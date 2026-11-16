@@ -53,12 +53,18 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 	# Items that come to rest inside or on the RV ride along with it.
-	var rv = Game.rv
-	if rv and linear_velocity.length() < 0.2 and rv.contains_point(global_position):
+	if linear_velocity.length() > 0.2:
+		return
+	var host: Node = null
+	for v in [Game.rv] + get_tree().get_nodes_in_group("vehicle"):
+		if v and is_instance_valid(v) and v.has_method("contains_point") and v.contains_point(global_position):
+			host = v
+			break
+	if host:
 		_attached = true
 		var xf := global_transform
 		get_parent().remove_child(self)
-		rv.get_node("Cargo").add_child(self)
+		host.get_node("Cargo").add_child(self)
 		global_transform = xf
 		freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		freeze = true

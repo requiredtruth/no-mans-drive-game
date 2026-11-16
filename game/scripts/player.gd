@@ -161,7 +161,7 @@ func _physics_process(delta: float) -> void:
 	if driving:
 		if is_driver and Input.is_action_just_pressed("primary") and not vehicle.engine_on and not Game.ui_open:
 			vehicle.try_start_engine()
-		var seat: Vector3 = vehicle.to_global(Vector3(-0.55 if is_driver else 0.55, 1.0, 2.3))
+		var seat: Vector3 = vehicle.seat_global(is_driver)
 		global_position = seat
 		velocity = Vector3.ZERO
 		_update_prompt()
@@ -311,7 +311,7 @@ func _pickup() -> void:
 			for k in t.data["items"]:
 				Game.add_item(k, int(t.data["items"][k]), true)
 		if t.has_meta("rv_rec"):
-			Game.rv.detach_structure(t)
+			t.get_meta("host").detach_structure(t)
 		elif t.persistent:
 			Net.remove_structure(t.id)
 		else:
@@ -326,7 +326,7 @@ func drop_item(id: String, n := 1) -> void:
 	Game.spawn_item(id, n, camera.global_position + fwd * 0.8 + Vector3(0, -0.3, 0), fwd * 1.5)
 
 func enter_vehicle(rv: Node, as_driver: bool) -> void:
-	if as_driver and not Net.claim_driver(true):
+	if as_driver and rv == Game.rv and not Net.claim_driver(true):
 		Game.notify("Someone else is driving")
 		return
 	driving = true
@@ -341,11 +341,8 @@ func enter_vehicle(rv: Node, as_driver: bool) -> void:
 	rv.fp_yaw = 0.0
 	rv.fp_pitch = 0.0
 	rv.look(Vector2.ZERO)
-	if as_driver:
-		rv.set_camera(rv.use_tp)
-	else:
-		rv.cam_fp.position.x = 0.55
-		rv.set_camera(false)
+	rv.set_seat(as_driver)
+	rv.set_camera(rv.use_tp if as_driver else false)
 	builder.set_active(false)
 
 func exit_vehicle() -> void:
@@ -355,14 +352,15 @@ func exit_vehicle() -> void:
 	if is_driver:
 		rv.stop_engine()
 		rv.driver = 0
-		Net.claim_driver(false)
-	rv.cam_fp.position.x = -0.55
+		if rv == Game.rv:
+			Net.claim_driver(false)
+	rv.set_seat(true)
 	driving = false
 	is_driver = false
 	$CollisionShape3D.disabled = false
 	visible = true
 	viewmodel.visible = true
-	teleport(rv.to_global(Vector3(-0.2, rv.FLOOR_Y + 0.1, rv.FRONT_Z - 1.9)))
+	teleport(rv.exit_global())
 	rotation.y = rv.global_rotation.y + PI
 	camera.make_current()
 

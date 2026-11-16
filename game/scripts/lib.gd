@@ -264,6 +264,9 @@ func _commit(surfaces: Array) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	for s in surfaces:
 		var st: SurfaceTool = s[0]
+		var probe := st.commit_to_arrays()
+		if probe[Mesh.ARRAY_VERTEX] == null or (probe[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+			continue
 		st.generate_tangents()
 		st.commit(mesh)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, s[1])

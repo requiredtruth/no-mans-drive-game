@@ -37,6 +37,7 @@ var removed := {} # resource keys removed from the world (trees, rocks, loot)
 var spawn_point = null # Vector3 of last slept bed/tent
 var next_struct_id := 1
 var rv_state := {}
+var vehicles := {} # id -> saved state of cars and trailers
 var playing := false
 var paused := false
 var ui_open := false
@@ -244,6 +245,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	next_struct_id = 1
 	rv_state = {}
 	pending_items = []
+	vehicles = {}
 
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
@@ -260,6 +262,7 @@ func world_snapshot() -> Dictionary:
 		"weather": weather, "structures": structures, "removed": removed, "next_id": next_struct_id,
 		"rv": rv.save_state() if rv else rv_state,
 		"items": _loose_items(),
+		"vehicles": world.vehicle_states() if world else vehicles,
 	}
 
 var pending_items: Array = []
@@ -287,6 +290,7 @@ func apply_world_snapshot(d: Dictionary) -> void:
 	next_struct_id = int(d.get("next_id", 1))
 	rv_state = d.get("rv", {})
 	pending_items = d.get("items", [])
+	vehicles = d.get("vehicles", {})
 
 func save_game() -> bool:
 	if not playing or not world:

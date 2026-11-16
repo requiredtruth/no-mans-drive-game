@@ -160,7 +160,7 @@ func _compute() -> void:
 	var cam_fwd: Vector3 = -player.camera.global_transform.basis.z
 	match snap:
 		"free":
-			placement = {"pos": p, "rot": player.rotation.y + PI + user_rot, "rv": on_rv}
+			placement = {"pos": p, "rot": player.rotation.y + PI + user_rot, "rv": on_rv, "host": _host_of(hit["collider"])}
 			valid = n.y > 0.7
 			if not valid:
 				reason = "Too steep"
@@ -256,19 +256,22 @@ func _compute() -> void:
 		reason = "Need: " + Data.cost_text(Data.PIECES[t]["cost"])
 	if valid and not Game.has_cost(Data.PIECES[t]["cost"]) and kit != "":
 		valid = true
-	if valid and Game.rv and not placement.get("rv", false) and Game.rv.global_position.distance_to(placement["pos"]) < 4.5 and t != "fence":
+	if valid and Game.rv and not placement.get("rv", false) and Game.rv.global_position.distance_to(placement["pos"]) < 4.5 and not (t in ["fence", "chair", "table", "lantern", "crate"]):
 		valid = false
 		reason = "Too close to the RV"
 
-func _is_rv(col: Object) -> bool:
+func _host_of(col: Object) -> Node:
 	var n := col as Node
 	for i in range(4):
 		if n == null:
-			return false
-		if n.is_in_group("rv"):
-			return true
+			return null
+		if n.has_method("attach_structure"):
+			return n
 		n = n.get_parent()
-	return false
+	return null
+
+func _is_rv(col: Object) -> bool:
+	return _host_of(col) != null
 
 func _min_corner(center: Vector3) -> float:
 	var gen = Game.world.gen
@@ -296,7 +299,7 @@ func place() -> void:
 	if t == "campfire":
 		rec["data"]["fuel"] = 240.0
 	if placement.get("rv", false):
-		Game.rv.attach_structure(rec)
+		placement["host"].attach_structure(rec)
 	else:
 		Net.place_structure(Game.new_struct_id(), rec)
 	Audio.play_at("hammer", placement["pos"])

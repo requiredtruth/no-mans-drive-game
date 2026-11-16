@@ -10,6 +10,8 @@ const RV = preload("res://scripts/rv.gd")
 const Animal = preload("res://scripts/animal.gd")
 const HUD = preload("res://scripts/hud.gd")
 const Touch = preload("res://scripts/touch.gd")
+const Car = preload("res://scripts/car.gd")
+const Trailer = preload("res://scripts/trailer.gd")
 
 var gen: WorldGen
 var hud: CanvasLayer
@@ -35,6 +37,7 @@ var structures := {} # id -> node
 var occupancy := {} # key -> id
 var animals: Array = []
 var remote_players := {}
+var vehicle_nodes := {} # id -> car / trailer node
 
 var _spawn_timer := 0.0
 var _autosave := 0.0
@@ -102,6 +105,14 @@ func start(loaded: Dictionary) -> void:
 	player.make_current()
 	for id in Game.structures:
 		spawn_structure(id, Game.structures[id])
+	for vid in Game.vehicles:
+		var st: Dictionary = Game.vehicles[vid]
+		var xf: Array = st.get("xform", [[0, 0, 0], [0, 0, 0]])
+		spawn_vehicle(vid, str(st.get("kind", "pickup")), Game.v3(xf[0]), Game.v3(xf[1]), st)
+	if not Game.vehicles.has("trl_start"):
+		var tp: Vector3 = rv.to_global(Vector3(0, 0, -9.5))
+		tp.y = gen.height(tp.x, tp.z) + 0.6
+		spawn_vehicle("trl_start", "flatbed", tp, Vector3(0, rv.rotation.y, 0), {})
 	for r in Game.pending_items:
 		var it = Game.spawn_item(str(r["id"]), int(r["n"]), Game.v3(r["pos"]))
 		if it:
@@ -356,13 +367,55 @@ func _ambience(delta: float) -> void:
 	var raining := Game.weather == "rain"
 	var inside: bool = rv and (player.driving or rv.is_inside(p2))
 	var muffle := 0.45 if inside else 1.0
+	_ambient_events(delta, b, day, raining, inside)
+	var midday := Game.time_of_day > 10.0 and Game.time_of_day < 18.0
 	Audio.set_ambience({
-		"birds_loop": (0.55 * (b.y + b.z) if day and not raining else 0.0) * muffle,
-		"crickets_loop": (0.4 * (1.0 - b.w) if not day and not raining else 0.0) * muffle,
-		"wind_loop": (0.15 + 0.5 * b.w + 0.3 * b.x + _overcast * 0.2) * muffle,
+		"forest_bed_loop": 0.22 * (b.z + b.y * 0.5) * muffle,
+		"insects_day_loop": (0.16 * (b.x + b.y) if day and midday and not raining else 0.0) * muffle,
+		"crickets_loop": (0.28 * (1.0 - b.w) if not day and not raining else 0.0) * muffle,
+		"wind_loop": (0.12 + 0.45 * b.w + 0.25 * b.x + _overcast * 0.2) * muffle,
 		"rain_loop": (0.8 * _overcast if raining and b.w < 0.5 else 0.0) * (0.7 if inside else 1.0),
-		"water_loop": 0.4 * _near_water * muffle,
+		"water_loop": 0.35 * _near_water * muffle,
 	}, delta)
+
+var _amb_event_timer := 3.0
+
+## Random, biome- and time-aware one-shot calls placed around the player (no looping birdsong).
+func _ambient_events(delta: float, b: Vector4, day: bool, raining: bool, inside: bool) -> void:
+	_amb_event_timer -= delta
+	if _amb_event_timer > 0.0:
+		return
+	var chorus := (Game.time_of_day > 5.0 and Game.time_of_day < 8.5) or (Game.time_of_day > 18.0 and Game.time_of_day < 20.5)
+	var rate := 2.2 if chorus else 1.0
+	if raining:
+		rate *= 0.35
+	_amb_event_timer = randf_range(2.0, 9.0) / rate
+	var names := ["desert", "plains", "forest", "tundra"]
+	var best := 0
+	for i in range(4):
+		if b[i] > b[best]:
+			best = i
+	var pools := [names[best] + ("_day" if day else "_night")]
+	if _near_water > 0.5 and (not day or randf() < 0.3):
+		pools.append("water")
+	if raining and _overcast > 0.7:
+		pools.append("storm")
+	var ev := Audio.pick_event(pools)
+	if ev == "":
+		return
+	var ang := randf() * TAU
+	var dist := 150.0 if ev.begins_with("thunder") else randf_range(18.0, 70.0)
+	var p := player.global_position + Vector3(cos(ang) * dist, randf_range(2.0, 12.0), sin(ang) * dist)
+	var vol := randf_range(-8.0, 2.0) - (8.0 if inside else 0.0)
+	var pitch := randf_range(0.9, 1.12)
+	Audio.play_at(ev, p, vol, pitch, "Ambience")
+	# sometimes another animal of the same kind answers from elsewhere
+	var answers := ev.begins_with("bird") or ev.begins_with("owl") or ev.begins_with("crow") or ev.begins_with("frog")
+	if answers and randf() < 0.35:
+		var a2 := ang + randf_range(1.5, 4.5)
+		var p2 := player.global_position + Vector3(cos(a2) * dist * 1.2, 4.0, sin(a2) * dist * 1.2)
+		get_tree().create_timer(randf_range(1.2, 3.5)).timeout.connect(func() -> void:
+			Audio.play_at(ev, p2, vol - 4.0, pitch * randf_range(0.93, 1.07), "Ambience"))
 
 # ------------------------------------------------------------------ chunks
 func _chunk_of(p: Vector3) -> Vector2i:
@@ -610,6 +663,7 @@ func _instantiate(d: Dictionary) -> void:
 	var poi := gen.poi_for_row(key.y)
 	if not poi.is_empty() and _chunk_of(poi["pos"]) == key:
 		Pois.build(root, poi)
+		_poi_vehicles(poi)
 
 # ------------------------------------------------------------------ resources
 func _find_res(key: String) -> Array:
@@ -886,6 +940,95 @@ func structure_data(id: String, d: Dictionary) -> void:
 		Game.structures[id]["data"] = d
 	if structures.has(id) and is_instance_valid(structures[id]):
 		structures[id].remote_data(d)
+
+# ------------------------------------------------------------------ vehicles
+func spawn_vehicle(vid: String, kind: String, pos: Vector3, rot: Vector3, state: Dictionary) -> Node:
+	if vehicle_nodes.has(vid):
+		return vehicle_nodes[vid]
+	var v: VehicleBody3D
+	if Trailer.SPECS.has(kind):
+		v = VehicleBody3D.new()
+		v.set_script(Trailer)
+	else:
+		v = VehicleBody3D.new()
+		v.set_script(Car)
+	v.setup(vid, kind, state)
+	add_child(v)
+	v.global_position = pos
+	v.rotation = rot
+	vehicle_nodes[vid] = v
+	restore_cargo(v, state.get("cargo", []))
+	if v.has_method("restore_attached"):
+		v.restore_attached(state.get("attached", []))
+	Game.vehicles[vid] = v.save_state()
+	return v
+
+func cargo_records(v: Node) -> Array:
+	var out := []
+	var cargo := v.get_node_or_null("Cargo")
+	if cargo == null:
+		return out
+	for ch in cargo.get_children():
+		if ch.is_in_group("world_item") and is_instance_valid(ch):
+			out.append({"id": ch.id, "n": ch.amount, "pos": Game.arr(ch.position), "rot": Game.arr(ch.rotation)})
+	return out
+
+func restore_cargo(v: Node, list: Array) -> void:
+	var cargo := v.get_node_or_null("Cargo")
+	if cargo == null:
+		return
+	for r in list:
+		var it := RigidBody3D.new()
+		it.set_script(load("res://scripts/world_item.gd"))
+		it.setup(str(r["id"]), int(r["n"]))
+		it._attached = true
+		it.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+		it.freeze = true
+		it.collision_mask = 0
+		cargo.add_child(it)
+		it.position = Game.v3(r["pos"])
+		it.rotation = Game.v3(r["rot"])
+
+func vehicle_states() -> Dictionary:
+	var out := {}
+	for vid in vehicle_nodes:
+		var v: Node = vehicle_nodes[vid]
+		if is_instance_valid(v):
+			out[vid] = v.save_state()
+	return out
+
+## Abandoned vehicles that belong to a roadside location (spawned once, then saved).
+func _poi_vehicles(poi: Dictionary) -> void:
+	var row := int(poi["row"])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = gen.hash3(row, 4242, 9)
+	var base: Vector3 = poi["pos"]
+	var yaw: float = poi["yaw"]
+	var bs := Basis(Vector3.UP, yaw)
+	var plan := []
+	match str(poi["type"]):
+		"wrecks":
+			plan.append(["veh_%d" % row, ["pickup", "sedan", "offroader"][rng.randi() % 3], Vector3(-6, 0, 5)])
+			plan.append(["veh_%db" % row, ["sedan", "pickup", "box_truck"][rng.randi() % 3], Vector3(1, 0, -5)])
+			if rng.randf() < 0.5:
+				plan.append(["trl_%d" % row, ["camper", "flatbed", "tanker"][rng.randi() % 3], Vector3(6, 0, 4)])
+		"house", "cabin":
+			if rng.randf() < 0.55:
+				plan.append(["veh_%d" % row, ["sedan", "pickup", "offroader"][rng.randi() % 3], Vector3(7.5, 0, 4)])
+		"truck_stop":
+			plan.append(["veh_%d" % row, "box_truck", Vector3(-7, 0, 3)])
+			plan.append(["trl_%d" % row, ["tanker", "camper"][rng.randi() % 2], Vector3(5, 0, 6)])
+		"farm":
+			if rng.randf() < 0.6:
+				plan.append(["veh_%d" % row, "pickup", Vector3(-4, 0, 7)])
+			if rng.randf() < 0.5:
+				plan.append(["trl_%d" % row, "flatbed", Vector3(3, 0, 8)])
+	for p in plan:
+		if Game.vehicles.has(p[0]) or vehicle_nodes.has(p[0]):
+			continue
+		var wp: Vector3 = base + bs * (p[2] as Vector3)
+		wp.y = gen.height(wp.x, wp.z) + 0.7
+		spawn_vehicle(p[0], p[1], wp, Vector3(0, yaw + rng.randf_range(-0.6, 0.6), 0), {})
 
 # ------------------------------------------------------------------ co-op puppets
 func update_remote_player(peer: int, pos: Vector3, yaw: float, in_vehicle: bool, pname: String) -> void:

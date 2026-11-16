@@ -74,7 +74,99 @@ func _viewmodels() -> void:
 		await _wait(0.4)
 		await _shot("vm_" + id)
 
+func _vehicles() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	w.hud.close_modal()
+	Game.time_of_day = 10.0
+	var z0: float = rv.global_position.z - 30.0
+	var gen = w.gen
+	var kinds := ["pickup", "sedan", "box_truck", "offroader", "camper", "flatbed", "tanker"]
+	var made := []
+	for i in range(kinds.size()):
+		var z := z0 - i * 9.0
+		var x: float = gen.road_x(z) + 2.0
+		var p := Vector3(x, gen.height(x, z) + 1.0, z)
+		made.append(w.spawn_vehicle("test_%d" % i, kinds[i], p, Vector3(0, PI * 0.5, 0), {}))
+	await _wait(2.5)
+	for i in range(kinds.size()):
+		var v: Node3D = made[i]
+		var cam: Vector3 = v.global_position + Vector3(-5.5, 0.6, 5.0)
+		_player_at(Vector3(cam.x, gen.height(cam.x, cam.z) + 0.1, cam.z), atan2(-(v.global_position - cam).x, -(v.global_position - cam).z), -0.12)
+		await _wait(0.5)
+		await _shot("veh_" + kinds[i])
+	var rc: Vector3 = rv.to_global(Vector3(-7.0, 0, 7.0))
+	_player_at(Vector3(rc.x, gen.height(rc.x, rc.z) + 0.1, rc.z), atan2(-(rv.global_position - rc).x, -(rv.global_position - rc).z), -0.08)
+	await _wait(0.6)
+	await _shot("veh_rv_front")
+	rc = rv.to_global(Vector3(7.5, 0, -6.0))
+	_player_at(Vector3(rc.x, gen.height(rc.x, rc.z) + 0.1, rc.z), atan2(-(rv.global_position - rc).x, -(rv.global_position - rc).z), -0.08)
+	await _wait(0.6)
+	await _shot("veh_rv_rear")
+	# hitch flatbed to pickup and tow
+	var pickup = made[0]
+	var flat = made[5]
+	flat.global_position = pickup.hitch_global() - (flat.tongue_global() - flat.global_position)
+	flat.rotation = pickup.rotation
+	await _wait(1.0)
+	flat.hitch_to(pickup)
+	for k in pickup.parts:
+		pickup.parts[k] = 100.0
+	pickup.fuel = 50.0
+	pickup.battery = 100.0
+	var t0: Vector3 = flat.global_position
+	Game.player.enter_vehicle(pickup, true)
+	Input.action_press("move_forward", 1.0)
+	await _wait(5.0)
+	Input.action_release("move_forward")
+	_log("tow: pickup speed %.1f km/h, trailer moved %.1f m" % [pickup.speed_kmh(), flat.global_position.distance_to(t0)])
+	await _shot("veh_towing")
+	Game.player.exit_vehicle()
+
+func _animals() -> void:
+	var w = Game.world
+	w.hud.close_modal()
+	Game.time_of_day = 11.0
+	var gen = w.gen
+	var z: float = Game.player.global_position.z - 15.0
+	var x: float = gen.road_x(z)
+	var i := 0
+	for sp in ["deer", "boar", "wolf", "bear", "rabbit"]:
+		var p := Vector3(x - 4.0 + i * 2.2, 0, z)
+		p.y = gen.height(p.x, p.z) + 0.3
+		var a = w.spawn_animal(sp, p)
+		a.state = "idle"
+		a._timer = 99.0
+		a.rotation.y = -PI * 0.5
+		i += 1
+	await _wait(1.0)
+	for a in w.animals:
+		a.set_physics_process(false)
+	await _wait(0.3)
+	_player_at(Vector3(x, gen.height(x, z + 5.5) + 0.1, z + 5.5), 0.0, -0.2)
+	await _wait(0.5)
+	await _shot("animals_side")
+	_player_at(Vector3(x - 6.0, gen.height(x - 6.0, z + 3.0) + 0.1, z + 3.0), -0.9, -0.15)
+	await _wait(0.5)
+	await _shot("animals_front")
+
 func _run() -> void:
+	if "--animals" in OS.get_cmdline_user_args():
+		var m2 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		m2._start_world({})
+		await _wait(1.5)
+		await _animals()
+		get_tree().quit()
+		return
+	if "--vehicles" in OS.get_cmdline_user_args():
+		var main1 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		main1._start_world({})
+		await _wait(1.5)
+		await _vehicles()
+		get_tree().quit()
+		return
 	if "--items" in OS.get_cmdline_user_args():
 		var main0 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
@@ -261,10 +353,10 @@ func _run() -> void:
 		if poi.is_empty() or found.has(poi["type"]):
 			continue
 		found[poi["type"]] = poi
-		if found.size() >= 5:
+		if found.size() >= 9:
 			break
 	_log("poi types found: %s" % str(found.keys()))
-	for t in ["gas_station", "house", "farm"]:
+	for t in ["gas_station", "house", "farm", "cabin", "hamlet", "truck_stop"]:
 		if not found.has(t):
 			continue
 		var poi: Dictionary = found[t]
@@ -276,6 +368,19 @@ func _run() -> void:
 		await _settle(cam)
 		await _wait(1.0)
 		await _shot("11_poi_" + t)
+		if t in ["house", "cabin"]:
+			var bs := Basis(Vector3.UP, poi["yaw"])
+			var inside: Vector3 = pp + bs * Vector3(-0.5, 0, 1.6)
+			Game.player.teleport(Vector3(inside.x, gen.height(pp.x, pp.z) + 0.75, inside.z))
+			Game.player.rotation.y = poi["yaw"] + 0.5
+			Game.player.pitch = -0.15
+			Game.player.head.rotation.x = -0.15
+			Game.player.flashlight.visible = false
+			await _wait(0.8)
+			await _shot("11_poi_" + t + "_inside")
+			Game.player.rotation.y = poi["yaw"] - 2.2
+			await _wait(0.4)
+			await _shot("11_poi_" + t + "_inside2")
 	for target in [["desert", 0], ["tundra", 3], ["forest", 2], ["grassland", 1]]:
 		var best := Vector3.ZERO
 		var ok := false

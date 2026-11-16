@@ -14,7 +14,17 @@ static func build(parent: Node3D, poi: Dictionary) -> Node3D:
 	rng.seed = hash(key)
 	match str(poi["type"]):
 		"gas_station": _gas_station(root, key, rng)
-		"house": _house(root, key, rng)
+		"house":
+			house(root, Vector3.ZERO, 0.0, key, rng, ["cottage", "brick", "log"][rng.randi() % 3])
+		"cabin":
+			house(root, Vector3.ZERO, 0.0, key, rng, "log", true)
+		"hamlet":
+			house(root, Vector3(-12, 0, -2), 0.25, key + "a", rng, ["cottage", "brick"][rng.randi() % 2])
+			house(root, Vector3(12, 0, -3), -0.2, key + "b", rng, ["cottage", "log", "brick"][rng.randi() % 3])
+			house(root, Vector3(0, 0, -16), 0.0, key + "c", rng, ["cottage", "log"][rng.randi() % 2])
+			Lib.box(root, Vector3(0, 0.03, -2), Vector3(10, 0.06, 26), Lib.mat("asphalt", Color(0.9, 0.9, 0.9), 0.25), true)
+		"truck_stop":
+			_gas_station(root, key, rng)
 		"wrecks": _wrecks(root, key, rng)
 		"camp_ruin": _camp(root, key, rng)
 		"farm": _farm(root, key, rng)
@@ -175,9 +185,17 @@ static func _car(root: Node3D, pos: Vector3, yaw: float, tint: Color, key: Strin
 	loot(car, Vector3(0, 0.9, -2.0), Vector3(1.6, 0.35, 0.5), body, key, "Car trunk", "trunk")
 
 static func _wrecks(root: Node3D, key: String, rng: RandomNumberGenerator) -> void:
-	var tints := [Color(0.5, 0.6, 0.8), Color(0.9, 0.85, 0.7), Color(0.8, 0.4, 0.35), Color(0.6, 0.7, 0.55)]
-	for i in range(rng.randi_range(2, 3)):
-		_car(root, Vector3(rng.randf_range(-4, 4), 0, rng.randf_range(-3, 3) + i * 2.0), rng.randf() * TAU, tints[i % tints.size()], "%s_car%d" % [key, i])
+	# The crashed vehicles themselves are real (repairable) vehicles spawned by the world.
+	var pile := loot(root, Vector3(0, 0, -2), Vector3(1.4, 0.5, 1.0), Lib.mat("rust"), key + "_pile", "Scrap pile", "scrap_pile")
+	pile.rotation.y = rng.randf() * TAU
+	loot(root, Vector3(2.5, 0, 1.5), Vector3(0.9, 0.6, 0.6), Lib.mat("paint", Color(0.3, 0.4, 0.3), 1.0, true, 0.5, 0.4), key + "_box", "Roadside toolbox", "trunk")
+	for k in range(3):
+		var t := MeshInstance3D.new()
+		t.mesh = Items.mesh("tire")
+		t.scale = Vector3.ONE * 1.25
+		t.position = Vector3(-3.0, k * 0.28, 2.0)
+		t.rotation.y = rng.randf() * TAU
+		root.add_child(t)
 
 static func _camp(root: Node3D, key: String, rng: RandomNumberGenerator) -> void:
 	var canvas := Lib.mat("canvas", Color(0.75, 0.65, 0.55), 0.5, false)
@@ -224,3 +242,201 @@ static func _farm(root: Node3D, key: String, rng: RandomNumberGenerator) -> void
 	for i in range(8):
 		Lib.box(root, Vector3(6.5, 0.6, -6 + i * 2.0), Vector3(0.12, 1.2, 0.12), dark, true)
 	Lib.box(root, Vector3(6.5, 0.9, 1.0), Vector3(0.06, 0.1, 14), dark)
+
+
+# ------------------------------------------------------------------ procedural furnished houses
+## Wall along local X from x0 to x1 at z, outer skin facing +z if face_out > 0. holes: [[x_center, width, y0, height, kind]]
+static func wall_run(parent: Node3D, x0: float, x1: float, z: float, y: float, h: float, outer: Material, inner: Material, holes: Array, face_out := 1.0, along_z := false) -> void:
+	var holder := Node3D.new()
+	holder.position = Vector3(0, y, z) if not along_z else Vector3(z, y, 0)
+	if along_z:
+		holder.rotation.y = -PI * 0.5
+	parent.add_child(holder)
+	var edges: Array[float] = [x0, x1]
+	for hl in holes:
+		edges.append(hl[0] - hl[1] * 0.5)
+		edges.append(hl[0] + hl[1] * 0.5)
+	edges.sort()
+	var t := 0.11
+	var trim := Lib.mat("planks", Color(0.92, 0.9, 0.85), 1.0)
+	for i in range(edges.size() - 1):
+		var a := edges[i]
+		var b := edges[i + 1]
+		if b - a < 0.01:
+			continue
+		var c := (a + b) * 0.5
+		var spans := [[0.0, h]]
+		for hl in holes:
+			if c > hl[0] - hl[1] * 0.5 and c < hl[0] + hl[1] * 0.5:
+				spans = [[0.0, hl[2]], [hl[2] + hl[3], h]]
+				if hl[4] == "window":
+					var g := Lib.box(holder, Vector3(c, hl[2] + hl[3] * 0.5, 0), Vector3(b - a, hl[3], 0.03), Lib.glass_mat(), true)
+					g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					for yy in [hl[2], hl[2] + hl[3]]:
+						Lib.box(holder, Vector3(c, yy, 0), Vector3(b - a + 0.12, 0.08, 0.3), trim)
+					for xx in [a, b]:
+						Lib.box(holder, Vector3(xx, hl[2] + hl[3] * 0.5, 0), Vector3(0.08, hl[3] + 0.08, 0.3), trim)
+					Lib.box(holder, Vector3(c, hl[2] + hl[3] * 0.5, 0), Vector3(0.04, hl[3], 0.05), trim)
+					Lib.box(holder, Vector3(c, hl[2] - 0.06, face_out * 0.14), Vector3(b - a + 0.2, 0.05, 0.12), trim)
+				else:
+					for xx in [a, b]:
+						Lib.box(holder, Vector3(xx, hl[3] * 0.5, 0), Vector3(0.1, hl[3], 0.3), trim)
+					Lib.box(holder, Vector3(c, hl[3], 0), Vector3(b - a + 0.2, 0.12, 0.3), trim)
+		for sp in spans:
+			var hh: float = sp[1] - sp[0]
+			if hh < 0.01:
+				continue
+			var cy: float = sp[0] + hh * 0.5
+			Lib.box(holder, Vector3(c, cy, face_out * t * 0.5), Vector3(b - a, hh, t), outer, true, Vector3.ZERO, 0.0)
+			Lib.box(holder, Vector3(c, cy, -face_out * t * 0.5), Vector3(b - a, hh, t), inner, false, Vector3.ZERO, 0.0)
+
+static func _decor(parent: Node3D, pos: Vector3, id: String, rot := 0.0, s := 1.0) -> void:
+	var n := Items.instance(id)
+	n.position = pos
+	n.rotation.y = rot
+	n.scale = Vector3.ONE * s
+	parent.add_child(n)
+
+static func house(root: Node3D, offset: Vector3, yaw: float, key: String, rng: RandomNumberGenerator, style: String, small := false) -> void:
+	var hn := Node3D.new()
+	hn.position = offset
+	hn.rotation.y = yaw
+	root.add_child(hn)
+	var w := rng.randf_range(7.5, 11.0) if not small else 6.0
+	var d := rng.randf_range(7.0, 9.5) if not small else 5.5
+	var h := 2.8
+	var fy := 0.6
+	var pastel := [Color(0.95, 0.92, 0.82), Color(0.75, 0.85, 0.9), Color(0.85, 0.9, 0.78), Color(0.95, 0.85, 0.75), Color(0.9, 0.8, 0.85), Color(0.98, 0.98, 0.95)]
+	var ext: Material
+	match style:
+		"brick": ext = Lib.mat("brick", Color.WHITE, 0.45)
+		"log": ext = Lib.mat("logs", Color.WHITE, 0.333)
+		_: ext = Lib.mat("siding", pastel[rng.randi() % pastel.size()], 0.35)
+	var paper := Lib.mat("wallpaper", [Color.WHITE, Color(0.9, 1.0, 0.95), Color(1.0, 0.92, 0.9)][rng.randi() % 3], 0.6)
+	var inner: Material = paper if style != "log" else Lib.mat("logs", Color(1.1, 1.05, 1.0), 0.333)
+	var wood_floor := Lib.mat("planks", Color(0.8, 0.7, 0.6), 0.5)
+	var tile := Lib.mat("tiles", Color.WHITE, 0.8)
+	var dark := Lib.mat("planks", Color(0.5, 0.4, 0.32), 1.0)
+	var fabric := Lib.mat("canvas", [Color(0.6, 0.7, 0.9), Color(0.85, 0.6, 0.5), Color(0.6, 0.8, 0.6)][rng.randi() % 3], 1.5, false)
+	# foundation & floors
+	Lib.box(hn, Vector3(0, fy * 0.5 - 0.3, 0), Vector3(w + 0.3, fy + 0.6, d + 0.3), Lib.mat("rock", Color(0.85, 0.83, 0.8), 0.6), true, Vector3.ZERO, 0.04)
+	Lib.box(hn, Vector3(0, fy + 0.01, 0), Vector3(w - 0.2, 0.02, d - 0.2), wood_floor)
+	var split_z := -d * 0.12
+	var split_x := w * 0.18
+	Lib.box(hn, Vector3(split_x + (w * 0.5 - split_x) * 0.5, fy + 0.025, split_z - (d * 0.5 + split_z) * 0.5), Vector3(w * 0.5 - split_x - 0.2, 0.02, d * 0.5 + split_z - 0.2), tile)
+	# exterior walls with windows / door
+	var door_x := -w * 0.22
+	wall_run(hn, -w * 0.5, w * 0.5, d * 0.5, fy, h, ext, inner, [[door_x, 1.05, 0.0, 2.15, "door"], [w * 0.22, 1.4, 1.0, 1.2, "window"]] if not small else [[door_x, 1.05, 0.0, 2.15, "door"], [w * 0.2, 1.1, 1.0, 1.1, "window"]], 1.0)
+	wall_run(hn, -w * 0.5, w * 0.5, -d * 0.5, fy, h, ext, inner, [[-w * 0.25, 1.2, 1.0, 1.2, "window"], [w * 0.3, 0.7, 1.4, 0.7, "window"]], -1.0)
+	wall_run(hn, -d * 0.5, d * 0.5, -w * 0.5, fy, h, ext, inner, [[d * 0.15, 1.3, 1.0, 1.2, "window"]], -1.0, true)
+	wall_run(hn, -d * 0.5, d * 0.5, w * 0.5, fy, h, ext, inner, [[d * 0.2, 1.1, 1.0, 1.2, "window"]], 1.0, true)
+	if not small:
+		# interior partitions with doorways
+		wall_run(hn, -w * 0.5 + 0.1, w * 0.5 - 0.1, split_z, fy, h, inner, inner, [[-w * 0.3, 0.9, 0.0, 2.1, "door"], [w * 0.36, 0.8, 0.0, 2.1, "door"]], 1.0)
+		wall_run(hn, -d * 0.5 + 0.1, split_z, split_x, fy, h, inner, inner, [], 1.0, true)
+	# ceiling and pitched roof with gables
+	Lib.box(hn, Vector3(0, fy + h + 0.03, 0), Vector3(w, 0.06, d), Lib.mat("planks", Color(0.95, 0.93, 0.88), 0.5))
+	var pitch := 0.5
+	var rise := tan(pitch) * (d * 0.5 + 0.5)
+	var slab := (d * 0.5 + 0.55) / cos(pitch)
+	var roof_m := Lib.mat("shingles", [Color.WHITE, Color(0.8, 0.55, 0.45), Color(0.6, 0.7, 0.8), Color(0.6, 0.75, 0.55)][rng.randi() % 4], 0.4)
+	for s in [-1.0, 1.0]:
+		Lib.box(hn, Vector3(0, fy + h + rise * 0.5 + 0.05, s * (d * 0.25 + 0.25)), Vector3(w + 0.8, 0.14, slab), roof_m, true, Vector3(-s * pitch, 0, 0), 0.03)
+		Lib.box(hn, Vector3(0, fy + h - 0.05, s * (d * 0.5 + 0.5)), Vector3(w + 0.8, 0.18, 0.06), Lib.mat("planks", Color(0.9, 0.9, 0.88), 1.0))
+	Lib.box(hn, Vector3(0, fy + h + rise + 0.08, 0), Vector3(w + 0.85, 0.1, 0.22), roof_m)
+	var gable_body := load("res://scripts/shapes.gd")
+	for s in [-1.0, 1.0]:
+		var gst: SurfaceTool = gable_body.st()
+		var tri := PackedVector2Array([Vector2(-d * 0.5, 0.0), Vector2(d * 0.5, 0.0), Vector2(0.0, rise - 0.05)])
+		gable_body.extrude(gst, null, tri, 0.18, 0.0)
+		var gm := MeshInstance3D.new()
+		gm.mesh = gable_body.commit([[gst, ext]])
+		gm.position = Vector3(s * (w * 0.5 - 0.08), fy + h, 0)
+		hn.add_child(gm)
+	if rng.randf() < 0.6 or style == "log":
+		Lib.box(hn, Vector3(w * 0.3, fy + h + rise * 0.6, -d * 0.15), Vector3(0.7, rise * 1.2 + 0.8, 0.7), Lib.mat("brick", Color(0.85, 0.8, 0.8), 0.45), true, Vector3.ZERO, 0.03)
+	# porch, steps, mailbox
+	var porch := rng.randf() < 0.7 or small
+	if porch:
+		Lib.box(hn, Vector3(door_x, fy - 0.05, d * 0.5 + 1.1), Vector3(3.2, 0.12, 2.0), dark, true, Vector3.ZERO, 0.02)
+		for x in [door_x - 1.5, door_x + 1.5]:
+			Lib.box(hn, Vector3(x, fy + 1.2, d * 0.5 + 2.0), Vector3(0.14, 2.4, 0.14), Lib.mat("planks", Color(0.95, 0.95, 0.9), 1.0), true)
+		Lib.box(hn, Vector3(door_x, fy + 2.45, d * 0.5 + 1.15), Vector3(3.6, 0.1, 2.3), roof_m, true, Vector3(0.12, 0, 0))
+	for k in range(3):
+		Lib.box(hn, Vector3(door_x, fy - 0.15 - k * 0.15, d * 0.5 + (2.2 if porch else 0.3) + k * 0.3), Vector3(1.4, 0.15, 0.3), Lib.mat("concrete"), true, Vector3.ZERO, 0.02)
+	Lib.box(hn, Vector3(w * 0.5 + 1.5, 0.6, d * 0.5 + 3.5), Vector3(0.08, 1.2, 0.08), dark)
+	Lib.box(hn, Vector3(w * 0.5 + 1.5, 1.25, d * 0.5 + 3.5), Vector3(0.25, 0.22, 0.45), Lib.mat("paint", Color(0.3, 0.35, 0.4), 2.0, true, 0.4, 0.4), false, Vector3.ZERO, 0.03)
+	var y := fy + 0.02
+	# --- living room (front left)
+	var lx := -w * 0.25
+	var lz := (d * 0.5 + split_z) * 0.5 + 0.2
+	if not small:
+		Lib.box(hn, Vector3(lx, y + 0.005, lz), Vector3(2.6, 0.01, 1.8), Lib.mat("carpet", Color.WHITE, 1.0))
+		# sofa
+		var sx := -w * 0.5 + 0.55
+		Lib.box(hn, Vector3(sx, y + 0.25, lz), Vector3(0.85, 0.45, 2.0), fabric, true, Vector3.ZERO, 0.08)
+		Lib.box(hn, Vector3(sx - 0.33, y + 0.65, lz), Vector3(0.22, 0.55, 2.0), fabric, false, Vector3.ZERO, 0.08)
+		for zz in [lz - 1.0, lz + 1.0]:
+			Lib.box(hn, Vector3(sx, y + 0.45, zz), Vector3(0.85, 0.35, 0.2), fabric, false, Vector3.ZERO, 0.08)
+		for k in range(3):
+			Lib.box(hn, Vector3(sx + 0.05, y + 0.52, lz - 0.6 + k * 0.6), Vector3(0.6, 0.1, 0.55), fabric, false, Vector3.ZERO, 0.05)
+		Lib.box(hn, Vector3(lx + 0.2, y + 0.22, lz), Vector3(0.8, 0.06, 1.2), dark, true, Vector3.ZERO, 0.02)
+		_decor(hn, Vector3(lx + 0.2, y + 0.25, lz - 0.2), "coffee", 0.4)
+		_decor(hn, Vector3(lx + 0.3, y + 0.25, lz + 0.3), "rope", 0.0, 0.6)
+		# bookshelf (searchable) with decor
+		var shelf := loot(hn, Vector3(lx - 0.2, y, d * 0.5 - 0.35), Vector3(1.4, 1.9, 0.35), dark, key + "_shelf", "Bookshelf", "living")
+		for k in range(4):
+			Lib.box(shelf, Vector3(0, 0.3 + k * 0.45, 0.02), Vector3(1.3, 0.03, 0.3), dark)
+		for k in range(5):
+			_decor(shelf, Vector3(-0.5 + k * 0.25, 0.75, 0.0), ["canned_food", "soda", "water_clean", "coffee_beans", "bandage"][k], k * 0.7, 0.9)
+		for k in range(8):
+			Lib.box(shelf, Vector3(-0.55 + k * 0.08, 1.4, 0.0), Vector3(0.05, 0.28, 0.22), Lib.color_mat(Color.from_hsv(rng.randf(), 0.5, 0.5), 0.8), false, Vector3(0, 0, rng.randf_range(-0.1, 0.1)))
+	# --- kitchen (front right)
+	var kx := w * 0.28
+	var kz := (d * 0.5 + split_z) * 0.5
+	var counter_z := d * 0.5 - 0.42
+	if small:
+		counter_z = -d * 0.5 + 0.42
+	var cab := loot(hn, Vector3(kx + 0.3, y, counter_z), Vector3(2.4, 0.9, 0.62), Lib.mat("planks", Color(0.95, 0.92, 0.85), 1.0), key + "_kitchen", "Kitchen cabinets", "kitchen")
+	Lib.box(cab, Vector3(0, 0.92, 0), Vector3(2.45, 0.05, 0.66), Lib.mat("concrete", Color(0.95, 0.95, 0.95), 1.0), false, Vector3.ZERO, 0.02)
+	Lib.box(cab, Vector3(-0.6, 0.93, 0), Vector3(0.6, 0.04, 0.45), Items.steel())
+	Lib.box(cab, Vector3(0.6, 0.94, 0), Vector3(0.6, 0.02, 0.55), Lib.color_mat(Color(0.08, 0.08, 0.08), 0.3))
+	for k in range(4):
+		Lib.cyl(cab, Vector3(0.45 + (k % 2) * 0.3, 0.955, -0.12 + (k / 2) * 0.24), 0.08, 0.08, 0.01, Items.dark_steel())
+	_decor(cab, Vector3(0.0, 0.95, 0.05), "canned_food", 0.3)
+	_decor(cab, Vector3(-0.2, 0.95, -0.1), "water_dirty", 0.0)
+	loot(hn, Vector3(kx + 1.9 if kx + 1.9 < w * 0.5 - 0.4 else kx - 1.3, y, counter_z), Vector3(0.75, 1.8, 0.7), Lib.mat("paint", Color(0.92, 0.92, 0.9), 1.0, true, 0.3, 0.2), key + "_fridge", "Old fridge", "kitchen")
+	if not small:
+		Lib.box(hn, Vector3(kx, y + 0.76, kz - 0.4), Vector3(1.4, 0.06, 0.9), dark, true, Vector3.ZERO, 0.02)
+		for xx in [kx - 0.6, kx + 0.6]:
+			for zz in [kz - 0.8, kz]:
+				Lib.box(hn, Vector3(xx, y + 0.37, zz), Vector3(0.06, 0.74, 0.06), dark)
+		for s in [-1.0, 1.0]:
+			Lib.box(hn, Vector3(kx + s * 0.35, y + 0.45, kz - 0.4 + s * 0.75), Vector3(0.42, 0.05, 0.42), dark, false, Vector3.ZERO, 0.02)
+			Lib.box(hn, Vector3(kx + s * 0.35, y + 0.72, kz - 0.4 + s * 0.95), Vector3(0.42, 0.5, 0.04), dark, false, Vector3.ZERO, 0.02)
+		_decor(hn, Vector3(kx - 0.3, y + 0.8, kz - 0.4), "stew", 0.0)
+		_decor(hn, Vector3(kx + 0.3, y + 0.8, kz - 0.5), "coffee", 1.0)
+	# --- bedroom (back left)
+	var bx := -w * 0.2
+	var bz := -d * 0.5 + 1.25
+	var bed := loot(hn, Vector3(bx, y, bz), Vector3(1.5, 0.5, 2.1), dark, key + "_bed", "Bed", "", "bed", PI * 0.5)
+	Lib.box(bed, Vector3(0, 0.58, 0.05), Vector3(1.42, 0.18, 1.95), Lib.mat("canvas", Color(0.95, 0.95, 0.92), 2.0, false), false, Vector3.ZERO, 0.06)
+	Lib.box(bed, Vector3(0, 0.7, 0.25), Vector3(1.44, 0.06, 1.3), Lib.mat("plaid", Color.WHITE, 1.2, false), false, Vector3.ZERO, 0.03)
+	for xx in [-0.35, 0.35]:
+		Lib.box(bed, Vector3(xx, 0.72, -0.75), Vector3(0.55, 0.12, 0.35), Lib.color_mat(Color(0.95, 0.95, 0.93)), false, Vector3.ZERO, 0.05)
+	Lib.box(bed, Vector3(0, 0.75, -1.03), Vector3(1.55, 1.0, 0.08), dark, false, Vector3.ZERO, 0.02)
+	if not small:
+		loot(hn, Vector3(-w * 0.5 + 0.4, y, split_z - 0.6), Vector3(0.6, 2.0, 1.2), dark, key + "_wardrobe", "Wardrobe", "wardrobe")
+		# bathroom (back right)
+		var tx := w * 0.5 - 0.5
+		var tz := -d * 0.5 + 0.5
+		Lib.box(hn, Vector3(tx, y + 0.22, tz + 0.2), Vector3(0.4, 0.44, 0.5), Lib.color_mat(Color(0.96, 0.96, 0.96), 0.15), true, Vector3.ZERO, 0.06)
+		Lib.box(hn, Vector3(tx + 0.12, y + 0.65, tz + 0.2), Vector3(0.15, 0.45, 0.45), Lib.color_mat(Color(0.96, 0.96, 0.96), 0.15), false, Vector3.ZERO, 0.05)
+		var tub_x := split_x + 1.0
+		Lib.box(hn, Vector3(tub_x, y + 0.28, -d * 0.5 + 0.45), Vector3(1.6, 0.56, 0.75), Lib.color_mat(Color(0.96, 0.96, 0.96), 0.15), true, Vector3.ZERO, 0.1)
+		loot(hn, Vector3(tx, y + 1.2, split_z - 0.15), Vector3(0.6, 0.6, 0.18), Lib.color_mat(Color(0.9, 0.92, 0.9), 0.2), key + "_med", "Medicine cabinet", "medical")
+	else:
+		# cabin wood stove
+		Lib.box(hn, Vector3(w * 0.32, y + 0.4, -d * 0.5 + 0.6), Vector3(0.7, 0.8, 0.6), Items.dark_steel(), true, Vector3.ZERO, 0.05)
+		Lib.cyl(hn, Vector3(w * 0.32, y + 2.0, -d * 0.5 + 0.6), 0.09, 0.09, 2.4, Items.dark_steel())
+		loot(hn, Vector3(-w * 0.5 + 0.4, y, 0.3), Vector3(0.6, 0.9, 1.0), dark, key + "_chest", "Old chest", "camp")

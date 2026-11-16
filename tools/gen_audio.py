@@ -246,3 +246,120 @@ for fn in [engine_loop, wind_loop, rain_loop, fire_loop, crickets_loop, birds_lo
 footstep("step_ground", 80, 900, 0.03)
 footstep("step_wood", 100, 2500, 0.025)
 footstep("step_snow", 200, 3500, 0.05)
+
+
+# --- v1.2 ambience variety: many one-shot calls, scheduled randomly in-game ----
+def _sweep(f0, f1, dur, shape="lin", vib=0.0, vib_rate=0.0, harm=(1.0,)):
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    k = t / max(dur, 1e-6)
+    if shape == "exp":
+        f = f0 * (f1 / f0) ** k
+    elif shape == "arch":
+        f = f0 + (f1 - f0) * np.sin(np.pi * k)
+    else:
+        f = f0 + (f1 - f0) * k
+    f = f * (1 + vib * np.sin(2 * np.pi * vib_rate * t))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    x = sum(a * np.sin((i + 1) * ph) for i, a in enumerate(harm))
+    return x * np.sin(np.pi * np.clip(k, 0, 1)) ** 0.5
+
+
+def _seq(parts, gap_range=(0.03, 0.08), r=None):
+    out = []
+    for p in parts:
+        out.append(p)
+        out.append(np.zeros(int(SR * r.uniform(*gap_range))))
+    return np.concatenate(out + [np.zeros(int(SR * 0.15))])
+
+
+def birds_variety():
+    r = np.random.default_rng(1001)
+    for v in range(4):  # sparrow-like chip series
+        base = r.uniform(3800, 5200)
+        notes = [_sweep(base * r.uniform(0.95, 1.05), base * r.uniform(0.7, 0.85), r.uniform(0.03, 0.06)) for _ in range(r.integers(4, 9))]
+        write("bird_chip_%d" % v, _seq(notes, (0.04, 0.09), r))
+    for v in range(4):  # robin-like warble phrases
+        notes = []
+        for _ in range(r.integers(4, 7)):
+            f0 = r.uniform(2000, 3400)
+            notes.append(_sweep(f0, f0 * r.uniform(0.8, 1.3), r.uniform(0.08, 0.18), "arch", 0.02, 40))
+        write("bird_warble_%d" % v, _seq(notes, (0.02, 0.12), r))
+    for v in range(3):  # wren-like fast trill
+        f = r.uniform(4000, 6000)
+        n = int(SR * r.uniform(0.8, 1.4))
+        t = np.arange(n) / SR
+        am = (np.sin(2 * np.pi * r.uniform(18, 28) * t) > 0).astype(float)
+        x = np.sin(2 * np.pi * np.cumsum(f * (1 - 0.25 * t / t[-1]) + 300 * np.sin(2 * np.pi * 22 * t)) / SR) * am
+        write("bird_trill_%d" % v, x * np.sin(np.pi * t / t[-1]))
+    for v in range(3):  # two-note whistle "fee-bee"
+        f = r.uniform(3000, 3800)
+        notes = [_sweep(f, f, 0.32), _sweep(f * 0.84, f * 0.82, 0.38)]
+        if v == 2:
+            notes.append(_sweep(f * 0.84, f * 0.82, 0.3))
+        write("bird_whistle_%d" % v, _seq(notes, (0.05, 0.1), r))
+    for v in range(2):  # descending song (meadowlark-ish)
+        notes = [_sweep(r.uniform(3000, 4200), r.uniform(1800, 2600), r.uniform(0.15, 0.3), "exp", 0.01, 30) for _ in range(4)]
+        write("bird_song_%d" % v, _seq(notes, (0.01, 0.05), r))
+    for v in range(3):  # crow caw
+        notes = []
+        for _ in range(r.integers(2, 5)):
+            d = r.uniform(0.25, 0.4)
+            n = int(SR * d)
+            nz = lowpass(r.normal(size=n), 2200)
+            tone = _sweep(r.uniform(500, 650), r.uniform(380, 450), d, harm=(1, 0.8, 0.6, 0.4, 0.3))
+            notes.append((nz * 0.6 + tone) * env(n, 0.02, d * 0.6))
+        write("crow_%d" % v, _seq(notes, (0.12, 0.25), r))
+    for v in range(2):  # woodpecker drumming
+        n = int(SR * 1.2)
+        x = np.zeros(n)
+        rate = r.uniform(14, 20)
+        for k in range(int(rate * 0.9)):
+            p = int(k / rate * SR)
+            L = 600
+            x[p:p + L] += lowpass(r.normal(size=L), 1800) * np.exp(-np.arange(L) / 90) * (1 - k / (rate * 0.9) * 0.5)
+        write("woodpecker_%d" % v, x)
+    for v in range(2):  # dove coo
+        notes = [_sweep(520, 600, 0.35, "arch", harm=(1, 0.3)), _sweep(560, 480, 0.6, "arch", harm=(1, 0.3)), _sweep(500, 470, 0.4, harm=(1, 0.3))]
+        write("dove_%d" % v, _seq(notes, (0.1, 0.25), r))
+    for v in range(3):  # owl hoots (night)
+        notes = [_sweep(r.uniform(330, 400), r.uniform(300, 360), r.uniform(0.25, 0.6), "arch", harm=(1, 0.15)) for _ in range(r.integers(2, 5))]
+        write("owl_%d" % v, _seq(notes, (0.15, 0.45), r))
+    for v in range(2):  # hawk screech
+        write("hawk_%d" % v, _sweep(3200, 1900, 1.1, "exp", 0.04, 50, harm=(1, 0.5, 0.3)) + 0.2 * lowpass(r.normal(size=int(SR * 1.1)), 4000) * env(int(SR * 1.1), 0.05, 0.6))
+    for v in range(3):  # frogs
+        notes = []
+        for _ in range(r.integers(3, 8)):
+            d = r.uniform(0.08, 0.18)
+            n = int(SR * d)
+            t = np.arange(n) / SR
+            pulse = (np.sin(2 * np.pi * r.uniform(60, 110) * t) > 0.3).astype(float)
+            notes.append(lowpass(r.normal(size=n), 900) * pulse * env(n, 0.005, d * 0.5) + 0.4 * np.sin(2 * np.pi * r.uniform(180, 300) * t) * env(n, 0.005, d * 0.5))
+        write("frog_%d" % v, _seq(notes, (0.08, 0.3), r))
+    for v in range(2):  # coyote yips (desert night)
+        notes = [_sweep(r.uniform(700, 900), r.uniform(1100, 1500), r.uniform(0.1, 0.25), "arch", 0.03, 25, harm=(1, 0.4)) for _ in range(r.integers(4, 8))]
+        write("coyote_%d" % v, _seq(notes, (0.03, 0.12), r))
+    for v in range(4):  # wind gusts
+        n = int(SR * r.uniform(2.5, 4.5))
+        t = np.arange(n) / SR
+        g = np.sin(np.pi * t / t[-1]) ** 2
+        write("gust_%d" % v, lowpass(r.normal(size=n), r.uniform(500, 1100)) * g)
+    for v in range(3):  # leaves rustle
+        n = int(SR * r.uniform(1.0, 2.0))
+        x = r.normal(size=n) * (0.3 + 0.7 * (np.abs(lowpass(r.normal(size=n), 6)) > 0.3))
+        f = np.fft.rfft(x)
+        fr = np.fft.rfftfreq(n, 1 / SR)
+        f *= (fr > 1500) & (fr < 9000)
+        x = np.fft.irfft(f, n)
+        write("leaves_%d" % v, x * np.sin(np.pi * np.arange(n) / n))
+    for v in range(2):  # distant thunder
+        n = int(SR * 4.0)
+        write("thunder_%d" % v, lowpass(r.normal(size=n), 160) * env(n, 0.3, 1.2) + lowpass(r.normal(size=n), 400) * env(n, 0.05, 0.3) * 0.5)
+    # gentler beds
+    n = SR * 8
+    t = np.arange(n) / SR
+    write("insects_day_loop", periodic_noise(n, 5000, 8000, 77) * (0.6 + 0.4 * np.sin(2 * np.pi * t / 4)) * 0.4)
+    write("forest_bed_loop", periodic_noise(n, 150, 1200, 78) * 0.5)
+
+
+birds_variety()

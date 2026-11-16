@@ -27,6 +27,14 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ Easier driving: stronger engine, quicker steering, stability assist, auto-righting, a third-person camera by default, and GAS/REV pedals on touch.
 - ✅ More natural world generation: groves and clearings, single-species stands, larger and gentler biomes, no trees on cliffs, grass in natural patches.
 
+### Requests after 1.1
+
+- 🔄 Finish **all visuals** before a version release: high-res models and textures that match the nature quality on every item, vehicle, building and animal. Regular releases are fine along the way.
+- ✅ **Multiple vehicle types and modularity**: a motorhome, pickup truck, sedan, box truck and off-roader, plus hitchable trailers (walk-in camper, flatbed, fuel tanker). Every vehicle has repairable parts, upgrades, paint, cargo that rides along, and furniture you can place on trailers.
+- ✅ **Random houses along the road**: procedurally generated cottages, brick and log houses, cabins, hamlets and truck stops, with furnished interiors.
+- ✅ **Varied ambience**: no looping birdsong. Dozens of randomized bird, owl, crow, woodpecker, frog, coyote, wind and thunder one-shots, chosen by biome and time, with dawn/dusk choruses and call-and-answer.
+- Quality and detail bar: Nomad Drive, plus all of our extra additions.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.
@@ -56,9 +64,9 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 
 - ✅ Detailed 3D models with PBR textures for every item and tool: hatchet, pickaxe, knife, hammer, bow, arrows, rifle, fishing rod, flashlight, food, cans, bottles, fuel cans, parts, seeds.
 - ✅ First-person hands and held-item models.
-- 🔄 Higher-detail RV (window trim and real tires done; rounded shell still to do).
+- ✅ Higher-detail RV: a smooth Class-C shell with over-cab nose, wheel arches, inset windows, decals, trim and real tires.
 - ✅ Log-cabin walls, shingle roofs, stone foundations, and window and door trim.
-- 🔄 Better animal models (fur textures done; anatomy and animation still to improve).
+- ✅ Better animal models: smooth lofted bodies with jointed legs and fur textures (more detail and animation still welcome).
 - ✅ Rendered 3D item icons in the inventory and hotbar.
 
 ## Release acceptance

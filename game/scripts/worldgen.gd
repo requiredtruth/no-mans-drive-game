@@ -130,19 +130,19 @@ func poi_for_row(ci: int) -> Dictionary:
 	if absi(ci) < 2:
 		return {}
 	var h := hash3(ci, 999, 17)
-	if h % 4 != 0:
+	if h % 3 != 0:
 		return {}
-	var types := ["gas_station", "house", "wrecks", "gas_station", "camp_ruin", "house", "farm"]
+	var types := ["gas_station", "house", "wrecks", "house", "camp_ruin", "cabin", "farm", "hamlet", "truck_stop", "house", "gas_station", "wrecks"]
 	var t: String = types[(h >> 4) % types.size()]
 	var z := ci * CHUNK + CHUNK * 0.5
 	var side := 1.0 if (h >> 9) % 2 == 0 else -1.0
 	var rx := road_x(z)
 	var dir := road_dir(z)
 	var perp := Vector3(-dir.z, 0, dir.x)
-	var offset := 17.0 if t != "wrecks" else 9.0
+	var offset: float = {"wrecks": 9.0, "hamlet": 26.0, "truck_stop": 20.0}.get(t, 18.0)
 	var pos := Vector3(rx, 0, z) + perp * side * offset
 	pos.y = road_h(z) + 0.05
-	return {"type": t, "pos": pos, "radius": 16.0 if t != "wrecks" else 6.0, "side": side,
+	return {"type": t, "pos": pos, "radius": {"wrecks": 6.0, "hamlet": 30.0, "truck_stop": 20.0}.get(t, 16.0), "side": side,
 		"yaw": atan2(dir.x, dir.z) + (PI * 0.5 if side > 0.0 else -PI * 0.5), "row": ci}
 
 # ------------------------------------------------------------------ chunk data (thread-safe)

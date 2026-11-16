@@ -4,6 +4,7 @@ extends VehicleBody3D
 const Data = preload("res://scripts/data.gd")
 const Structure = preload("res://scripts/structure.gd")
 const RvPart = preload("res://scripts/rv_part.gd")
+const Shapes = preload("res://scripts/shapes.gd")
 
 const W := 2.4 # body width
 const FLOOR_Y := 1.0
@@ -146,25 +147,34 @@ func _build_exterior() -> void:
 	var vis := Node3D.new()
 	vis.name = "Exterior"
 	add_child(vis)
-	# skirt + floor underside
-	Lib.box(vis, Vector3(0, FLOOR_Y - 0.2, mid), Vector3(W + 0.02, 0.45, L), stripe)
-	# outer shell walls with window holes
-	_wall_x(vis, -W * 0.5 - 0.03, white, [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55]])
-	_wall_x(vis, W * 0.5 + 0.03, white, [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6]])
-	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z - 0.03), Vector3(W + 0.08, h, 0.06), white)
-	Lib.box(vis, Vector3(0, ROOF_Y + 0.1, mid), Vector3(W + 0.08, 0.2, L + 0.08), white)
-	# decorative stripes
-	for y in [1.62, 1.72]:
-		Lib.box(vis, Vector3(-W * 0.5 - 0.06, y, mid), Vector3(0.02, 0.06, L), stripe)
-		Lib.box(vis, Vector3(W * 0.5 + 0.06, y, mid - 1.8), Vector3(0.02, 0.06, L - 3.6), stripe)
-	# cab front: hood, windshield, grille
-	Lib.box(vis, Vector3(0, 1.18, FRONT_Z + 0.62), Vector3(W - 0.06, 0.95, 1.25), stripe)
-	Lib.box(vis, Vector3(0, 1.66, FRONT_Z + 0.6), Vector3(W - 0.1, 0.06, 1.2), white)
-	var ws := Lib.box(vis, Vector3(0, 2.38, FRONT_Z + 0.12), Vector3(W - 0.2, 1.3, 0.04), Lib.glass_mat(), false, Vector3(0.22, 0, 0))
-	ws.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	Lib.box(vis, Vector3(0, 3.13, FRONT_Z), Vector3(W + 0.08, 0.24, 0.3), white)
-	for x in [-W * 0.5 + 0.06, W * 0.5 - 0.06]:
-		Lib.box(vis, Vector3(x, 2.4, FRONT_Z + 0.12), Vector3(0.1, 1.4, 0.12), white, false, Vector3(0.22, 0, 0))
+	# Smooth Class-C motorhome shell: over-cab nose, sloped hood, wheel arches, rounded edges.
+	var body := Shapes.st()
+	var glass := Shapes.st()
+	var trim := Shapes.st()
+	var deco := Shapes.st()
+	var o := Shapes.arched_bottom(REAR_Z - 0.05, FRONT_Z + 1.25, 0.72, [[-2.35, 0.6], [2.55, 0.6]])
+	for pt in [Vector2(FRONT_Z + 1.32, 1.0), Vector2(FRONT_Z + 1.24, 1.6), Vector2(FRONT_Z + 0.22, 1.72), Vector2(FRONT_Z - 0.12, 2.5),
+			Vector2(FRONT_Z + 0.45, 2.58), Vector2(FRONT_Z + 0.62, 2.88), Vector2(FRONT_Z + 0.5, 3.25), Vector2(FRONT_Z + 0.05, ROOF_Y + 0.2),
+			Vector2(REAR_Z + 0.25, ROOF_Y + 0.2), Vector2(REAR_Z - 0.05, ROOF_Y - 0.1)]:
+		o.append(pt)
+	var ws_edge := o.size() - 8
+	Shapes.extrude(body, glass, o, W + 0.06, 0.16, [ws_edge])
+	var xo := W * 0.5 + 0.035
+	for side in [-1.0, 1.0]:
+		var wins: Array = [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.35, 3.25, 1.85, 2.5]] if side < 0.0 else [[-1.1, 0.1, 1.85, 2.55], [-3.1, -2.2, 2.2, 2.6], [2.35, 3.25, 1.85, 2.5]]
+		for wn in wins:
+			var poly := PackedVector2Array([Vector2(wn[0], wn[2]), Vector2(wn[1], wn[2]), Vector2(wn[1], wn[3]), Vector2(wn[0], wn[3])])
+			Shapes.side_panel(trim, Shapes.shrink(poly, -0.05), side * (xo + 0.002), side)
+			Shapes.side_panel(glass, poly, side * (xo + 0.006), side)
+		# swoosh decals in the customizable paint colour
+		Shapes.side_panel(deco, PackedVector2Array([Vector2(REAR_Z, 1.15), Vector2(FRONT_Z + 1.2, 1.15), Vector2(FRONT_Z + 1.2, 1.3), Vector2(REAR_Z, 1.3)]), side * (xo + 0.003), side)
+		Shapes.side_panel(deco, PackedVector2Array([Vector2(REAR_Z, 1.38), Vector2(-0.5, 1.38), Vector2(1.5, 1.62), Vector2(FRONT_Z + 0.6, 1.62), Vector2(FRONT_Z + 0.6, 1.68), Vector2(1.5, 1.68), Vector2(-0.5, 1.44), Vector2(REAR_Z, 1.44)]), side * (xo + 0.003), side)
+		Shapes.side_panel(trim, PackedVector2Array([Vector2(REAR_Z, 0.72), Vector2(FRONT_Z + 1.25, 0.72), Vector2(FRONT_Z + 1.25, 0.82), Vector2(REAR_Z, 0.82)]), side * (xo + 0.002), side)
+	var shell := MeshInstance3D.new()
+	shell.mesh = Shapes.commit([[body, white], [glass, Lib.glass_mat()], [trim, Lib.mat("rubber", Color(0.5, 0.5, 0.5), 2.0, false, 0.8)], [deco, stripe]])
+	vis.add_child(shell)
+	# inner face of the entry door (so the closed door isn't see-through from inside)
+	Lib.box(vis, Vector3(W * 0.5 - 0.05, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.03, DOOR_H, DOOR_Z1 - DOOR_Z0), Lib.mat("planks", Color(0.95, 0.88, 0.78), 1.1, false))
 	Lib.box(vis, Vector3(0, 1.2, FRONT_Z + 1.26), Vector3(1.3, 0.45, 0.04), dark)
 	for k in range(5):
 		Lib.box(vis, Vector3(0, 1.02 + k * 0.09, FRONT_Z + 1.28), Vector3(1.25, 0.025, 0.02), chrome)
@@ -289,8 +299,8 @@ func _build_interior() -> void:
 	add_child(vis)
 	Lib.box(vis, Vector3(0, FLOOR_Y + 0.01, mid), Vector3(W - 0.14, 0.02, L - 0.1), floor_m)
 	Lib.box(vis, Vector3(0, ROOF_Y - 0.03, mid), Vector3(W - 0.14, 0.04, L - 0.1), panel)
-	_wall_x(vis, -W * 0.5 + 0.08, panel, [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55]])
-	_wall_x(vis, W * 0.5 - 0.08, panel, [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6]])
+	_wall_x(vis, -W * 0.5 + 0.08, panel, [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.35, 3.25, 1.85, 2.5]])
+	_wall_x(vis, W * 0.5 - 0.08, panel, [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6], [2.35, 3.25, 1.85, 2.5]])
 	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.08), Vector3(W - 0.14, h, 0.04), panel)
 	# cab: dashboard + seats + steering wheel
 	Lib.box(vis, Vector3(0, 1.75, FRONT_Z - 0.05), Vector3(W - 0.15, 0.5, 0.5), black)
@@ -777,6 +787,7 @@ func _spawn_attached(rec: Dictionary) -> Node:
 	s.collision_mask = 0
 	s.remove_from_group("roof")
 	s.set_meta("rv_rec", rec)
+	s.set_meta("host", self)
 	s.save_cb = func(d: Dictionary) -> void: rec["data"] = d
 	return s
 
@@ -803,6 +814,29 @@ func _spawn_cargo(r: Dictionary) -> void:
 	get_node("Cargo").add_child(it)
 	it.position = Game.v3(r["pos"])
 	it.rotation = Game.v3(r["rot"])
+
+var trailer: Node = null
+
+func display_name() -> String:
+	return "Motorhome"
+
+func seat_global(as_driver: bool) -> Vector3:
+	return to_global(Vector3(-0.55 if as_driver else 0.55, 1.0, 2.3))
+
+func exit_global() -> Vector3:
+	return to_global(Vector3(-0.2, FLOOR_Y + 0.1, FRONT_Z - 1.9))
+
+func set_seat(as_driver: bool) -> void:
+	cam_fp.position.x = -0.55 if as_driver else 0.55
+
+func hitch_global() -> Vector3:
+	return to_global(Vector3(0, 0.75, REAR_Z - 0.55))
+
+func paint_palette() -> Array:
+	return Data.RV_PAINTS
+
+func upgrade_list() -> Array:
+	return Data.RV_UPGRADES.keys()
 
 func set_paint(i: int) -> void:
 	paint = i

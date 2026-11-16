@@ -261,7 +261,7 @@ func _process(delta: float) -> void:
 		hotbar_box.visible = not p.driving
 		crosshair.visible = not p.driving
 		if p.driving:
-			var rv = Game.rv
+			var rv = p.vehicle
 			var spd: float = rv.speed_kmh()
 			dash_label.text = "%3d km/h   %s   Fuel %d/%d L   Battery %d%%   Engine %d%%   Tires %d%%%s" % [int(absf(spd)), "R" if spd < -0.5 else "D",
 				int(rv.fuel), int(rv.fuel_capacity()), int(rv.battery), int(rv.parts["engine"]), int(rv.parts["tires"]), "   LIGHTS" if rv.headlights else ""]
@@ -555,8 +555,8 @@ func open_storage(items: Dictionary, title: String, on_change: Callable) -> void
 
 # ------------------------------------------------------------------ RV
 func open_rv_menu(rv) -> void:
-	var body := _open_modal("rv", "RV Workshop", rv, 1000.0)
-	body.add_child(UI.label("Odometer %.1f km · Fuel %d/%d L · Water %d/%d L · Battery charge %d%%" % [rv.odometer / 1000.0, int(rv.fuel), int(rv.fuel_capacity()), int(rv.water), int(rv.water_capacity()), int(rv.battery)], 16, Color(0.85, 0.85, 0.8)))
+	var body := _open_modal("rv", "%s Workshop" % rv.display_name(), rv, 1000.0)
+	body.add_child(UI.label("%s · Odometer %.1f km · Fuel %d/%d L%s · Battery charge %d%%" % [rv.display_name(), rv.odometer / 1000.0, int(rv.fuel), int(rv.fuel_capacity()), (" · Water %d/%d L" % [int(rv.water), int(rv.water_capacity())]) if rv.water_capacity() > 0.0 else "", int(rv.battery)], 16, Color(0.85, 0.85, 0.8)))
 	body.add_child(UI.label("Parts", 20, Color(1.0, 0.8, 0.5)))
 	for part in Data.RV_PARTS:
 		var spec: Dictionary = Data.RV_PARTS[part]
@@ -575,7 +575,7 @@ func open_rv_menu(rv) -> void:
 		row.add_child(rb)
 		body.add_child(row)
 	body.add_child(UI.label("Upgrades (toolkit required)", 20, Color(1.0, 0.8, 0.5)))
-	for up in Data.RV_UPGRADES:
+	for up in rv.upgrade_list():
 		var spec: Dictionary = Data.RV_UPGRADES[up]
 		var row := HBoxContainer.new()
 		var have: bool = rv.upgrades.has(up)
@@ -589,11 +589,12 @@ func open_rv_menu(rv) -> void:
 		body.add_child(row)
 	body.add_child(UI.label("Paint job", 20, Color(1.0, 0.8, 0.5)))
 	var prow := HBoxContainer.new()
-	for i in range(Data.RV_PAINTS.size()):
+	var palette: Array = rv.paint_palette()
+	for i in range(palette.size()):
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(56, 44)
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Data.RV_PAINTS[i]
+		sb.bg_color = palette[i]
 		sb.set_corner_radius_all(6)
 		sb.border_color = Color.WHITE if rv.paint == i else Color(0, 0, 0, 0.5)
 		sb.set_border_width_all(3)

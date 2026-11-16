@@ -10,3 +10,5 @@
 | Engine | [Godot Engine 4.6.3](https://godotengine.org) | MIT |
 | `BarramundiFish.glb` | [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/BarramundiFish) — Microsoft | CC0 |
 | Item models, first-person hands | Procedural geometry in `game/scripts/items.gd` | CC0 |
+| Vehicles, trailers, houses, animals (lofted bodies) | Procedural geometry in `game/scripts/car.gd`, `trailer.gd`, `shapes.gd`, `pois.gd`, `animal.gd` | CC0 |
+| Ambient bird/animal/wind calls | Synthesized by `tools/gen_audio.py` | CC0 |

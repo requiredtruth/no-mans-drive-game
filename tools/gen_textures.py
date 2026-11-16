@@ -443,3 +443,79 @@ def fabric_plaid():
 for fn in [brushed_metal, paint_chipped, leather, rubber, fur, shingles, logs, cardboard, skin, denim, fabric_plaid]:
     fn()
     print("generated", fn.__name__)
+
+
+# --- v1.2 houses ---------------------------------------------------------------
+def brick():
+    yy, xx = np.mgrid[0:N, 0:N]
+    rows = 16
+    rh = N // rows
+    row = yy // rh
+    bw = N // 8
+    off = (row % 2) * (bw // 2)
+    mortar = ((yy % rh) < 6) | (((xx + off) % bw) < 6)
+    rng = np.random.default_rng(310)
+    tint = rng.uniform(0.75, 1.15, size=(rows, 9))[row, ((xx + off) // bw) % 9]
+    grain = band(N, 100, 512, 311)
+    large = spectral(N, 1.8, 312)
+    col = ramp(0.6 * grain + 0.4 * large, [(0, rgb("6a2a1c")), (0.5, rgb("9a4a32")), (1, rgb("b8684a"))]) * tint[..., None]
+    col[mortar] = (ramp(grain, [(0, rgb("8a857a")), (1, rgb("b8b2a4"))]))[mortar]
+    save_rgb("brick", col)
+    h = grain * 0.3
+    h[mortar] = -0.6
+    save_normal("brick", h, 8)
+
+
+def siding():
+    yy, xx = np.mgrid[0:N, 0:N]
+    rows = 16
+    rh = N // rows
+    v = (yy % rh) / rh
+    lap = v * 0.8 + 0.2
+    grain = band(N, 4, 80, 320, aniso=(16.0, 1.0))
+    large = spectral(N, 1.7, 321)
+    base = np.ones((N, N, 3)) * (0.86 + 0.08 * grain + 0.06 * large)[..., None]
+    base *= (0.75 + 0.25 * lap)[..., None]
+    chips = np.clip((spectral(N, 1.2, 322) - 0.78) * 6, 0, 1)
+    base = lerp(base, np.array(rgb("7a6a58")), chips * 0.8)
+    save_rgb("siding", base)
+    save_normal("siding", lap * 0.8 - chips * 0.2, 6)
+
+
+def wallpaper():
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    stripes = 0.5 + 0.5 * np.sin(2 * np.pi * xx * 16)
+    motif = (np.sin(2 * np.pi * xx * 32) * np.sin(2 * np.pi * yy * 32) > 0.6).astype(float)
+    large = spectral(N, 2.0, 330)
+    base = ramp(0.6 * stripes + 0.2 * large, [(0, rgb("b8a98a")), (1, rgb("ddd0b2"))])
+    base = lerp(base, np.array(rgb("8a7a5a")), motif * 0.5)
+    stain = np.clip((spectral(N, 1.6, 331) - 0.62) * 2.5, 0, 1)
+    base = lerp(base, np.array(rgb("6a5a40")), stain * 0.45)
+    save_rgb("wallpaper", base)
+
+
+def tiles():
+    yy, xx = np.mgrid[0:N, 0:N]
+    t = N // 8
+    grout = ((xx % t) < 6) | ((yy % t) < 6)
+    checker = (((xx // t) + (yy // t)) % 2).astype(float)
+    large = spectral(N, 1.8, 340)
+    base = ramp(0.7 * checker + 0.3 * large, [(0, rgb("8a8e90")), (1, rgb("e4e2dc"))])
+    base[grout] = np.array(rgb("5a5852"))
+    save_rgb("tiles", base)
+    h = np.zeros((N, N))
+    h[grout] = -0.5
+    save_normal("tiles", h, 4)
+
+
+def carpet():
+    fine = band(N, 200, 512, 350)
+    large = spectral(N, 1.8, 351)
+    col = ramp(0.5 * fine + 0.5 * large, [(0, rgb("4a3a4a")), (1, rgb("7a5a6a"))])
+    save_rgb("carpet", col)
+    save_normal("carpet", fine, 3)
+
+
+for fn in [brick, siding, wallpaper, tiles, carpet]:
+    fn()
+    print("generated", fn.__name__)
