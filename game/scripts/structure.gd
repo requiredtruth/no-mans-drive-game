@@ -159,10 +159,18 @@ func _build() -> void:
 			Lib.cyl(self, Vector3(0, 0.73, -1.2), 0.03, 0.03, 1.45, Lib.mat("bark"))
 			_col(Vector3(0, 0.6, 0), Vector3(1.8, 1.2, 2.4))
 		"crate":
-			_solid(Vector3(0, 0.4, 0), Vector3(1.1, 0.8, 0.7), planks)
-			Lib.box(self, Vector3(0, 0.81, 0), Vector3(1.14, 0.06, 0.74), dark)
-			for x in [-0.5, 0.5]:
-				Lib.box(self, Vector3(x, 0.4, 0), Vector3(0.08, 0.82, 0.74), dark)
+			# open-top crate: things you put in it physically sit inside and come along
+			# when you carry the crate
+			_solid(Vector3(0, 0.05, 0), Vector3(1.1, 0.1, 0.7), planks)
+			for sx in [-1.0, 1.0]:
+				_solid(Vector3(sx * 0.525, 0.4, 0), Vector3(0.05, 0.8, 0.7), planks)
+				_solid(Vector3(0, 0.4, sx * 0.325), Vector3(1.0, 0.8, 0.05), planks)
+				Lib.box(self, Vector3(sx * 0.53, 0.4, 0), Vector3(0.08, 0.82, 0.74), dark)
+			for y in [0.06, 0.78]:
+				for sz in [-1.0, 1.0]:
+					Lib.box(self, Vector3(0, y, sz * 0.34), Vector3(1.12, 0.06, 0.04), dark)
+			if persistent and data.has("items") and not (data["items"] as Dictionary).is_empty():
+				call_deferred("_spill_legacy")
 		"planter":
 			_solid(Vector3(0, 0.25, 0), Vector3(1.6, 0.5, 0.8), planks)
 			Lib.box(self, Vector3(0, 0.5, 0), Vector3(1.45, 0.04, 0.65), Lib.mat("dirt", Color(0.7, 0.6, 0.5), 0.6))
@@ -400,7 +408,7 @@ func _prompt() -> String:
 		"tent", "bed":
 			return "[E] Sleep"
 		"crate":
-			return "[E] Open storage"
+			return "Storage crate — put things inside with [G]"
 		"planter":
 			var crop: String = data.get("crop", "")
 			if crop == "":
@@ -439,9 +447,7 @@ func interact(player: Node) -> void:
 		"tent", "bed":
 			Game.world.sleep(global_position + Vector3(0, 0.5, 0))
 		"crate":
-			if not data.has("items"):
-				data["items"] = {}
-			Game.world.hud.open_storage(data["items"], "Storage Crate", _save_data)
+			Game.notify("Hold something and press [G] to put it in the crate. Pick the crate up with [G] (empty hands) to carry everything at once.")
 		"planter":
 			_planter_interact()
 		"workbench":
@@ -457,6 +463,22 @@ func interact(player: Node) -> void:
 				_save_data()
 			else:
 				Game.notify("The collector is empty. Wait for rain.")
+
+## Crates from older saves stored an item list: lay those items inside for real.
+func _spill_legacy() -> void:
+	var items: Dictionary = data.get("items", {})
+	var i := 0
+	for k in items:
+		var n := int(items[k])
+		while n > 0:
+			var lim := Data.stack(k)
+			var take := mini(n, lim)
+			var lp := Vector3(-0.3 + (i % 3) * 0.3, 0.12 + (i / 6) * 0.2, -0.13 + ((i / 3) % 2) * 0.26)
+			Game.place_item(k, take, global_transform * Transform3D(Basis.IDENTITY, lp))
+			n -= take
+			i += 1
+	data.erase("items")
+	_save_data()
 
 func add_fuel() -> bool:
 	if not Game.remove_item("wood", 1):

@@ -4,6 +4,7 @@ extends CharacterBody3D
 const Data = preload("res://scripts/data.gd")
 const Builder = preload("res://scripts/builder.gd")
 const Arrow = preload("res://scripts/arrow.gd")
+const RvPart = preload("res://scripts/rv_part.gd")
 
 const WALK := 4.3
 const SPRINT := 7.2
@@ -107,13 +108,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.select_slot(Game.selected_slot + 1)
 	elif event.is_action_pressed("hotbar_prev"):
 		Game.select_slot(Game.selected_slot - 1)
-	for i in range(6):
+	for i in range(mini(6, Game.slots.size())):
 		if event.is_action_pressed("slot_%d" % (i + 1)):
 			Game.select_slot(i)
 	if event.is_action_pressed("interact"):
 		_interact()
 	if event.is_action_pressed("pickup"):
-		_pickup()
+		place_or_grab()
+	if event.is_action_pressed("drop") and not driving:
+		throw_held()
+	if event.is_action_pressed("rotate") and not driving and not builder.active and Game.equipped() != "":
+		_place_rot = wrapf(_place_rot + PI * 0.25, 0.0, TAU)
 	if event.is_action_pressed("flashlight"):
 		toggle_flashlight()
 	if driving:
@@ -136,7 +141,7 @@ func look(rel: Vector2) -> void:
 	head.rotation.x = pitch
 
 func toggle_flashlight() -> void:
-	if Game.count("flashlight") <= 0:
+	if not Game.worn.has("flashlight") and Game.carried("flashlight") <= 0:
 		Game.notify("You don't have a flashlight")
 		return
 	flashlight.visible = not flashlight.visible
@@ -170,6 +175,7 @@ func _physics_process(delta: float) -> void:
 	_update_prompt()
 	_handle_tools(delta)
 	_fishing(delta)
+	_update_placement()
 
 func _move(delta: float) -> void:
 	if not Game.world.ground_ready(global_position):
@@ -254,6 +260,7 @@ func _update_prompt() -> void:
 	look_target = null
 	prompt = ""
 	if driving:
+		_set_highlight(null)
 		var spd: float = absf(vehicle.speed_kmh())
 		prompt = "[E] Exit vehicle" if spd < 12.0 else ""
 		return
@@ -265,6 +272,11 @@ func _update_prompt() -> void:
 				prompt = t.get_prompt()
 			elif t.has_meta("res_kind"):
 				prompt = _resource_prompt(t)
+	_set_highlight(look_target)
+	var held := Game.equipped()
+	if held != "" and not builder.active and _place_valid and (look_target == null or not look_target.is_in_group("world_item")):
+		var hint := "[G] Place %s   [R] Rotate   [Q] Throw" % Data.item_name(held)
+		prompt = hint if prompt == "" else prompt + "\n" + hint
 	if _fish_state == "bite":
 		prompt = "A fish is biting! [Use] to reel in!"
 	elif _fish_state == "waiting":
@@ -293,37 +305,197 @@ func _interact() -> void:
 	elif look_target.has_meta("res_kind") and look_target.get_meta("res_kind") == "bush":
 		Game.world.harvest_bush(look_target)
 	elif look_target.has_meta("res_kind") and look_target.get_meta("res_kind") == "pickup":
-		Game.add_item(look_target.get_meta("item"), 1)
+		var item: String = look_target.get_meta("item")
+		if Game.hands_full_for(item):
+			Game.notify("Your hands are full — place [G] or drop [Q] something first")
+			return
+		Game.add_item(item, 1)
 		Audio.play("pickup", -6.0)
 		Net.mark_removed(look_target.get_meta("res_key"), true)
 
-## Grab a loose item, or pick a placed object (crate, campfire, chair...) back up to move it.
-func _pickup() -> void:
-	if driving or look_target == null:
+var _hl_node: Node = null
+
+func _set_highlight(t: Object) -> void:
+	var n: Node = t as Node if t and (t as Node).is_in_group("world_item") else null
+	if n == _hl_node:
+		return
+	if _hl_node and is_instance_valid(_hl_node):
+		_hl_node.set_highlight(false)
+	_hl_node = n
+	if n:
+		n.set_highlight(true)
+
+## G: place what you hold exactly where the preview shows, or — with empty hands — pick up
+## placed furniture (crate, chair, campfire...) to carry it somewhere else.
+func place_or_grab() -> void:
+	if driving or dead:
+		return
+	if builder.active and builder.kit != "":
+		builder.place()
+		return
+	if Game.equipped() != "":
+		place_held()
+		return
+	if look_target == null:
 		return
 	var t := look_target as Node
 	if t.is_in_group("world_item"):
 		t.interact(self)
 		return
 	if t.get_script() == Builder.Structure and t.is_in_group("placeable"):
+		if Game.space_for(t.type) <= 0:
+			Game.notify("Your hands are full — place [G] or drop [Q] something first")
+			return
 		var type: String = t.type
-		if type == "crate" and t.data.has("items"):
-			for k in t.data["items"]:
-				Game.add_item(k, int(t.data["items"][k]), true)
+		var contents: Array = []
+		if type == "crate":
+			contents = _crate_contents(t)
 		if t.has_meta("rv_rec"):
 			t.get_meta("host").detach_structure(t)
 		elif t.persistent:
 			Net.remove_structure(t.id)
 		else:
 			return
-		Game.add_item(type, 1)
+		Game.add_item(type, 1, true)
+		if not contents.is_empty():
+			for sl in Game.slots:
+				if sl["id"] == "crate" and not sl.has("c"):
+					sl["c"] = contents
+					break
+			Game.notify("Picked up the crate with %d things inside" % contents.size())
+		else:
+			Game.notify("Picked up %s" % Data.item_name(type))
 		Audio.play("pickup")
 
+## Items lying inside a crate come along when you carry the crate.
+func _crate_contents(crate: Node3D) -> Array:
+	var out := []
+	var inv := crate.global_transform.affine_inverse()
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if not is_instance_valid(it) or it.is_queued_for_deletion():
+			continue
+		var l: Vector3 = inv * it.global_position
+		if absf(l.x) < 0.56 and absf(l.z) < 0.36 and l.y > 0.0 and l.y < 0.95:
+			var lx: Transform3D = inv * it.global_transform
+			out.append({"id": it.id, "n": it.amount, "pos": Game.arr(lx.origin), "rot": Game.arr(lx.basis.get_euler())})
+			it.queue_free()
+	return out
+
+func throw_held() -> void:
+	if Game.equipped() == "":
+		return
+	if builder.active and builder.kit != "":
+		builder.stop()
+	var s := Game.take_held()
+	if s["id"] == "":
+		return
+	var fwd := -camera.global_transform.basis.z
+	var it = Game.spawn_item(s["id"], int(s["n"]), camera.global_position + fwd * 0.7 + Vector3(0, -0.25, 0), fwd * 4.0)
+	if it and s.has("c"):
+		it.contents = s["c"]
+	Audio.play("click", -8.0, 0.7)
+
 func drop_item(id: String, n := 1) -> void:
-	if not Game.remove_item(id, n):
+	if Game.carried(id) < n or not Game.remove_item(id, n):
 		return
 	var fwd := -camera.global_transform.basis.z
 	Game.spawn_item(id, n, camera.global_position + fwd * 0.8 + Vector3(0, -0.3, 0), fwd * 1.5)
+
+# ------------------------------------------------------------------ placing held items
+var _place_ghost: Node3D
+var _place_ghost_id := ""
+var _place_rot := 0.0
+var _place_valid := false
+var _place_xf := Transform3D()
+var _place_host: Node = null
+var _ghost_ok: StandardMaterial3D
+var _ghost_bad: StandardMaterial3D
+
+func _host_of(n: Node) -> Node:
+	for i in range(7):
+		if n == null:
+			return null
+		if n.get_node_or_null("Cargo") != null and (n is VehicleBody3D or n.has_method("contains_point")):
+			return n
+		n = n.get_parent()
+	return null
+
+func _update_placement() -> void:
+	var id := Game.equipped()
+	var kind: String = Data.ITEMS.get(id, {}).get("kind", "")
+	_place_valid = false
+	if id == "" or kind == "placeable" or builder.active or Game.ui_open or _fish_state != "":
+		if _place_ghost:
+			_place_ghost.visible = false
+		return
+	if _place_ghost_id != id:
+		if _place_ghost:
+			_place_ghost.queue_free()
+		_place_ghost = Items.display_instance(id)
+		_place_ghost.top_level = true
+		_set_no_shadow(_place_ghost)
+		add_child(_place_ghost)
+		_place_ghost_id = id
+		if _ghost_ok == null:
+			_ghost_ok = StandardMaterial3D.new()
+			_ghost_ok.albedo_color = Color(0.4, 1.0, 0.5, 0.45)
+			_ghost_ok.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			_ghost_ok.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_ghost_bad = _ghost_ok.duplicate()
+			_ghost_bad.albedo_color = Color(1.0, 0.35, 0.3, 0.4)
+	# cast from the eyes, skipping interaction hotspots (seats, stove...) so you can set
+	# things on the counter, dashboard, shelves, table or the floor of any vehicle
+	var space := get_world_3d().direct_space_state
+	var from := camera.global_position
+	var to := from - camera.global_transform.basis.z * 3.4
+	var q := PhysicsRayQueryParameters3D.create(from, to, 1 | 2 | 16 | 32)
+	var ex: Array[RID] = [get_rid()]
+	q.exclude = ex
+	var hit := {}
+	for k in range(6):
+		hit = space.intersect_ray(q)
+		if hit.is_empty():
+			break
+		var col: Object = hit["collider"]
+		if col.get_script() == RvPart or col.is_in_group("animal") or (col is Area3D):
+			ex.append(col.get_rid())
+			q.exclude = ex
+			continue
+		break
+	if hit.is_empty():
+		_place_ghost.visible = false
+		return
+	var n: Vector3 = hit["normal"]
+	var bb: AABB = Items.display_bounds(id)
+	var basis := Basis(Vector3.UP, rotation.y + PI + _place_rot)
+	var pos: Vector3 = hit["position"]
+	if n.y > 0.6:
+		pos -= Vector3(0, bb.position.y - 0.005, 0)
+		_place_valid = true
+	else:
+		# against a wall: stand it on the floor next to the wall would be guesswork — show red
+		pos += n * (maxf(bb.size.x, bb.size.z) * 0.5)
+	_place_host = _host_of(hit["collider"] as Node)
+	_place_xf = Transform3D(basis, pos)
+	_place_ghost.global_transform = _place_xf
+	_place_ghost.visible = true
+	_paint_ghost(_place_ghost, _ghost_ok if _place_valid else _ghost_bad)
+
+func _paint_ghost(n: Node, m: Material) -> void:
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).material_override = m
+	for c in n.get_children():
+		_paint_ghost(c, m)
+
+func place_held() -> void:
+	if not _place_valid:
+		Game.notify("Aim at a flat surface within reach to place it")
+		return
+	var s := Game.take_held()
+	if s["id"] == "":
+		return
+	Game.place_item(s["id"], int(s["n"]), _place_xf, _place_host, s.get("c", []))
+	Audio.play_at("pickup", _place_xf.origin, -6.0, 0.8)
 
 func enter_vehicle(rv: Node, as_driver: bool) -> void:
 	if as_driver and rv == Game.rv and not Net.claim_driver(true):
@@ -393,7 +565,11 @@ func _refresh_viewmodel() -> void:
 		"":
 			pose = [Vector3(0, 0, 0), Vector3.ZERO, 1.0]
 		_:
-			pose = [Vector3(0, -0.02, -0.03), Vector3(0.2, 0.6, 0.0), 0.9]
+			# carried objects: held out in front, big enough to see what you have
+			var bb: AABB = Items.bounds(id)
+			var big := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
+			var k := clampf(0.2 / maxf(big, 0.01), 0.35, 1.5)
+			pose = [Vector3(-0.1 - big * k * 0.25, -0.05, -0.08 - big * k * 0.2), Vector3(0.15, 0.5, 0.0), k]
 	if id != "":
 		var item := Items.instance(id)
 		item.position = pose[0]
@@ -486,6 +662,9 @@ func use_primary() -> void:
 			if it.get("kind", "") in ["food", "medical"]:
 				Game.consume(id)
 				_cooldown = 0.8
+			elif it.get("kind", "") == "wear":
+				Game.wear(id)
+				_cooldown = 0.5
 			elif it.get("kind", "") == "fuel" and Game.rv.global_position.distance_to(global_position) < 6.0:
 				Game.rv.do_action("fuel", self)
 				_cooldown = 0.8
@@ -634,7 +813,7 @@ func effective_temp() -> float:
 			t += 14.0
 	elif Game.world.is_sheltered(global_position):
 		t += 6.0
-	if Game.count("jacket") > 0:
+	if Game.worn.has("jacket"):
 		t += 12.0
 	return t
 
@@ -705,7 +884,8 @@ func respawn() -> void:
 	teleport(p + Vector3(0, 0.5, 0))
 	Game.stats = {"health": 60.0, "food": 50.0, "water": 50.0, "energy": 70.0, "warmth": 80.0}
 	# lose some perishables
-	for k in ["raw_meat", "cooked_meat", "raw_fish", "cooked_fish", "berries"]:
-		if Game.count(k) > 0:
-			Game.remove_item(k, Game.count(k))
+	for i in range(Game.slots.size()):
+		if Game.slots[i]["id"] in ["raw_meat", "cooked_meat", "raw_fish", "cooked_fish", "berries"]:
+			Game.slots[i] = {"id": "", "n": 0}
+	Game._changed()
 	camera.make_current()

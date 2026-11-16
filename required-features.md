@@ -35,6 +35,16 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ **Varied ambience**: no looping birdsong. Dozens of randomized bird, owl, crow, woodpecker, frog, coyote, wind and thunder one-shots, chosen by biome and time, with dawn/dusk choruses and call-and-answer.
 - Quality and detail bar: Nomad Drive, plus all of our extra additions.
 
+### Requests after 1.2 (addressed in 1.3)
+
+- ✅ **Physical items, Nomad Drive style. No boxed inventory.** Pick up each individual item. You can carry only a few (two hands, plus two backpack slots). Place items in exact spots with a preview and rotation, and placed items stay glued in place in the RV and every vehicle while driving.
+- ✅ **Open boxes to find items inside** them (cardboard boxes, open-top crates, RV fridge and cupboards with doors and shelves). Clicking an item never sends it to an inventory screen.
+- ✅ **Replace parts by hand**: pull out the worn battery or tire, carry the new one over and fit it. Engine parts and scrap go in at the hood.
+- ✅ **Items easier to see**: small items are drawn larger in the world, and the targeted item is highlighted with its name shown.
+- ✅ **Truck cabs are real interiors** (headliner, door panels, pillars, dash gauges), not just windows.
+- ✅ **The RV interior should not look like wood**: wall board, vinyl floor, laminate cabinets, fabric seats.
+- Keep imitating Nomad Drive as closely as possible, plus our added features. Sound and driving are approved as-is.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.

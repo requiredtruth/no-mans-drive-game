@@ -20,7 +20,8 @@ const TABLES := {
 var key := ""
 var label := "Cabinet"
 var table := "shelf"
-var mode := "loot" # loot | pump | well | bed
+var mode := "loot" # loot | box | pump | well | bed
+var flaps: Array = [] # cardboard box flaps (open when searched)
 
 func setup(p_key: String, p_label: String, p_table: String, p_mode := "loot") -> void:
 	key = p_key
@@ -42,6 +43,8 @@ func get_prompt() -> String:
 			return "[E] Sleep in old bed"
 	if Game.removed.has(key):
 		return "%s (searched)" % label
+	if mode == "box":
+		return "[E] Open %s" % label
 	return "[E] Search %s" % label
 
 func pump_left() -> float:
@@ -65,28 +68,63 @@ func interact(_player: Node) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var rolls := int(round(rng.randi_range(2, 3) * Game.diff("loot")))
-	var got := false
+	var found: Array = []
 	var entries: Array = TABLES.get(table, TABLES["shelf"])
 	for i in range(maxi(rolls, 1)):
 		var e: Array = entries[rng.randi() % entries.size()]
 		var id: String = e[0]
 		if Data.ITEMS[id]["kind"] == "tool" and (Game.count(id) > 0 or rng.randf() < 0.5):
 			continue
-		var top := 1.0
-		for ch in get_children():
-			if ch is CollisionShape3D and ch.shape is BoxShape3D:
-				top = ch.position.y + ch.shape.size.y * 0.5
-		var toward: Vector3 = (Game.player.global_position - global_position) * Vector3(1, 0, 1)
-		toward = toward.normalized() * 0.25 if toward.length() > 0.01 else Vector3.ZERO
-		var spot := global_position + Vector3(0, top + 0.15 + i * 0.12, 0) + toward + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
-		Game.spawn_item(id, rng.randi_range(e[1], e[2]), spot)
-		got = true
-	if not got:
+		found.append([id, rng.randi_range(e[1], e[2])])
+	_reveal(found, rng)
+	if found.is_empty():
 		Game.notify("Found nothing useful")
 	else:
-		Game.notify("You found something — pick it up")
-	Audio.play("pickup")
+		Game.notify("You found something — pick it up [E]")
+	Audio.play_at("door" if mode == "box" else "pickup", global_position, -6.0, 1.5)
 	Net.mark_removed(key, true)
+
+## Lay what you found out for real: inside an opened box, on top of low furniture, or on the
+## floor in front of tall cupboards. Items stay where they appear until you pick them up.
+func _reveal(found: Array, rng: RandomNumberGenerator) -> void:
+	var size := Vector3(1, 1, 1)
+	for ch in get_children():
+		if ch is CollisionShape3D and ch.shape is BoxShape3D:
+			size = ch.shape.size
+			break
+	if mode == "box":
+		open_flaps(true)
+		var lid := get_node_or_null("Lid")
+		if lid:
+			lid.set_deferred("disabled", true)
+	var toward: Vector3 = to_local(Game.player.global_position) * Vector3(1, 0, 1)
+	var front := Vector3(0, 0, 1) if absf(toward.z) >= absf(toward.x) else Vector3(1, 0, 0)
+	if front.dot(toward) < 0.0:
+		front = -front
+	for i in range(found.size()):
+		var id: String = found[i][0]
+		var n: int = found[i][1]
+		var bb: AABB = Items.display_bounds(id)
+		var lp: Vector3
+		var spread := (i - (found.size() - 1) * 0.5)
+		if mode == "box":
+			lp = Vector3(spread * 0.14, 0.04, rng.randf_range(-0.06, 0.06))
+		elif size.y < 1.3:
+			var across := Vector3(front.z, 0, front.x)
+			lp = across * spread * minf(0.35, (maxf(size.x, size.z) - 0.2) / maxf(found.size(), 1)) + front * rng.randf_range(-0.05, 0.08) + Vector3(0, size.y, 0)
+		else:
+			var across := Vector3(front.z, 0, front.x)
+			lp = front * ((size.x if front.x != 0.0 else size.z) * 0.5 + 0.3) + across * spread * 0.35
+		var xf := global_transform * Transform3D(Basis(Vector3.UP, rng.randf() * TAU), lp - Vector3(0, bb.position.y, 0))
+		Game.place_item(id, n, xf)
+
+func open_flaps(animate := false) -> void:
+	for f in flaps:
+		var target: float = f.get_meta("open")
+		if animate:
+			create_tween().tween_property(f, "rotation:" + str(f.get_meta("axis")), target, 0.35).set_trans(Tween.TRANS_BACK)
+		else:
+			f.set_indexed("rotation:" + str(f.get_meta("axis")), target)
 
 func _pump() -> void:
 	var left := pump_left()

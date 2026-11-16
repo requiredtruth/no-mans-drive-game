@@ -410,6 +410,6 @@ func interact(_player: Node) -> void:
 		return
 	var drops: Dictionary = spec["drops"]
 	for k in drops:
-		Game.add_item(k, int(drops[k]))
+		Game.drop_pile(k, int(drops[k]), global_position + Vector3(0, 0.5, 0))
 	Audio.play_at("chop", global_position, 0.0, 0.8)
 	queue_free()

@@ -46,6 +46,54 @@ static func loot(parent: Node3D, pos: Vector3, size: Vector3, m: Material, key: 
 	Lib.box(body, Vector3(0, size.y * 0.5, 0), size, m)
 	return body
 
+## A cardboard box you open to find real items inside (they stay in the box until you take them).
+static func cardboard(parent: Node3D, pos: Vector3, key: String, table: String, rot := 0.0, label := "cardboard box") -> Node3D:
+	var body := StaticBody3D.new()
+	body.set_script(Loot)
+	body.setup(key, label, table, "box")
+	body.position = pos
+	body.rotation.y = rot
+	parent.add_child(body)
+	var sz := Vector3(0.6, 0.42, 0.46)
+	var cb := Lib.mat("cardboard", Color(1.0, 0.95, 0.85), 2.0, false, 0.95)
+	var t := 0.015
+	for pc in [[Vector3(0, t * 0.5, 0), Vector3(sz.x, t, sz.z)],
+			[Vector3(-sz.x * 0.5 + t * 0.5, sz.y * 0.5, 0), Vector3(t, sz.y, sz.z)], [Vector3(sz.x * 0.5 - t * 0.5, sz.y * 0.5, 0), Vector3(t, sz.y, sz.z)],
+			[Vector3(0, sz.y * 0.5, -sz.z * 0.5 + t * 0.5), Vector3(sz.x, sz.y, t)], [Vector3(0, sz.y * 0.5, sz.z * 0.5 - t * 0.5), Vector3(sz.x, sz.y, t)]]:
+		Lib.box(body, pc[0], pc[1], cb)
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = pc[1]
+		cs.shape = sh
+		cs.position = pc[0]
+		body.add_child(cs)
+	# a closed lid made of four flaps (closed = flat across the top)
+	var lid := CollisionShape3D.new()
+	var lsh := BoxShape3D.new()
+	lsh.size = Vector3(sz.x, 0.02, sz.z)
+	lid.shape = lsh
+	lid.position = Vector3(0, sz.y, 0)
+	lid.name = "Lid"
+	body.add_child(lid)
+	var tape := Lib.color_mat(Color(0.75, 0.62, 0.4), 0.6)
+	for f in [[Vector3(-sz.x * 0.5, sz.y, 0), Vector3(sz.x * 0.25, 0, 0), Vector3(sz.x * 0.5, 0.008, sz.z), "z", 2.3],
+			[Vector3(sz.x * 0.5, sz.y, 0), Vector3(-sz.x * 0.25, 0, 0), Vector3(sz.x * 0.5, 0.008, sz.z), "z", -2.3],
+			[Vector3(0, sz.y + 0.008, -sz.z * 0.5), Vector3(0, 0, sz.z * 0.25), Vector3(sz.x, 0.008, sz.z * 0.5), "x", -2.1],
+			[Vector3(0, sz.y + 0.008, sz.z * 0.5), Vector3(0, 0, -sz.z * 0.25), Vector3(sz.x, 0.008, sz.z * 0.5), "x", 2.1]]:
+		var hinge := Node3D.new()
+		hinge.position = f[0]
+		hinge.set_meta("axis", f[3])
+		hinge.set_meta("open", f[4])
+		body.add_child(hinge)
+		Lib.box(hinge, f[1], f[2], cb)
+		body.flaps.append(hinge)
+	Lib.box(body, Vector3(0, sz.y + 0.02, 0), Vector3(0.05, 0.004, sz.z + 0.01), tape)
+	if Game.removed.has(key):
+		lid.disabled = true
+		body.open_flaps(false)
+		body.get_child(body.get_child_count() - 1).visible = false
+	return body
+
 ## Wall segment along local X centered at pos, with optional opening.
 static func wall(parent: Node3D, pos: Vector3, length: float, height: float, m: Material, along_z := false, hole_w := 0.0, hole_h := 0.0, hole_y := 0.0, t := 0.2) -> void:
 	var holder := Node3D.new()
@@ -121,6 +169,9 @@ static func _gas_station(root: Node3D, key: String, rng: RandomNumberGenerator) 
 	loot(root, Vector3(1.8, 0.25, cz - 0.5), Vector3(2.4, 1.6, 0.6), Lib.mat("rust", Color(0.8, 0.8, 0.9)), key + "_s2", "Store shelf", "shelf")
 	loot(root, Vector3(3.5, 0.25, cz + 2.2), Vector3(1.8, 1.0, 0.7), Lib.mat("planks"), key + "_counter", "Counter", "shelf")
 	loot(root, Vector3(-3.8, 0.25, cz - 2.8), Vector3(1.4, 1.0, 0.7), Lib.mat("rust"), key + "_back", "Back room toolbox", "backroom")
+	cardboard(root, Vector3(-1.6, 0.25, cz - 2.9), key + "_box1", "shelf", 0.3)
+	cardboard(root, Vector3(-1.0, 0.25, cz - 2.6), key + "_box2", "backroom", -0.4)
+	cardboard(root, Vector3(3.6, 0.25, cz - 2.6), key + "_box3", "shelf", 1.2, "delivery box")
 	signpost(root, Vector3(9.5, 5.5, 8.5), "FUEL  •  FOOD", Color("2f4f6f"))
 	# debris
 	for i in range(4):
@@ -169,6 +220,7 @@ static func _house(root: Node3D, key: String, rng: RandomNumberGenerator) -> voi
 		Lib.box(root, Vector3(x, y + 0.2, -0.5), Vector3(0.08, 0.4, 0.9), dark)
 	if rng.randf() < 0.7:
 		loot(root, Vector3(-4.2, y, 2.6), Vector3(1.0, 0.8, 0.6), Lib.mat("rust"), key + "_garage", "Toolbox", "garage")
+	cardboard(root, Vector3(-3.4, y, 1.6), key + "_box1", "living", rng.randf() * TAU, "moving box")
 
 static func _car(root: Node3D, pos: Vector3, yaw: float, tint: Color, key: String) -> void:
 	var car := Node3D.new()
@@ -189,6 +241,7 @@ static func _wrecks(root: Node3D, key: String, rng: RandomNumberGenerator) -> vo
 	var pile := loot(root, Vector3(0, 0, -2), Vector3(1.4, 0.5, 1.0), Lib.mat("rust"), key + "_pile", "Scrap pile", "scrap_pile")
 	pile.rotation.y = rng.randf() * TAU
 	loot(root, Vector3(2.5, 0, 1.5), Vector3(0.9, 0.6, 0.6), Lib.mat("paint", Color(0.3, 0.4, 0.3), 1.0, true, 0.5, 0.4), key + "_box", "Roadside toolbox", "trunk")
+	cardboard(root, Vector3(1.2, 0, -3.0), key + "_cb", "scrap_pile", rng.randf() * TAU, "soggy box")
 	for k in range(3):
 		var t := MeshInstance3D.new()
 		t.mesh = Items.mesh("tire")
@@ -214,6 +267,7 @@ static func _camp(root: Node3D, key: String, rng: RandomNumberGenerator) -> void
 	fire.position = Vector3(0, 0, 2)
 	loot(root, Vector3(3, 0, -4), Vector3(1.1, 0.8, 0.7), Lib.mat("planks"), key + "_crate1", "Supply crate", "camp")
 	loot(root, Vector3(-5, 0, 2), Vector3(1.1, 0.8, 0.7), Lib.mat("planks"), key + "_crate2", "Supply crate", "camp")
+	cardboard(root, Vector3(1.5, 0, -2.5), key + "_cb", "camp", rng.randf() * TAU, "supply box")
 	for i in range(3):
 		Lib.cyl(root, Vector3(rng.randf_range(-3, 3), 0.2, rng.randf_range(3, 5)), 0.2, 0.22, 1.6, Lib.mat("bark", Color.WHITE, 1.0, false), Vector3(0, rng.randf() * TAU, PI * 0.5))
 
@@ -232,6 +286,7 @@ static func _farm(root: Node3D, key: String, rng: RandomNumberGenerator) -> void
 	loot(root, Vector3(-2.5, 0.2, -4.5), Vector3(1.2, 0.8, 0.8), Lib.mat("planks"), key + "_c1", "Feed crate", "farm")
 	loot(root, Vector3(2.5, 0.2, -4.5), Vector3(1.2, 0.8, 0.8), Lib.mat("planks"), key + "_c2", "Seed crate", "farm")
 	loot(root, Vector3(3.5, 0.2, 0.0), Vector3(1.0, 0.8, 0.6), Lib.mat("rust"), key + "_tools", "Tool chest", "garage")
+	cardboard(root, Vector3(3.3, 0.2, -1.4), key + "_cb", "farm", 0.2, "seed box")
 	# well
 	var well := loot(root, Vector3(-7.5, 0, 5), Vector3(1.4, 0.9, 1.4), Lib.mat("rock", Color.WHITE, 0.6), key + "_well", "Well", "", "well")
 	for x in [-0.6, 0.6]:
@@ -385,6 +440,7 @@ static func house(root: Node3D, offset: Vector3, yaw: float, key: String, rng: R
 		_decor(hn, Vector3(lx + 0.3, y + 0.25, lz + 0.3), "rope", 0.0, 0.6)
 		# bookshelf (searchable) with decor
 		var shelf := loot(hn, Vector3(lx - 0.2, y, d * 0.5 - 0.35), Vector3(1.4, 1.9, 0.35), dark, key + "_shelf", "Bookshelf", "living")
+		cardboard(hn, Vector3(lx + 1.1, y, lz + 1.15), key + "_mbox", "living" if rng.randf() < 0.6 else "kitchen", rng.randf() * TAU, "moving box")
 		for k in range(4):
 			Lib.box(shelf, Vector3(0, 0.3 + k * 0.45, 0.02), Vector3(1.3, 0.03, 0.3), dark)
 		for k in range(5):

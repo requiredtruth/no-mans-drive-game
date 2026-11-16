@@ -40,7 +40,7 @@ func _ready() -> void:
 		_btn("BUILD", "build_menu", Color(0.7, 0.55, 0.25), 0.8),
 		_btn("ROT", "rotate", Color(0.7, 0.55, 0.25), 0.7),
 		_btn("LIGHT", "flashlight", Color(0.6, 0.6, 0.3), 0.7),
-		_btn("GRAB", "pickup", Color(0.3, 0.6, 0.85), 0.85),
+		_btn("PLACE", "pickup", Color(0.3, 0.7, 0.5), 0.95),
 	]
 	_drive_buttons = [
 		_btn("EXIT", "interact", Color(0.3, 0.6, 0.85), 1.05),
@@ -51,11 +51,12 @@ func _ready() -> void:
 		_btn("GAS", "move_forward", Color(0.35, 0.75, 0.35), 1.25),
 		_btn("REV", "move_back", Color(0.8, 0.45, 0.25), 1.0),
 	]
-	var bag := _btn("BAG", "inventory", Color(0.45, 0.45, 0.45), 0.75)
+	var bag := _btn("CRAFT", "inventory", Color(0.45, 0.45, 0.45), 0.75)
 	var pause := _btn("II", "pause", Color(0.3, 0.3, 0.3), 0.6)
 	_foot_buttons.append(bag)
 	_drive_buttons.append(pause)
 	_foot_buttons.append(pause)
+	_foot_buttons.append(_btn("THROW", "drop", Color(0.6, 0.45, 0.35), 0.75))
 	_layout()
 
 func _make_circle(s: int) -> Texture2D:
@@ -133,6 +134,7 @@ func _layout() -> void:
 	_place(f[9], Vector2(r - px.call(f[9]), vp.y * 0.3 + px.call(f[6]) + 10))
 	_place(f[10], Vector2(24, vp.y * 0.42))
 	_place(f[11], Vector2(vp.x * 0.5 + 250, 14))
+	_place(f[12], Vector2(r - px.call(f[9]) - px.call(f[12]) - 10, vp.y * 0.3 + px.call(f[6]) + 10))
 	var d := _drive_buttons
 	_place(d[5], Vector2(r - px.call(d[5]), b - px.call(d[5])))
 	_place(d[6], Vector2(r - px.call(d[5]) - px.call(d[6]) - 16, b - px.call(d[6])))

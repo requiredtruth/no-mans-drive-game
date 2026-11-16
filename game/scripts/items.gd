@@ -199,6 +199,56 @@ func instance(id: String) -> Node3D:
 	root.add_child(mi)
 	return root
 
+var _bounds := {}
+
+## Raw model bounds (real-world size).
+func bounds(id: String) -> AABB:
+	if _bounds.has(id):
+		return _bounds[id]
+	var inst := instance(id)
+	var acc := [null]
+	for ch in inst.get_children():
+		_aabb_of(ch, inst.transform, acc)
+	inst.free()
+	var bb: AABB = acc[0] if acc[0] != null else AABB(Vector3(-0.1, 0, -0.1), Vector3(0.2, 0.2, 0.2))
+	_bounds[id] = bb
+	return bb
+
+## Small things are shown a bit larger in the world so you can actually see and grab them.
+func display_scale(id: String) -> float:
+	var Data = load("res://scripts/data.gd")
+	if Data.ITEMS.get(id, {}).get("kind", "") == "placeable":
+		return 1.0
+	var bb := bounds(id)
+	var biggest := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
+	return clampf(0.34 / maxf(biggest, 0.01), 1.0, 2.0)
+
+func display_bounds(id: String) -> AABB:
+	var bb := bounds(id)
+	var k := display_scale(id)
+	return AABB(bb.position * k, bb.size * k)
+
+func display_instance(id: String) -> Node3D:
+	var root := Node3D.new()
+	var inst := instance(id)
+	inst.scale = Vector3.ONE * display_scale(id)
+	root.add_child(inst)
+	return root
+
+var _glow_mat: StandardMaterial3D
+
+func set_glow(n: Node, on: bool) -> void:
+	if _glow_mat == null:
+		_glow_mat = StandardMaterial3D.new()
+		_glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_glow_mat.albedo_color = Color(0.35, 0.32, 0.2, 1.0)
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).material_overlay = _glow_mat if on else null
+	for ch in n.get_children():
+		set_glow(ch, on)
+
 func _strip_fx(n: Node) -> void:
 	for ch in n.get_children():
 		if ch is Light3D or ch is CPUParticles3D or ch is AudioStreamPlayer3D or ch is CollisionShape3D:
@@ -264,6 +314,9 @@ func _build(id: String) -> Mesh:
 		"hide": return _hide(rng)
 		"feather": return _feather()
 		"jacket": return _jacket()
+		"backpack": return _backpack()
+		"worn_tire": return _tire(true)
+		"worn_battery": return _battery(true)
 	var st := _st()
 	box(st, Vector3(0, 0.05, 0), Vector3(0.1, 0.1, 0.1))
 	return _mesh([[st, c(Color.GRAY)]])
@@ -602,7 +655,7 @@ func _engine_parts() -> Mesh:
 	torus(piston, Vector3(0.06, 0.125, 0.052), 0.015, 0.006, 12, 6, Vector3.RIGHT)
 	return _mesh([[gear, steel()], [piston, dark_steel()]])
 
-func _tire() -> Mesh:
+func _tire(worn := false) -> Mesh:
 	var t := _st()
 	torus(t, Vector3(0, 0.12, 0), 0.24, 0.11, 32, 14, Vector3.UP)
 	var rim := _st()
@@ -610,9 +663,11 @@ func _tire() -> Mesh:
 	for i in range(5):
 		var a := TAU * i / 5.0
 		Lib._tube(rim, Vector3(cos(a) * 0.08, 0.17, sin(a) * 0.08), Vector3(cos(a) * 0.08, 0.18, sin(a) * 0.08), 0.01, 0.008, 6)
+	if worn:
+		return _mesh([[t, m("rubber", Color(0.75, 0.7, 0.62), 5.0, 1.0)], [rim, m("rust", Color.WHITE, 4.0, 0.8, 0.4)]])
 	return _mesh([[t, rubber()], [rim, m("metal", Color(0.7, 0.7, 0.72), 4.0, 0.35, 0.8)]])
 
-func _battery() -> Mesh:
+func _battery(worn := false) -> Mesh:
 	var b := _st()
 	box(b, Vector3(0, 0.09, 0), Vector3(0.24, 0.18, 0.17))
 	var top := _st()
@@ -623,6 +678,9 @@ func _battery() -> Mesh:
 	lathe(pos, [Vector2(0.012, 0.19), Vector2(0.01, 0.215)], 12, Vector3(0.08, 0, 0.04))
 	var neg := _st()
 	lathe(neg, [Vector2(0.012, 0.19), Vector2(0.01, 0.215)], 12, Vector3(-0.08, 0, 0.04))
+	if worn:
+		return _mesh([[b, m("rust", Color(0.45, 0.42, 0.4), 4.0, 0.9)], [top, c(Color(0.3, 0.28, 0.26))], [label, paint(Color(0.45, 0.4, 0.3))],
+			[pos, m("rust", Color.WHITE, 8.0)], [neg, m("rust", Color.WHITE, 8.0)]])
 	return _mesh([[b, m("paint", Color(0.12, 0.12, 0.13), 4.0, 0.6)], [top, c(Color(0.18, 0.18, 0.2))], [label, paint(Color(0.2, 0.45, 0.8))],
 		[pos, c(Color(0.8, 0.15, 0.1), 0.4, 0.5)], [neg, dark_steel()]])
 
@@ -710,6 +768,20 @@ func _jacket() -> Mesh:
 	for y in [0.12, 0.24, 0.36]:
 		ellipsoid(buttons, Vector3(0, y, 0.1), Vector3(0.012, 0.012, 0.004), 4, 8)
 	return _mesh([[body, m("leather", Color(1.0, 0.9, 0.8), 3.0, 0.7)], [buttons, brass()]])
+
+func _backpack() -> Mesh:
+	var body := _st()
+	ellipsoid(body, Vector3(0, 0.24, 0), Vector3(0.17, 0.24, 0.11), 10, 16)
+	var pocket := _st()
+	ellipsoid(pocket, Vector3(0, 0.15, 0.1), Vector3(0.12, 0.1, 0.05), 8, 12)
+	var straps := _st()
+	for x in [-0.08, 0.08]:
+		Lib._tube(straps, Vector3(x, 0.44, -0.09), Vector3(x, 0.08, -0.12), 0.018, 0.018, 6)
+	torus(straps, Vector3(0, 0.49, 0), 0.04, 0.01, 12, 5, Vector3.RIGHT)
+	var buckles := _st()
+	box(buckles, Vector3(0, 0.22, 0.152), Vector3(0.05, 0.03, 0.01))
+	return _mesh([[body, m("canvas", Color(0.55, 0.62, 0.45), 4.0, 0.9)], [pocket, m("canvas", Color(0.45, 0.5, 0.36), 4.0, 0.9)],
+		[straps, leather()], [buckles, dark_steel()]])
 
 # ------------------------------------------------------------------ first-person arm
 ## Right forearm + hand gripping at the origin; the forearm runs back toward +Z/-Y.

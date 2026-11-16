@@ -15,6 +15,8 @@ const ITEMS := {
 	"tire": {"name": "Spare Tire", "color": Color("2a2a2a"), "kind": "material"},
 	"car_battery": {"name": "Car Battery", "color": Color("3b6ea8"), "kind": "material"},
 	"toolkit": {"name": "Toolkit", "color": Color("c0392b"), "kind": "material"},
+	"worn_tire": {"name": "Worn Tire", "color": Color("3a3a3a"), "kind": "material"},
+	"worn_battery": {"name": "Dead Battery", "color": Color("4a4a4a"), "kind": "material"},
 	# Food & drink
 	"raw_meat": {"name": "Raw Meat", "color": Color("c0504d"), "kind": "food", "food": 8, "water": 0, "health": -6, "cook": "cooked_meat"},
 	"cooked_meat": {"name": "Cooked Meat", "color": Color("8b4a2b"), "kind": "food", "food": 35, "water": -2, "health": 4},
@@ -54,6 +56,7 @@ const ITEMS := {
 	"fishing_rod": {"name": "Fishing Rod", "color": Color("4f7f5f"), "kind": "tool"},
 	"flashlight": {"name": "Flashlight", "color": Color("e8d36a"), "kind": "tool"},
 	"jacket": {"name": "Hide Jacket", "color": Color("6f4a2f"), "kind": "wear", "insulation": 12},
+	"backpack": {"name": "Backpack (+2 carry slots)", "color": Color("5a6a4a"), "kind": "wear"},
 	# Carried objects you can place, pick up and move (also built from the build menu)
 	"campfire": {"name": "Campfire", "color": Color("b05a30"), "kind": "placeable"},
 	"tent": {"name": "Tent", "color": Color("7b8a5c"), "kind": "placeable"},
@@ -67,6 +70,17 @@ const ITEMS := {
 	"table": {"name": "Wooden Table", "color": Color("8a6440"), "kind": "placeable"},
 }
 
+## How many of an item fit in one hand/backpack slot. Anything not listed is carried one at a time.
+const STACK := {
+	"wood": 3, "stone": 4, "scrap": 4, "fiber": 6, "rope": 3, "cloth": 4, "hide": 2, "feather": 12,
+	"berries": 8, "mushroom": 6, "tomato": 4, "potato": 4, "coffee_beans": 3, "raw_meat": 2, "cooked_meat": 2,
+	"bandage": 4, "seeds_tomato": 6, "seeds_potato": 6, "seeds_coffee": 3, "ammo": 30, "arrow": 12, "soda": 2,
+	"roast_mushroom": 4, "baked_potato": 3,
+}
+
+static func stack(id: String) -> int:
+	return int(STACK.get(id, 1))
+
 ## Crafting recipes. "station": "" (hands), "workbench", "fire".
 const RECIPES := [
 	{"out": "rope", "n": 1, "cost": {"fiber": 3}, "station": ""},
@@ -79,12 +93,15 @@ const RECIPES := [
 	{"out": "fishing_rod", "n": 1, "cost": {"wood": 2, "rope": 2}, "station": ""},
 	{"out": "hammer", "n": 1, "cost": {"wood": 2, "stone": 1, "rope": 1}, "station": ""},
 	{"out": "jacket", "n": 1, "cost": {"hide": 4, "rope": 2}, "station": ""},
+	{"out": "backpack", "n": 1, "cost": {"hide": 2, "cloth": 2, "rope": 2}, "station": ""},
 	{"out": "ammo", "n": 6, "cost": {"scrap": 3}, "station": "workbench"},
 	{"out": "engine_parts", "n": 1, "cost": {"scrap": 6, "rope": 1}, "station": "workbench"},
 	{"out": "toolkit", "n": 1, "cost": {"scrap": 4, "wood": 2}, "station": "workbench"},
 	{"out": "tire", "n": 1, "cost": {"hide": 3, "scrap": 4, "rope": 2}, "station": "workbench"},
 	{"out": "medkit", "n": 1, "cost": {"bandage": 2, "water_clean": 1, "fiber": 2}, "station": "workbench"},
 	{"out": "rifle", "n": 1, "cost": {"scrap": 12, "wood": 4, "engine_parts": 1}, "station": "workbench"},
+	{"out": "scrap", "n": 3, "cost": {"worn_tire": 1}, "station": "workbench"},
+	{"out": "scrap", "n": 3, "cost": {"worn_battery": 1}, "station": "workbench"},
 ]
 
 ## Cooking at a campfire or the RV stove.
@@ -125,11 +142,13 @@ const PIECE_ORDER := ["foundation", "floor", "wall", "doorway", "window", "roof"
 	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table"]
 
 ## RV parts (condition 0..100).
+## Vehicle parts (condition 0..100). Parts are replaced physically: carry the part in your hands
+## to where it fits on the vehicle ("where") and install it there.
 const RV_PARTS := {
-	"engine": {"name": "Engine", "repair": {"engine_parts": 1}, "amount": 50, "needs_toolkit": true},
-	"tires": {"name": "Tires", "repair": {"tire": 1}, "amount": 40, "needs_toolkit": false},
-	"battery": {"name": "Battery", "repair": {"car_battery": 1}, "amount": 100, "needs_toolkit": false},
-	"body": {"name": "Body & Chassis", "repair": {"scrap": 3}, "amount": 30, "needs_toolkit": true},
+	"engine": {"name": "Engine", "repair": {"engine_parts": 1}, "amount": 50, "needs_toolkit": true, "where": "Hold Engine Parts at the open hood (toolkit nearby)"},
+	"tires": {"name": "Tires", "repair": {"tire": 1}, "amount": 25, "needs_toolkit": true, "where": "Pull a worn tire off a wheel, then fit a Spare Tire there (toolkit nearby)"},
+	"battery": {"name": "Battery", "repair": {"car_battery": 1}, "amount": 100, "needs_toolkit": false, "where": "Pull the old battery out of the battery box, then fit a Car Battery"},
+	"body": {"name": "Body & Chassis", "repair": {"scrap": 1}, "amount": 12, "needs_toolkit": true, "where": "Hold Scrap Metal at the hood to weld patches (toolkit nearby)"},
 }
 
 const RV_UPGRADES := {

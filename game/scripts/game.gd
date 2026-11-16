@@ -28,8 +28,8 @@ var difficulty := "Normal"
 var time_of_day := 8.0 # hours 0..24
 var day := 1
 var weather := "clear"
-var inventory := {}
-var hotbar: Array = ["knife", "axe", "hammer", "fishing_rod", "", ""]
+var slots: Array = [] # hand/backpack slots: {"id", "n", optional "c": contents of a carried crate}
+var worn := {} # jacket, backpack, flashlight
 var selected_slot := 0
 var stats := {"health": 100.0, "food": 80.0, "water": 80.0, "energy": 90.0, "warmth": 100.0}
 var structures := {} # id -> {type, pos:[x,y,z], rot, level, base_y, data:{}}
@@ -95,7 +95,8 @@ func _setup_input() -> void:
 	_key("lights", [KEY_L], [JOY_BUTTON_DPAD_LEFT])
 	_key("flashlight", [KEY_F], [JOY_BUTTON_DPAD_RIGHT])
 	_key("crouch", [KEY_CTRL], [JOY_BUTTON_RIGHT_STICK])
-	_key("pickup", [KEY_G], [JOY_BUTTON_B])
+	_key("pickup", [KEY_G], [JOY_BUTTON_B]) # place the held item / grab placed furniture
+	_key("drop", [KEY_Q], [JOY_BUTTON_MISC1]) # throw the held item
 	for i in range(6):
 		_key("slot_%d" % (i + 1), [KEY_1 + i])
 
@@ -140,35 +141,137 @@ func use_touch() -> bool:
 		"off": return false
 	return DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
 
-# ---------------------------------------------------------------- inventory
-func count(id: String) -> int:
-	return int(inventory.get(id, 0))
+# ---------------------------------------------------------------- hands & carrying
+## There is no abstract inventory: you carry a few items in hand slots (more with a backpack).
+## Everything else is a physical object in the world. Crafting, cooking and repairs use what
+## you carry plus anything lying within reach (NEAR) — e.g. a pile of logs next to the workbench.
+const NEAR := 3.2
+const BASE_SLOTS := 2
 
+func slot_count() -> int:
+	return BASE_SLOTS + (2 if worn.has("backpack") else 0)
+
+func _fit_slots() -> void:
+	while slots.size() < slot_count():
+		slots.append({"id": "", "n": 0})
+	while slots.size() > slot_count():
+		var s: Dictionary = slots.pop_back()
+		if s["id"] != "" and player and world:
+			drop_pile(s["id"], s["n"], player.global_position + Vector3(0, 0.5, 0), s.get("c", []))
+	selected_slot = clampi(selected_slot, 0, slots.size() - 1)
+
+func _empty_slot(i: int) -> void:
+	slots[i] = {"id": "", "n": 0}
+
+func carried(id: String) -> int:
+	var n := 0
+	for s in slots:
+		if s["id"] == id:
+			n += int(s["n"])
+	return n
+
+func hands_full_for(id: String) -> bool:
+	return space_for(id) <= 0
+
+func space_for(id: String) -> int:
+	var lim := Data.stack(id)
+	var room := 0
+	for s in slots:
+		if s["id"] == "":
+			room += lim
+		elif s["id"] == id and not s.has("c"):
+			room += maxi(lim - int(s["n"]), 0)
+	return room
+
+var _near_cache := {}
+var _near_frame := -1
+
+## Loose items lying within reach of the player (in the world or glued inside a vehicle).
+func nearby_items(id := "") -> Array:
+	var out := []
+	if world == null or player == null:
+		return out
+	var p := player.global_position + Vector3(0, 0.8, 0)
+	for it in world.get_tree().get_nodes_in_group("world_item"):
+		if is_instance_valid(it) and not it.is_queued_for_deletion() and (id == "" or it.id == id) and it.global_position.distance_to(p) < NEAR:
+			out.append(it)
+	out.sort_custom(func(a, b): return a.global_position.distance_squared_to(p) < b.global_position.distance_squared_to(p))
+	return out
+
+func nearby(id: String) -> int:
+	var f := Engine.get_physics_frames()
+	if f != _near_frame:
+		_near_frame = f
+		_near_cache = {}
+		for it in nearby_items():
+			_near_cache[it.id] = int(_near_cache.get(it.id, 0)) + int(it.amount)
+	return int(_near_cache.get(id, 0))
+
+## Everything usable right now: what you carry, wear, and what lies within reach.
+func count(id: String) -> int:
+	if world == null:
+		return carried(id)
+	return carried(id) + nearby(id) + (1 if worn.has(id) else 0)
+
+## Put items into your hands. What doesn't fit is dropped in front of you as a physical pile.
 func add_item(id: String, n: int = 1, quiet := false) -> void:
 	if n <= 0:
 		return
-	inventory[id] = count(id) + n
-	if Data.ITEMS.get(id, {}).get("kind", "") in ["tool", "placeable"] and not hotbar.has(id):
-		for i in range(hotbar.size()):
-			if hotbar[i] == "":
-				hotbar[i] = id
-				hotbar_changed.emit()
-				break
-	if not quiet:
-		notify("+%d %s" % [n, Data.item_name(id)])
-	inventory_changed.emit()
+	var left := n
+	var lim := Data.stack(id)
+	for i in range(slots.size()):
+		if left > 0 and slots[i]["id"] == id and not slots[i].has("c") and int(slots[i]["n"]) < lim:
+			var k := mini(lim - int(slots[i]["n"]), left)
+			slots[i]["n"] = int(slots[i]["n"]) + k
+			left -= k
+	var order := [selected_slot]
+	for i in range(slots.size()):
+		if i != selected_slot:
+			order.append(i)
+	for i in order:
+		if left > 0 and slots[i]["id"] == "":
+			var k := mini(lim, left)
+			slots[i] = {"id": id, "n": k}
+			left -= k
+	if left > 0 and player and world:
+		var fwd: Vector3 = -player.camera.global_transform.basis.z * Vector3(1, 0, 1)
+		drop_pile(id, left, player.global_position + fwd.normalized() * 0.7 + Vector3(0, 0.6, 0))
+		if not quiet:
+			notify("Hands full — %d %s set down at your feet" % [left, Data.item_name(id)])
+	if not quiet and left < n:
+		notify("+%d %s" % [n - left, Data.item_name(id)])
+	_changed()
 
+func _changed() -> void:
+	_near_frame = -1
+	inventory_changed.emit()
+	hotbar_changed.emit()
+
+## Use up items: from your hands first, then from items lying within reach.
 func remove_item(id: String, n: int = 1) -> bool:
 	if count(id) < n:
 		return false
-	inventory[id] = count(id) - n
-	if inventory[id] <= 0:
-		inventory.erase(id)
-		var i := hotbar.find(id)
-		if i >= 0 and Data.ITEMS.get(id, {}).get("kind", "") in ["tool", "placeable"]:
-			hotbar[i] = ""
-			hotbar_changed.emit()
-	inventory_changed.emit()
+	var left := n
+	if worn.has(id) and carried(id) + nearby(id) < n:
+		worn.erase(id)
+		left -= 1
+	for i in range(slots.size() - 1, -1, -1):
+		if left > 0 and slots[i]["id"] == id:
+			var k := mini(int(slots[i]["n"]), left)
+			slots[i]["n"] = int(slots[i]["n"]) - k
+			left -= k
+			if int(slots[i]["n"]) <= 0:
+				_empty_slot(i)
+	if left > 0:
+		for it in nearby_items(id):
+			if left <= 0:
+				break
+			var k := mini(int(it.amount), left)
+			it.amount -= k
+			left -= k
+			if it.amount <= 0:
+				it.queue_free()
+	_changed()
 	return true
 
 func has_cost(cost: Dictionary) -> bool:
@@ -184,22 +287,76 @@ func pay(cost: Dictionary) -> bool:
 		remove_item(k, int(cost[k]))
 	return true
 
+func held() -> Dictionary:
+	if selected_slot < 0 or selected_slot >= slots.size():
+		return {"id": "", "n": 0}
+	return slots[selected_slot]
+
 func equipped() -> String:
-	var id: String = hotbar[selected_slot]
-	if id != "" and count(id) <= 0:
-		return ""
-	return id
+	return str(held()["id"])
+
+## Take the item out of the selected hand slot (for placing or throwing it).
+func take_held() -> Dictionary:
+	var s := held().duplicate(true)
+	if s["id"] != "":
+		_empty_slot(selected_slot)
+		_changed()
+	return s
 
 func select_slot(i: int) -> void:
-	selected_slot = wrapi(i, 0, hotbar.size())
+	selected_slot = wrapi(i, 0, slots.size())
 	hotbar_changed.emit()
 
-func assign_hotbar(id: String) -> void:
-	var existing := hotbar.find(id)
-	if existing >= 0:
-		hotbar[existing] = ""
-	hotbar[selected_slot] = id
-	hotbar_changed.emit()
+## Pick a physical item up into your hands (as much of the pile as fits).
+func pick_up(it: Node) -> bool:
+	var id: String = it.id
+	var room := space_for(id)
+	if room <= 0:
+		notify("Your hands are full — place [G] or drop [Q] something first")
+		Audio.play("click", -6.0)
+		return false
+	var k := mini(room, int(it.amount))
+	it.amount -= k
+	add_item(id, k, true)
+	# what you just picked up is what you're now holding
+	if equipped() != id:
+		for i in range(slots.size()):
+			if slots[i]["id"] == id:
+				select_slot(i)
+				break
+	notify("Picked up %s%s" % [Data.item_name(id), (" ×%d" % k) if k > 1 else ""])
+	if it.amount <= 0:
+		it.queue_free()
+	else:
+		it.refresh_label()
+	return true
+
+## Put on wearables (jacket, backpack, flashlight) so they stop taking up a hand.
+func wear(id: String) -> bool:
+	if worn.has(id) or not (Data.ITEMS.get(id, {}).get("kind", "") == "wear" or id == "flashlight"):
+		return false
+	if carried(id) <= 0:
+		return false
+	for i in range(slots.size()):
+		if slots[i]["id"] == id:
+			slots[i]["n"] = int(slots[i]["n"]) - 1
+			if slots[i]["n"] <= 0:
+				_empty_slot(i)
+			break
+	worn[id] = true
+	_fit_slots()
+	notify("You put on the %s" % Data.item_name(id))
+	Audio.play("pickup", -4.0)
+	_changed()
+	return true
+
+func take_off(id: String) -> void:
+	if not worn.has(id):
+		return
+	worn.erase(id)
+	_fit_slots()
+	add_item(id, 1, true)
+	_changed()
 
 func notify(text: String) -> void:
 	notified.emit(text)
@@ -234,9 +391,10 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	time_of_day = 8.0
 	day = 1
 	weather = "clear"
-	# A rough start: a pocket knife, a flashlight and a few supplies. Everything else is scavenged.
-	inventory = {"knife": 1, "flashlight": 1, "canned_food": 1, "water_clean": 2, "bandage": 1, "rope": 1}
-	hotbar = ["knife", "flashlight", "", "", "", ""]
+	# A rough start: a pocket knife in hand and a flashlight clipped on. The few supplies you
+	# own sit inside the RV (see world.gd); everything else is scavenged.
+	worn = {"flashlight": true}
+	slots = [{"id": "knife", "n": 1}, {"id": "", "n": 0}]
 	selected_slot = 0
 	stats = {"health": 100.0, "food": 80.0, "water": 80.0, "energy": 90.0, "warmth": 100.0}
 	structures = {}
@@ -266,6 +424,7 @@ func world_snapshot() -> Dictionary:
 	}
 
 var pending_items: Array = []
+var legacy_inventory := {}
 
 func _loose_items() -> Array:
 	var out := []
@@ -297,8 +456,8 @@ func save_game() -> bool:
 		return false
 	var d := world_snapshot()
 	d["version"] = 1
-	d["inventory"] = inventory
-	d["hotbar"] = hotbar
+	d["slots"] = slots
+	d["worn"] = worn
 	d["stats"] = stats
 	d["player"] = arr(player.global_position) if player else [0, 5, 0]
 	d["player_yaw"] = player.rotation.y if player else 0.0
@@ -321,13 +480,22 @@ func load_game_data() -> Dictionary:
 		return {}
 	var d: Dictionary = parsed
 	apply_world_snapshot(d)
-	inventory = {}
-	var inv: Dictionary = d.get("inventory", {})
-	for k in inv:
-		inventory[k] = int(inv[k])
-	hotbar = d.get("hotbar", hotbar)
-	while hotbar.size() < 6:
-		hotbar.append("")
+	worn = d.get("worn", {})
+	slots = []
+	for s in d.get("slots", []):
+		var rec := {"id": str(s.get("id", "")), "n": int(s.get("n", 0))}
+		if s.has("c"):
+			rec["c"] = s["c"]
+		slots.append(rec)
+	_fit_slots()
+	# saves from before 1.3 had an abstract inventory: it becomes a pile next to you
+	legacy_inventory = d.get("inventory", {})
+	if d.has("inventory") and not d.has("slots"):
+		worn = {"flashlight": true} if int(legacy_inventory.get("flashlight", 0)) > 0 else {}
+		for k in ["jacket", "backpack"]:
+			if int(legacy_inventory.get(k, 0)) > 0:
+				worn[k] = true
+		_fit_slots()
 	var st: Dictionary = d.get("stats", {})
 	for k in st:
 		stats[k] = float(st[k])
@@ -346,6 +514,33 @@ func spawn_item(id: String, n: int, pos: Vector3, impulse := Vector3.ZERO) -> No
 	it.rotation.y = randf() * TAU
 	if impulse != Vector3.ZERO:
 		it.apply_central_impulse(impulse)
+	return it
+
+## Drop a pile of items near a spot (harvest, butchering, overflow), split into hand-sized piles.
+func drop_pile(id: String, n: int, pos: Vector3, contents: Array = []) -> void:
+	var lim := maxi(Data.stack(id), 1)
+	var piles := 0
+	while n > 0 and piles < 8:
+		var k := mini(n, lim * 2)
+		var off := Vector3(randf_range(-0.35, 0.35), piles * 0.15, randf_range(-0.35, 0.35))
+		var it := spawn_item(id, k, pos + off)
+		if it and not contents.is_empty():
+			it.contents = contents
+			contents = []
+		n -= k
+		piles += 1
+
+## Place an item exactly (it stays put). host: a vehicle/trailer to glue it to, or null for the world.
+func place_item(id: String, n: int, xf: Transform3D, host: Node = null, contents: Array = []) -> Node:
+	if world == null:
+		return null
+	var it := RigidBody3D.new()
+	it.set_script(WorldItem)
+	it.setup(id, n)
+	it.contents = contents
+	world.add_child(it)
+	it.global_transform = xf
+	it.settle(host)
 	return it
 
 func new_struct_id() -> String:

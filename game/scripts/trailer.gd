@@ -31,7 +31,25 @@ func setup(p_id: String, p_kind: String, state: Dictionary) -> void:
 	if not state.is_empty():
 		fuel_store = float(state.get("fuel_store", fuel_store))
 		storage = state.get("storage", {})
+		if not storage.is_empty():
+			call_deferred("_spill_legacy")
 		tow_id = str(state.get("tow", ""))
+
+## Older saves kept camper storage as a list: lay those items on the shelves.
+func _spill_legacy() -> void:
+	var L: float = spec["len"]
+	var w: float = spec["w"]
+	var i := 0
+	for k in storage:
+		var n := int(storage[k])
+		while n > 0 and i < 12:
+			var take := mini(n, Game.Data.stack(k))
+			var lp := Vector3(-w * 0.5 + 0.4, 0.72 if i < 6 else 1.33, -L * 0.5 + 0.35 + (i % 6) * 0.1)
+			var bb: AABB = Items.display_bounds(k)
+			Game.place_item(k, take, global_transform * Transform3D(Basis.IDENTITY, lp - Vector3(0, bb.position.y, 0)), self)
+			n -= take
+			i += 1
+	storage = {}
 
 func save_state() -> Dictionary:
 	var tid := ""
@@ -165,15 +183,28 @@ func _build() -> void:
 			mi.mesh = mesh
 			add_child(mi)
 			Lib.box(self, Vector3(w * 0.5 + 0.02, 1.5, -0.6), Vector3(0.04, 0.04, 0.14), Items.steel())
-			# interior (seen after stepping in): floor, bed, table, cabinet, lamp
-			var panel := Lib.mat("planks", Color(0.95, 0.88, 0.78), 1.1, false)
-			Lib.box(self, Vector3(0, 0.68, 0), Vector3(w - 0.3, 0.04, L - 0.4), Lib.mat("planks", Color(0.6, 0.48, 0.38), 1.0, false))
-			Lib.box(self, Vector3(0, 0.95, L * 0.5 - 0.75), Vector3(w - 0.35, 0.5, 1.2), panel)
-			Lib.box(self, Vector3(0, 1.25, L * 0.5 - 0.75), Vector3(w - 0.4, 0.15, 1.15), Lib.mat("canvas", Color(0.75, 0.55, 0.45), 0.8, false))
-			Lib.box(self, Vector3(-w * 0.5 + 0.45, 1.05, -L * 0.5 + 0.6), Vector3(0.6, 0.7, 0.9), panel)
+			# interior: vinyl floor, wall board, laminate bed base and an open shelf unit
+			var wall := Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8)
+			var lam := Lib.color_mat(Color(0.8, 0.78, 0.74), 0.4)
+			var trim_m := Lib.color_mat(Color(0.36, 0.35, 0.34), 0.5)
+			Lib.box(self, Vector3(0, 0.68, 0), Vector3(w - 0.3, 0.04, L - 0.4), Lib.mat("tiles", Color(0.62, 0.58, 0.52), 1.1, false, 0.55))
+			for sx in [-1.0, 1.0]:
+				Lib.box(self, Vector3(sx * (w * 0.5 - 0.09), 1.6, 0), Vector3(0.02, 1.8, L - 0.3), wall)
+			Lib.box(self, Vector3(0, 2.47, 0), Vector3(w - 0.2, 0.02, L - 0.3), Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9))
+			Lib.box(self, Vector3(0, 0.95, L * 0.5 - 0.75), Vector3(w - 0.35, 0.5, 1.2), lam)
+			Lib.box(self, Vector3(0, 1.25, L * 0.5 - 0.75), Vector3(w - 0.4, 0.15, 1.15), Lib.color_mat(Color(0.92, 0.92, 0.9), 0.95), false, Vector3.ZERO, 0.05)
+			Lib.box(self, Vector3(0.1, 1.34, L * 0.5 - 0.75), Vector3(w - 0.6, 0.05, 1.17), Lib.mat("plaid", Color(0.75, 0.75, 0.78), 2.0, false, 0.95))
+			_shape(Vector3(0, 1.0, L * 0.5 - 0.75), Vector3(w - 0.35, 0.65, 1.2))
+			var sc := Vector3(-w * 0.5 + 0.4, 1.3, -L * 0.5 + 0.6)
+			var ss := Vector3(0.5, 1.2, 0.9)
+			for pc in [[sc + Vector3(-ss.x * 0.5 + 0.015, 0, 0), Vector3(0.03, ss.y, ss.z)], [sc + Vector3(0, 0, -ss.z * 0.5 + 0.015), Vector3(ss.x, ss.y, 0.03)],
+					[sc + Vector3(0, 0, ss.z * 0.5 - 0.015), Vector3(ss.x, ss.y, 0.03)], [sc + Vector3(0, ss.y * 0.5 - 0.015, 0), Vector3(ss.x, 0.03, ss.z)],
+					[sc + Vector3(0, -ss.y * 0.5 + 0.015, 0), Vector3(ss.x, 0.03, ss.z)], [sc + Vector3(0, 0.0, 0), Vector3(ss.x, 0.025, ss.z)]]:
+				Lib.box(self, pc[0], pc[1], lam)
+				_shape(pc[0], pc[1])
+			Lib.box(self, sc + Vector3(ss.x * 0.5, 0.0, 0), Vector3(0.02, 0.04, ss.z), trim_m)
 			Lib.light(self, Vector3(0, 2.3, 0), Color(1.0, 0.86, 0.66), 0.8, 5.0)
-			_part(Vector3(0, 1.3, L * 0.5 - 0.75), Vector3(w - 0.4, 0.4, 1.2), "bed")
-			_part(Vector3(-w * 0.5 + 0.45, 1.1, -L * 0.5 + 0.6), Vector3(0.65, 0.8, 0.95), "cabinet")
+			_part(Vector3(0, 1.38, L * 0.5 - 0.35), Vector3(w - 0.6, 0.12, 0.35), "bed")
 			_part(Vector3(w * 0.5 + 0.1, 1.5, -0.8), Vector3(0.15, 1.5, 0.8), "door")
 			_part(Vector3(w * 0.5 - 0.3, 1.5, -0.8), Vector3(0.15, 1.5, 0.8), "door")
 			_floor_y = 0.7
@@ -283,7 +314,6 @@ func prompt_for(action: String) -> String:
 			var v := _nearest_tow()
 			return ("[E] Hitch to %s" % v.display_name()) if v else "%s — back a vehicle's hitch up to the tongue" % spec["name"]
 		"bed": return "[E] Sleep"
-		"cabinet": return "[E] Open storage"
 		"door": return "[E] Exit camper" if is_inside(Game.player.global_position) else "[E] Enter camper"
 		"tank_valve":
 			return "[E] Fuel tank %d L — transfer 20 L to the towing vehicle / fill cans" % int(fuel_store)
@@ -302,8 +332,6 @@ func do_action(action: String, player: Node) -> void:
 					Game.notify("Back a vehicle up so its hitch is next to the trailer tongue")
 		"bed":
 			Game.world.sleep(player.global_position)
-		"cabinet":
-			Game.world.hud.open_storage(storage, "Camper storage", func() -> void: pass)
 		"door":
 			if is_inside(player.global_position):
 				player.teleport(to_global(Vector3(spec["w"] * 0.5 + 0.9, 0.2, -0.8)))

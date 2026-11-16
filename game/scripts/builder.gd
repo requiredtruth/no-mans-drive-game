@@ -113,7 +113,10 @@ func _process(delta: float) -> void:
 		return
 	if Input.is_action_just_pressed("rotate"):
 		user_rot = wrapf(user_rot + PI * 0.25, 0.0, TAU)
-	if Input.is_action_pressed("primary") and _cd <= 0.0:
+	if Input.is_action_pressed("primary") and _cd <= 0.0 and kit == "":
+		place()
+		_cd = 0.35
+	elif Input.is_action_just_pressed("primary") and _cd <= 0.0 and kit != "":
 		place()
 		_cd = 0.35
 	if Input.is_action_just_pressed("secondary") and _cd <= 0.0:
@@ -287,10 +290,12 @@ func place() -> void:
 		Game.notify(reason)
 		return
 	var t := piece()
+	var contents: Array = []
 	if kit != "":
-		if not Game.remove_item(kit, 1):
+		if Game.equipped() != kit:
 			stop()
 			return
+		contents = Game.take_held().get("c", [])
 	elif not Game.pay(Data.PIECES[t]["cost"]):
 		return
 	var rec := {"type": t, "pos": Game.arr(placement["pos"]), "rot": placement["rot"], "data": {}}
@@ -303,7 +308,13 @@ func place() -> void:
 	else:
 		Net.place_structure(Game.new_struct_id(), rec)
 	Audio.play_at("hammer", placement["pos"])
-	if kit != "" and Game.count(kit) <= 0:
+	# a carried crate keeps its contents: put them back inside
+	var host: Node = placement["host"] if placement.get("rv", false) else null
+	var cx := Transform3D(Basis(Vector3.UP, placement["rot"]), placement["pos"])
+	for c in contents:
+		var lx := Transform3D(Basis.from_euler(Game.v3(c["rot"])), Game.v3(c["pos"]))
+		Game.place_item(str(c["id"]), int(c["n"]), cx * lx, host)
+	if kit != "" and Game.carried(kit) <= 0:
 		stop()
 
 func demolish() -> void:
@@ -320,7 +331,7 @@ func demolish() -> void:
 			Game.add_item(k, back, true)
 	if s.type == "crate" and s.data.has("items"):
 		for k in s.data["items"]:
-			Game.add_item(k, int(s.data["items"][k]), true)
+			Game.drop_pile(k, int(s.data["items"][k]), s.global_position + Vector3(0, 0.6, 0))
 	Game.notify("Demolished %s (50%% refunded)" % Data.PIECES[s.type]["name"])
 	Audio.play_at("chop", s.global_position, 0.0, 0.7)
 	Net.remove_structure(s.id)

@@ -202,15 +202,16 @@ static func _option(parent: Container, text: String, key: String, values: Array)
 
 const CONTROLS_TEXT := """KEYBOARD & MOUSE
 WASD move · Mouse look · Shift sprint · Ctrl crouch (sneak up on game) · Space jump / handbrake
-E interact / enter / exit · Left click use tool · Right click aim / demolish (build)
-1-6 or wheel select hotbar · Tab inventory & crafting · B build menu · R rotate piece
+E pick up / interact / enter / exit · G place held item (or pick up furniture) · Q throw
+Left click use / eat / wear · Right click aim / demolish (build) · R rotate what you place
+1-4 or wheel switch hands · Tab crafting · B build menu
 F flashlight · L headlights · C driving camera · Esc pause
 
 CONTROLLER
 Left stick move · Right stick look · RT use · LT aim / demolish · A jump · X interact
-Y inventory · LB/RB hotbar · D-pad: up rotate, down build menu, left lights, right flashlight
+B place · Y crafting · LB/RB switch hands · D-pad: up rotate, down build menu, left lights, right flashlight
 Back camera · Start pause
 
 TOUCH
 Left joystick move / drive · Drag right side to look · Buttons for use, aim, interact, jump,
-sprint, inventory, build, rotate, lights and camera. Tap hotbar slots to equip."""
+sprint, place, throw, crafting, build, rotate, lights and camera. Tap a hand slot to switch."""

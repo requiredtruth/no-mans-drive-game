@@ -5,6 +5,7 @@ const Data = preload("res://scripts/data.gd")
 const Structure = preload("res://scripts/structure.gd")
 const RvPart = preload("res://scripts/rv_part.gd")
 const Shapes = preload("res://scripts/shapes.gd")
+const Mounts = preload("res://scripts/mounts.gd")
 
 const W := 2.4 # body width
 const FLOOR_Y := 1.0
@@ -22,7 +23,8 @@ var parts := {"engine": 38.0, "tires": 52.0, "battery": 48.0, "body": 55.0}
 var upgrades := {}
 var paint := 0
 var fridge := {}
-var cabinet := {"seeds_tomato": 1}
+var cabinet := {}
+var missing := {} # parts pulled out: "battery", "wheel0".."wheel3"
 var pots := [{}, {}]
 var interior_lights := false
 var headlights := false
@@ -129,6 +131,9 @@ func _build_wheels() -> void:
 		tire.mesh = Items.mesh("tire")
 		tire.position.y = -0.12
 		holder.add_child(tire)
+		w.set_meta("tire_mesh", tire)
+		w.set_meta("hub_mesh", Mounts.hub(holder))
+		_part(Vector3(spec[0] + signf(spec[0]) * 0.12, 0.62, spec[1]), Vector3(0.4, 1.0, 1.1), "wheel%d" % wheels.size())
 		wheels.append(w)
 
 func _paint_mat() -> StandardMaterial3D:
@@ -174,7 +179,7 @@ func _build_exterior() -> void:
 	shell.mesh = Shapes.commit([[body, white], [glass, Lib.glass_mat()], [trim, Lib.mat("rubber", Color(0.5, 0.5, 0.5), 2.0, false, 0.8)], [deco, stripe]])
 	vis.add_child(shell)
 	# inner face of the entry door (so the closed door isn't see-through from inside)
-	Lib.box(vis, Vector3(W * 0.5 - 0.05, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.03, DOOR_H, DOOR_Z1 - DOOR_Z0), Lib.mat("planks", Color(0.95, 0.88, 0.78), 1.1, false))
+	Lib.box(vis, Vector3(W * 0.5 - 0.05, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.03, DOOR_H, DOOR_Z1 - DOOR_Z0), Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8))
 	Lib.box(vis, Vector3(0, 1.2, FRONT_Z + 1.26), Vector3(1.3, 0.45, 0.04), dark)
 	for k in range(5):
 		Lib.box(vis, Vector3(0, 1.02 + k * 0.09, FRONT_Z + 1.28), Vector3(1.25, 0.025, 0.02), chrome)
@@ -232,6 +237,21 @@ func _build_exterior() -> void:
 		Lib.box(_bullbar, Vector3(x, 1.05, FRONT_Z + 1.45), Vector3(0.08, 0.8, 0.08), chrome)
 	Lib.box(_bullbar, Vector3(0, 1.45, FRONT_Z + 1.45), Vector3(1.9, 0.08, 0.08), chrome)
 	Lib.box(_bullbar, Vector3(0, 0.95, FRONT_Z + 1.45), Vector3(1.9, 0.08, 0.08), chrome)
+	# battery tray on the driver side, just behind the front wheel: the battery sits in plain view
+	var tray := Vector3(-W * 0.5 - 0.22, 0.78, 1.35)
+	Lib.box(vis, tray + Vector3(0, -0.04, 0), Vector3(0.42, 0.05, 0.56), dark)
+	Lib.box(vis, tray + Vector3(0.2, 0.12, 0), Vector3(0.03, 0.3, 0.56), dark)
+	for dz in [-0.26, 0.26]:
+		Lib.box(vis, tray + Vector3(0, 0.03, dz), Vector3(0.42, 0.1, 0.03), dark)
+	_battery_vis = Node3D.new()
+	_battery_vis.position = tray + Vector3(-0.02, -0.015, 0)
+	_battery_vis.rotation.y = PI * 0.5
+	vis.add_child(_battery_vis)
+	var bm := MeshInstance3D.new()
+	bm.mesh = Items.mesh("car_battery")
+	bm.scale = Vector3.ONE * 1.6
+	_battery_vis.add_child(bm)
+	_part(tray + Vector3(-0.02, 0.15, 0), Vector3(0.5, 0.42, 0.62), "battery")
 	# outside interactables
 	_part(Vector3(0, 1.75, FRONT_Z + 0.7), Vector3(W, 0.3, 1.1), "hood")
 	_part(Vector3(-W * 0.5 - 0.1, 1.2, -2.8), Vector3(0.25, 0.4, 0.4), "fuel")
@@ -283,61 +303,150 @@ func _part(pos: Vector3, size: Vector3, action: String) -> StaticBody3D:
 	add_child(b)
 	return b
 
+var _doors := {} # action -> {"pivot": Node3D, "open": bool, "angle": float}
+var _battery_vis: Node3D
+
+## Real RV materials: off-white wall board, vinyl plank floor, laminate cabinetry, fabric
+## upholstery and a plastic dash — no bare lumber.
+func _interior_mats() -> Dictionary:
+	return {
+		"wall": Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8),
+		"ceiling": Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9),
+		"floor": Lib.mat("tiles", Color(0.62, 0.58, 0.52), 1.1, false, 0.55),
+		"cab": Lib.color_mat(Color(0.8, 0.78, 0.74), 0.4),
+		"cab_trim": Lib.color_mat(Color(0.36, 0.35, 0.34), 0.5),
+		"counter": Lib.mat("concrete", Color(0.55, 0.55, 0.56), 1.0, false, 0.35),
+		"fabric": Lib.mat("denim", Color(0.62, 0.64, 0.68), 2.5, false, 0.95),
+		"fabric2": Lib.mat("plaid", Color(0.75, 0.75, 0.78), 2.0, false, 0.95),
+		"metal": Lib.color_mat(Color(0.72, 0.72, 0.74), 0.3, 0.8),
+		"plastic": Lib.color_mat(Color(0.14, 0.14, 0.15), 0.55),
+		"black": Lib.color_mat(Color(0.06, 0.06, 0.06), 0.5),
+	}
+
+## A cupboard or fridge whose front faces +X, with shelves you can put things on and a
+## door you open and close. center/size are the outer box in RV space.
+func _cupboard(vis: Node3D, action: String, center: Vector3, size: Vector3, shelves: Array, body_m: Material, door_m: Material, trim: Material) -> void:
+	var t := 0.03
+	var front := center.x + size.x * 0.5
+	var back := center.x - size.x * 0.5
+	var bottom := center.y - size.y * 0.5
+	var top := center.y + size.y * 0.5
+	var z0 := center.z - size.z * 0.5
+	var z1 := center.z + size.z * 0.5
+	var pieces := [
+		[Vector3(back + t * 0.5, center.y, center.z), Vector3(t, size.y, size.z)],
+		[Vector3(center.x, center.y, z0 + t * 0.5), Vector3(size.x, size.y, t)],
+		[Vector3(center.x, center.y, z1 - t * 0.5), Vector3(size.x, size.y, t)],
+		[Vector3(center.x, top - t * 0.5, center.z), Vector3(size.x, t, size.z)],
+		[Vector3(center.x, bottom + t * 0.5, center.z), Vector3(size.x, t, size.z)],
+	]
+	for y in shelves:
+		pieces.append([Vector3(center.x - 0.01, y, center.z), Vector3(size.x - 0.04, 0.02, size.z - 2 * t)])
+	for pc in pieces:
+		Lib.box(vis, pc[0], pc[1], body_m)
+		_shape(pc[0], pc[1])
+	# inside light colour for fridges, plain inside for cupboards
+	Lib.box(vis, Vector3(back + t + 0.005, center.y, center.z), Vector3(0.01, size.y - 2 * t, size.z - 2 * t), Lib.color_mat(Color(0.95, 0.96, 0.97), 0.3) if action == "fridge" else body_m)
+	var pivot := Node3D.new()
+	pivot.position = Vector3(front, center.y, z0)
+	vis.add_child(pivot)
+	Lib.box(pivot, Vector3(0.02, 0, size.z * 0.5), Vector3(0.035, size.y, size.z), door_m)
+	Lib.box(pivot, Vector3(0.045, 0, size.z * 0.5), Vector3(0.01, size.y - 0.04, size.z - 0.04), trim)
+	Lib.box(pivot, Vector3(0.06, 0.0 if size.y < 0.8 else 0.1, size.z - 0.07), Vector3(0.025, minf(size.y * 0.4, 0.35), 0.025), Lib.color_mat(Color(0.75, 0.75, 0.78), 0.3, 0.8))
+	var hs := StaticBody3D.new()
+	hs.set_script(RvPart)
+	hs.rv = self
+	hs.action = action
+	hs.collision_layer = 2
+	hs.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(0.08, size.y, size.z)
+	cs.shape = sh
+	cs.position = Vector3(0.03, 0, size.z * 0.5)
+	hs.add_child(cs)
+	pivot.add_child(hs)
+	_doors[action] = {"pivot": pivot, "open": false}
+
+func _toggle_door(action: String) -> void:
+	var d: Dictionary = _doors[action]
+	d["open"] = not d["open"]
+	var tw := create_tween()
+	tw.tween_property(d["pivot"], "rotation:y", -1.75 if d["open"] else 0.0, 0.3).set_trans(Tween.TRANS_SINE)
+	Audio.play_at("door", d["pivot"].global_position, -10.0, 1.4)
+
 func _build_interior() -> void:
-	var panel := Lib.mat("planks", Color(0.95, 0.88, 0.78), 1.1, false)
-	var floor_m := Lib.mat("planks", Color(0.6, 0.48, 0.38), 1.0, false)
-	var counter := Lib.mat("concrete", Color(0.9, 0.88, 0.84), 0.6, false)
-	var cab := Lib.mat("planks", Color(0.75, 0.6, 0.45), 1.2, false)
-	var fabric := Lib.mat("canvas", Color(0.75, 0.55, 0.45), 0.8, false)
-	var metal := Lib.color_mat(Color(0.7, 0.7, 0.72), 0.3, 0.8)
-	var black := Lib.color_mat(Color(0.08, 0.08, 0.08), 0.5)
+	var M := _interior_mats()
 	var L := FRONT_Z - REAR_Z
 	var mid := (FRONT_Z + REAR_Z) * 0.5
 	var h := ROOF_Y - FLOOR_Y
 	var vis := Node3D.new()
 	vis.name = "Interior"
 	add_child(vis)
-	Lib.box(vis, Vector3(0, FLOOR_Y + 0.01, mid), Vector3(W - 0.14, 0.02, L - 0.1), floor_m)
-	Lib.box(vis, Vector3(0, ROOF_Y - 0.03, mid), Vector3(W - 0.14, 0.04, L - 0.1), panel)
-	_wall_x(vis, -W * 0.5 + 0.08, panel, [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.35, 3.25, 1.85, 2.5]])
-	_wall_x(vis, W * 0.5 - 0.08, panel, [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6], [2.35, 3.25, 1.85, 2.5]])
-	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.08), Vector3(W - 0.14, h, 0.04), panel)
-	# cab: dashboard + seats + steering wheel
-	Lib.box(vis, Vector3(0, 1.75, FRONT_Z - 0.05), Vector3(W - 0.15, 0.5, 0.5), black)
-	Lib.box(vis, Vector3(-0.55, 2.02, FRONT_Z - 0.2), Vector3(0.5, 0.06, 0.18), Lib.color_mat(Color(0.2, 0.25, 0.2), 0.3, 0.0, Color(0.4, 0.9, 0.5), 0.6))
-	var sw := Lib.cyl(vis, Vector3(-0.55, 1.82, FRONT_Z - 0.42), 0.17, 0.17, 0.03, black, Vector3(-1.1, 0, 0), 20)
+	Lib.box(vis, Vector3(0, FLOOR_Y + 0.01, mid), Vector3(W - 0.14, 0.02, L - 0.1), M["floor"])
+	Lib.box(vis, Vector3(0, ROOF_Y - 0.03, mid), Vector3(W - 0.14, 0.04, L - 0.1), M["ceiling"])
+	_wall_x(vis, -W * 0.5 + 0.08, M["wall"], [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.35, 3.25, 1.85, 2.5]])
+	_wall_x(vis, W * 0.5 - 0.08, M["wall"], [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6], [2.35, 3.25, 1.85, 2.5]])
+	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.08), Vector3(W - 0.14, h, 0.04), M["wall"])
+	# baseboards / trim lines along the walls
+	for x in [-W * 0.5 + 0.11, W * 0.5 - 0.11]:
+		Lib.box(vis, Vector3(x, FLOOR_Y + 0.05, mid), Vector3(0.02, 0.08, L - 0.2), M["cab_trim"])
+		Lib.box(vis, Vector3(x, ROOF_Y - 0.08, mid), Vector3(0.03, 0.05, L - 0.2), M["cab_trim"])
+	# ---- cab: moulded dashboard with gauges, centre console, captain's seats
+	var dash_c := Vector3(0, FLOOR_Y + 0.75, FRONT_Z - 0.05)
+	Lib.box(vis, dash_c, Vector3(W - 0.15, 0.5, 0.5), M["plastic"], false, Vector3.ZERO, 0.06)
+	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.05), Vector3(W - 0.2, 0.03, 0.45), Lib.color_mat(Color(0.2, 0.2, 0.21), 0.7))
+	_shape(dash_c, Vector3(W - 0.15, 0.5, 0.5))
+	var cluster := Lib.box(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.31), Vector3(0.5, 0.18, 0.04), Lib.color_mat(Color(0.05, 0.05, 0.06), 0.3))
+	cluster.rotation.x = -0.3
+	for gx in [-0.68, -0.42]:
+		var g := Lib.cyl(vis, Vector3(gx, FLOOR_Y + 0.92, FRONT_Z - 0.335), 0.06, 0.06, 0.01, Lib.color_mat(Color(0.9, 0.9, 0.85), 0.3, 0.0, Color(0.5, 0.9, 1.0), 0.5), Vector3(PI * 0.5 - 0.3, 0, 0))
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	Lib.box(vis, Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.31), Vector3(0.22, 0.14, 0.03), Lib.color_mat(Color(0.1, 0.15, 0.12), 0.3, 0.0, Color(0.4, 0.9, 0.5), 0.5))
+	for vx in [-0.95, 0.35, 0.95]:
+		Lib.box(vis, Vector3(vx, FLOOR_Y + 0.85, FRONT_Z - 0.31), Vector3(0.16, 0.08, 0.02), M["black"])
+	var sw := Lib.cyl(vis, Vector3(-0.55, FLOOR_Y + 0.82, FRONT_Z - 0.42), 0.17, 0.17, 0.03, M["black"], Vector3(-1.1, 0, 0), 20)
 	sw.name = "SteeringWheel"
+	Lib.box(vis, Vector3(0, FLOOR_Y + 0.25, FRONT_Z - 0.75), Vector3(0.3, 0.5, 0.6), M["plastic"], false, Vector3.ZERO, 0.04)
 	for x in [-0.55, 0.55]:
-		Lib.box(vis, Vector3(x, FLOOR_Y + 0.45, FRONT_Z - 1.05), Vector3(0.6, 0.12, 0.6), fabric)
-		Lib.box(vis, Vector3(x, FLOOR_Y + 0.9, FRONT_Z - 1.35), Vector3(0.6, 0.85, 0.12), fabric, false, Vector3(-0.15, 0, 0))
-		Lib.box(vis, Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.4, 0.4), black)
+		Lib.box(vis, Vector3(x, FLOOR_Y + 0.45, FRONT_Z - 1.05), Vector3(0.58, 0.14, 0.58), M["fabric"], false, Vector3.ZERO, 0.05)
+		Lib.box(vis, Vector3(x, FLOOR_Y + 0.92, FRONT_Z - 1.35), Vector3(0.56, 0.85, 0.14), M["fabric"], false, Vector3(-0.15, 0, 0), 0.05)
+		Lib.box(vis, Vector3(x, FLOOR_Y + 1.42, FRONT_Z - 1.42), Vector3(0.3, 0.16, 0.1), M["fabric"], false, Vector3(-0.15, 0, 0), 0.04)
+		Lib.box(vis, Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4), M["black"])
 	_part(Vector3(-0.55, FLOOR_Y + 0.6, FRONT_Z - 1.1), Vector3(0.6, 0.9, 0.6), "drive")
 	_part(Vector3(0.55, FLOOR_Y + 0.6, FRONT_Z - 1.1), Vector3(0.6, 0.9, 0.6), "passenger")
-	# kitchen (left wall): counter, stove, sink, coffee maker
+	# over-cab bunk shelf (you can store things up there)
+	Lib.box(vis, Vector3(0, ROOF_Y - 0.55, FRONT_Z + 0.25), Vector3(W - 0.2, 0.06, 0.9), M["cab"])
+	_shape(Vector3(0, ROOF_Y - 0.55, FRONT_Z + 0.25), Vector3(W - 0.2, 0.06, 0.9))
+	Lib.box(vis, Vector3(0, ROOF_Y - 0.47, FRONT_Z - 0.19), Vector3(W - 0.2, 0.12, 0.03), M["cab_trim"])
+	# ---- galley (left wall): counter, stove, sink, coffee maker
 	var kz0 := -0.2
 	var kz1 := 1.5
-	Lib.box(vis, Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.45, (kz0 + kz1) * 0.5), Vector3(0.6, 0.9, kz1 - kz0), cab)
-	Lib.box(vis, Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.92, (kz0 + kz1) * 0.5), Vector3(0.64, 0.05, kz1 - kz0 + 0.02), counter)
-	Lib.box(vis, Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.95, 1.1), Vector3(0.5, 0.02, 0.55), black)
+	var kx := -W * 0.5 + 0.38
+	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.45, (kz0 + kz1) * 0.5), Vector3(0.6, 0.9, kz1 - kz0), M["cab"])
+	for dz in [0.15, 0.55, 0.95, 1.3]:
+		Lib.box(vis, Vector3(kx + 0.305, FLOOR_Y + 0.45, kz0 + dz), Vector3(0.01, 0.8, 0.005), M["cab_trim"])
+		Lib.box(vis, Vector3(kx + 0.32, FLOOR_Y + 0.75, kz0 + dz - 0.12), Vector3(0.02, 0.02, 0.1), M["metal"])
+	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.92, (kz0 + kz1) * 0.5), Vector3(0.64, 0.05, kz1 - kz0 + 0.02), M["counter"])
+	_shape(Vector3(kx, FLOOR_Y + 0.4725, (kz0 + kz1) * 0.5), Vector3(0.64, 0.945, kz1 - kz0 + 0.02))
+	Lib.box(vis, Vector3(-W * 0.5 + 0.1, FLOOR_Y + 1.15, (kz0 + kz1) * 0.5), Vector3(0.01, 0.4, kz1 - kz0), Lib.mat("tiles", Color(0.85, 0.85, 0.82), 2.5, false, 0.3))
+	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.95, 1.1), Vector3(0.5, 0.02, 0.55), M["black"])
 	for p in [Vector2(-0.12, 0.95), Vector2(0.12, 0.95), Vector2(-0.12, 1.25), Vector2(0.12, 1.25)]:
-		Lib.cyl(vis, Vector3(-W * 0.5 + 0.38 + p.x, FLOOR_Y + 0.965, p.y), 0.08, 0.08, 0.01, Lib.color_mat(Color(0.25, 0.25, 0.25), 0.4, 0.7))
-	_part(Vector3(-W * 0.5 + 0.38, FLOOR_Y + 1.0, 1.1), Vector3(0.6, 0.2, 0.6), "stove")
-	Lib.box(vis, Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.9, 0.35), Vector3(0.42, 0.06, 0.38), metal)
-	Lib.cyl(vis, Vector3(-W * 0.5 + 0.18, FLOOR_Y + 1.12, 0.35), 0.015, 0.015, 0.35, metal)
-	_part(Vector3(-W * 0.5 + 0.38, FLOOR_Y + 1.0, 0.35), Vector3(0.6, 0.2, 0.45), "sink")
-	Lib.box(vis, Vector3(-W * 0.5 + 0.3, FLOOR_Y + 1.08, -0.05), Vector3(0.2, 0.28, 0.2), black)
+		Lib.cyl(vis, Vector3(kx + p.x, FLOOR_Y + 0.965, p.y), 0.08, 0.08, 0.01, Lib.color_mat(Color(0.25, 0.25, 0.25), 0.4, 0.7))
+	_part(Vector3(kx, FLOOR_Y + 0.98, 1.1), Vector3(0.5, 0.06, 0.55), "stove")
+	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.92, 0.35), Vector3(0.42, 0.06, 0.38), M["metal"])
+	Lib.cyl(vis, Vector3(-W * 0.5 + 0.18, FLOOR_Y + 1.12, 0.35), 0.015, 0.015, 0.35, M["metal"])
+	_part(Vector3(-W * 0.5 + 0.2, FLOOR_Y + 1.12, 0.35), Vector3(0.12, 0.35, 0.3), "sink")
+	Lib.box(vis, Vector3(-W * 0.5 + 0.3, FLOOR_Y + 1.08, -0.05), Vector3(0.2, 0.28, 0.2), M["black"])
 	Lib.cyl(vis, Vector3(-W * 0.5 + 0.34, FLOOR_Y + 1.0, -0.05), 0.06, 0.05, 0.12, Lib.glass_mat())
-	_part(Vector3(-W * 0.5 + 0.3, FLOOR_Y + 1.08, -0.05), Vector3(0.3, 0.35, 0.25), "coffee")
-	# overhead cabinets
-	Lib.box(vis, Vector3(-W * 0.5 + 0.28, ROOF_Y - 0.3, 0.65), Vector3(0.42, 0.5, 1.7), cab)
+	_part(Vector3(-W * 0.5 + 0.3, FLOOR_Y + 1.08, -0.05), Vector3(0.24, 0.3, 0.22), "coffee")
+	# overhead cupboard above the galley
+	_cupboard(vis, "overhead", Vector3(-W * 0.5 + 0.3, ROOF_Y - 0.33, 0.65), Vector3(0.44, 0.5, 1.6), [], M["cab"], M["cab"], M["cab_trim"])
 	# fridge
-	Lib.box(vis, Vector3(-W * 0.5 + 0.4, FLOOR_Y + 0.85, -0.65), Vector3(0.62, 1.7, 0.7), Lib.color_mat(Color(0.92, 0.92, 0.9), 0.3))
-	Lib.box(vis, Vector3(-W * 0.5 + 0.72, FLOOR_Y + 1.1, -0.4), Vector3(0.03, 0.4, 0.04), metal)
-	_part(Vector3(-W * 0.5 + 0.4, FLOOR_Y + 0.85, -0.65), Vector3(0.66, 1.7, 0.72), "fridge")
-	# storage cabinet
-	Lib.box(vis, Vector3(-W * 0.5 + 0.35, FLOOR_Y + 0.5, -1.45), Vector3(0.55, 1.0, 0.8), cab)
-	_part(Vector3(-W * 0.5 + 0.35, FLOOR_Y + 0.5, -1.45), Vector3(0.6, 1.0, 0.82), "cabinet")
-	# plant pots on the cabinet
+	_cupboard(vis, "fridge", Vector3(-W * 0.5 + 0.42, FLOOR_Y + 0.86, -0.67), Vector3(0.62, 1.7, 0.68), [FLOOR_Y + 0.5, FLOOR_Y + 0.95, FLOOR_Y + 1.35],
+		Lib.color_mat(Color(0.93, 0.93, 0.91), 0.3), Lib.color_mat(Color(0.88, 0.88, 0.86), 0.25), Lib.color_mat(Color(0.8, 0.8, 0.78), 0.25))
+	# storage cupboard (plant pots on top)
+	_cupboard(vis, "cabinet", Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.5, -1.45), Vector3(0.56, 1.0, 0.8), [FLOOR_Y + 0.5], M["cab"], M["cab"], M["cab_trim"])
 	for i in range(2):
 		var pot := StaticBody3D.new()
 		pot.set_script(Structure)
@@ -350,36 +459,74 @@ func _build_interior() -> void:
 		pot.collision_layer = 2
 		pot.collision_mask = 0
 		pot.name = "Pot%d" % i
-	# dinette (right side)
-	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.05, 0.9), counter)
-	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.36, -0.5), Vector3(0.08, 0.72, 0.08), metal)
+	# ---- dinette (right side): table and two benches
+	var tx := W * 0.5 - 0.45
+	Lib.box(vis, Vector3(tx, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.04, 0.9), M["counter"], false, Vector3.ZERO, 0.015)
+	Lib.box(vis, Vector3(tx, FLOOR_Y + 0.69, -0.5), Vector3(0.72, 0.02, 0.92), M["cab_trim"])
+	_shape(Vector3(tx, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.05, 0.9))
+	Lib.cyl(vis, Vector3(tx, FLOOR_Y + 0.36, -0.5), 0.04, 0.04, 0.72, M["metal"])
 	for z in [0.25, -1.25]:
-		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.22, z), Vector3(0.75, 0.44, 0.45), cab)
-		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.5, z), Vector3(0.75, 0.12, 0.45), fabric)
-		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.85, z + signf(z) * 0.17), Vector3(0.75, 0.6, 0.1), fabric)
-	# bathroom cubicle (right rear)
-	Lib.box(vis, Vector3(W * 0.5 - 0.5, FLOOR_Y + h * 0.5, -1.75), Vector3(0.9, h, 0.05), panel)
-	Lib.box(vis, Vector3(0.18, FLOOR_Y + h * 0.5, -2.2), Vector3(0.05, h, 0.95), panel)
-	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.22, -2.45), Vector3(0.38, 0.44, 0.45), Lib.color_mat(Color(0.95, 0.95, 0.95), 0.2))
-	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.45, -2.45), Vector3(0.4, 0.04, 0.48), Lib.color_mat(Color(0.95, 0.95, 0.95), 0.2))
-	Lib.box(vis, Vector3(W * 0.5 - 0.3, FLOOR_Y + 0.7, -2.45), Vector3(0.12, 0.45, 0.4), Lib.color_mat(Color(0.95, 0.95, 0.95), 0.2))
+		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.22, z), Vector3(0.75, 0.44, 0.45), M["cab"])
+		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.5, z), Vector3(0.75, 0.12, 0.45), M["fabric"], false, Vector3.ZERO, 0.04)
+		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.85, z + signf(z) * 0.17), Vector3(0.75, 0.6, 0.1), M["fabric"], false, Vector3.ZERO, 0.04)
+		_shape(Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.28, z), Vector3(0.75, 0.56, 0.45))
+	# ---- bathroom cubicle (right rear)
+	Lib.box(vis, Vector3(W * 0.5 - 0.5, FLOOR_Y + h * 0.5, -1.75), Vector3(0.9, h, 0.05), M["wall"])
+	Lib.box(vis, Vector3(0.18, FLOOR_Y + h * 0.5, -2.2), Vector3(0.05, h, 0.95), M["wall"])
+	var porcelain := Lib.color_mat(Color(0.95, 0.95, 0.95), 0.15)
+	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.22, -2.45), Vector3(0.38, 0.44, 0.45), porcelain, false, Vector3.ZERO, 0.08)
+	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.45, -2.45), Vector3(0.4, 0.04, 0.48), porcelain, false, Vector3.ZERO, 0.02)
+	Lib.box(vis, Vector3(W * 0.5 - 0.3, FLOOR_Y + 0.7, -2.45), Vector3(0.12, 0.45, 0.4), porcelain, false, Vector3.ZERO, 0.03)
 	_part(Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.4, -2.45), Vector3(0.5, 0.8, 0.5), "toilet")
-	# rear bed
-	Lib.box(vis, Vector3(-0.25, FLOOR_Y + 0.3, -2.75), Vector3(1.85, 0.6, 1.2), cab)
-	Lib.box(vis, Vector3(-0.25, FLOOR_Y + 0.68, -2.75), Vector3(1.8, 0.18, 1.15), Lib.mat("canvas", Color(0.55, 0.65, 0.8), 0.8, false))
-	Lib.box(vis, Vector3(-0.85, FLOOR_Y + 0.82, -2.75), Vector3(0.35, 0.1, 0.8), Lib.color_mat(Color("eae6dd")))
-	Lib.box(vis, Vector3(0.1, FLOOR_Y + 0.79, -2.75), Vector3(1.1, 0.06, 1.17), Lib.mat("canvas", Color(0.8, 0.45, 0.35), 0.8, false))
-	_part(Vector3(-0.25, FLOOR_Y + 0.7, -2.75), Vector3(1.85, 0.5, 1.2), "bed")
-	# light switch + interior light
+	# ---- rear bed: laminate platform, mattress, duvet, pillows
+	Lib.box(vis, Vector3(-0.25, FLOOR_Y + 0.3, -2.75), Vector3(1.85, 0.6, 1.2), M["cab"])
+	Lib.box(vis, Vector3(-0.25, FLOOR_Y + 0.68, -2.75), Vector3(1.8, 0.18, 1.15), Lib.color_mat(Color(0.92, 0.92, 0.9), 0.95), false, Vector3.ZERO, 0.06)
+	Lib.box(vis, Vector3(-0.85, FLOOR_Y + 0.82, -2.75), Vector3(0.35, 0.1, 0.8), Lib.color_mat(Color("eae6dd"), 0.95), false, Vector3.ZERO, 0.04)
+	Lib.box(vis, Vector3(0.1, FLOOR_Y + 0.79, -2.75), Vector3(1.1, 0.06, 1.17), M["fabric2"], false, Vector3.ZERO, 0.02)
+	_shape(Vector3(-0.25, FLOOR_Y + 0.385, -2.75), Vector3(1.85, 0.77, 1.2))
+	_part(Vector3(-0.85, FLOOR_Y + 0.9, -2.75), Vector3(0.4, 0.15, 0.85), "bed")
+	# light switch + interior lights
 	Lib.box(vis, Vector3(W * 0.5 - 0.1, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.03, 0.12, 0.08), Lib.color_mat(Color(0.9, 0.9, 0.85)))
 	_part(Vector3(W * 0.5 - 0.12, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.1, 0.25, 0.2), "lights")
 	_part(Vector3(W * 0.5 - 0.15, FLOOR_Y + 1.0, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.12, 2.0, DOOR_Z1 - DOOR_Z0), "door")
 	for z in [-1.8, 0.6]:
-		Lib.box(vis, Vector3(0, ROOF_Y - 0.06, z), Vector3(0.35, 0.03, 0.35), Lib.color_mat(Color(1, 0.95, 0.85), 0.5, 0.0, Color(1, 0.9, 0.7), 1.0))
+		Lib.cyl(vis, Vector3(0, ROOF_Y - 0.06, z), 0.17, 0.17, 0.03, Lib.color_mat(Color(1, 0.95, 0.85), 0.5, 0.0, Color(1, 0.9, 0.7), 1.0))
 	_interior_light = Lib.light(vis, Vector3(0, ROOF_Y - 0.3, -0.5), Color(1.0, 0.86, 0.66), 1.4, 6.0, false)
 	_interior_light.visible = false
-	# rug and details
-	Lib.box(vis, Vector3(0.1, FLOOR_Y + 0.025, -0.3), Vector3(0.8, 0.01, 1.8), Lib.mat("canvas", Color(0.7, 0.35, 0.3), 1.2, false))
+	# runner rug
+	Lib.box(vis, Vector3(0.0, FLOOR_Y + 0.025, -0.3), Vector3(0.7, 0.01, 1.8), Lib.mat("carpet", Color(0.45, 0.42, 0.4), 1.5, false))
+
+## Your few starting supplies sit in the RV — pick them up when you need them.
+func stock_starter_supplies() -> void:
+	_stock("water_clean", 1, Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.945, 0.7))
+	_stock("water_clean", 1, Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.945, 0.86))
+	_stock("canned_food", 1, Vector3(W * 0.5 - 0.5, FLOOR_Y + 0.745, -0.35))
+	_stock("rope", 1, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.745, -0.7))
+	_stock("bandage", 1, Vector3(-W * 0.5 + 0.32, FLOOR_Y + 1.01, -1.35))
+	_stock("seeds_tomato", 1, Vector3(-W * 0.5 + 0.32, FLOOR_Y + 0.52, -1.5))
+	_stock("toolkit", 1, Vector3(0.25, FLOOR_Y + 0.015, -1.9))
+
+func _stock(id: String, n: int, lp: Vector3, yaw := 0.0) -> void:
+	var bb: AABB = Items.display_bounds(id)
+	var xf := global_transform * Transform3D(Basis(Vector3.UP, yaw), lp - Vector3(0, bb.position.y, 0))
+	Game.place_item(id, n, xf, self)
+
+## Older saves kept the fridge/cabinet as item lists: put those items on the shelves.
+func _spill_legacy() -> void:
+	var spots := {"fridge": [Vector3(-W * 0.5 + 0.42, FLOOR_Y + 0.52, -0.67), Vector3(-W * 0.5 + 0.42, FLOOR_Y + 0.97, -0.67), Vector3(-W * 0.5 + 0.42, FLOOR_Y + 1.37, -0.67)],
+		"cabinet": [Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.04, -1.45), Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.52, -1.45)]}
+	for which in ["fridge", "cabinet"]:
+		var items: Dictionary = fridge if which == "fridge" else cabinet
+		var i := 0
+		for k in items:
+			var n := int(items[k])
+			while n > 0 and i < 18:
+				var take := mini(n, Data.stack(k))
+				var base: Vector3 = spots[which][i % spots[which].size()]
+				_stock(k, take, base + Vector3(0, 0, -0.22 + (i / spots[which].size()) % 3 * 0.22))
+				n -= take
+				i += 1
+		items.clear()
 
 func _build_cameras() -> void:
 	cam_fp = Camera3D.new()
@@ -403,7 +550,7 @@ func water_capacity() -> float:
 func save_state() -> Dictionary:
 	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
-		"cabinet": cabinet, "pots": pots, "odometer": odometer, "attached": attached, "cargo": _cargo_records()}
+		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records()}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
@@ -423,6 +570,7 @@ func apply_state(s: Dictionary) -> void:
 	paint = int(s.get("paint", 0))
 	fridge = s.get("fridge", fridge)
 	cabinet = s.get("cabinet", cabinet)
+	missing = s.get("missing", {})
 	var sp: Array = s.get("pots", pots)
 	pots = sp if sp.size() == 2 else pots
 	odometer = float(s.get("odometer", 0.0))
@@ -438,6 +586,8 @@ func apply_state(s: Dictionary) -> void:
 		var pot := get_node_or_null("Interior/Pot%d" % i)
 		if pot:
 			pot.remote_data(pots[i])
+	if not fridge.is_empty() or not cabinet.is_empty():
+		call_deferred("_spill_legacy")
 	_apply_visuals()
 
 func _apply_visuals() -> void:
@@ -448,8 +598,9 @@ func _apply_visuals() -> void:
 	_bullbar.visible = upgrades.has("bullbar")
 	var grip := 3.0 if not upgrades.has("offroad_tires") else 3.6
 	grip *= lerpf(0.55, 1.0, parts["tires"] / 100.0)
-	for w in wheels:
-		w.wheel_friction_slip = grip
+	Mounts.apply_wheels(self, grip)
+	if _battery_vis:
+		_battery_vis.visible = not missing.has("battery")
 
 # ------------------------------------------------------------------ driving
 func is_driven_locally() -> bool:
@@ -464,8 +615,11 @@ func try_start_engine() -> void:
 	if fuel <= 0.1:
 		Game.notify("Out of fuel! Use a fuel can on the fuel cap.")
 		return
+	if missing.has("battery"):
+		Game.notify("There's no battery fitted. Carry a Car Battery to the battery tray.")
+		return
 	if battery < 5.0 or parts["battery"] < 5.0:
-		Game.notify("The battery is dead. Replace it or wait for the solar panel.")
+		Game.notify("The battery is dead. Pull it out of its tray and fit a Car Battery (or wait for the solar panel).")
 		return
 	if parts["engine"] <= 1.0:
 		Game.notify("The engine is wrecked. Repair it at the hood.")
@@ -508,6 +662,7 @@ func _physics_process(delta: float) -> void:
 		handbrake = Input.is_action_pressed("jump")
 	var fwd_speed := linear_velocity.dot(global_transform.basis.z)
 	var power := 9500.0 * (1.35 if upgrades.has("engine_tune") else 1.0) * lerpf(0.65, 1.0, parts["engine"] / 100.0)
+	power *= maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
 	var top := 27.0 * (1.12 if upgrades.has("engine_tune") else 1.0)
 	var force := 0.0
 	var brk := 0.0
@@ -572,7 +727,7 @@ func _physics_process(delta: float) -> void:
 		battery = maxf(battery - delta * (0.02 if engine_on else 0.06), 0.0)
 	if interior_lights:
 		battery = maxf(battery - delta * 0.03, 0.0)
-	if upgrades.has("solar") and Game.time_of_day > 7.0 and Game.time_of_day < 18.0 and Game.weather != "rain":
+	if upgrades.has("solar") and not missing.has("battery") and Game.time_of_day > 7.0 and Game.time_of_day < 18.0 and Game.weather != "rain":
 		battery = minf(battery + delta * 0.08, 100.0)
 	if battery <= 0.0:
 		headlights = false
@@ -660,14 +815,19 @@ func door_open_anim() -> void:
 
 # ------------------------------------------------------------------ interaction
 func prompt_for(action: String) -> String:
+	if action.begins_with("wheel"):
+		return Mounts.prompt(self, action)
 	match action:
 		"drive": return "[E] Drive" if driver == 0 else "Someone is driving"
 		"passenger": return "[E] Sit in passenger seat"
 		"stove": return "[E] Cook on stove"
 		"sink": return "[E] Use sink  (tank %d/%d L)" % [int(water), int(water_capacity())]
 		"coffee": return "[E] Brew coffee (beans + 1 L water)"
-		"fridge": return "[E] Open fridge"
-		"cabinet": return "[E] Open storage cabinet"
+		"fridge", "cabinet", "overhead":
+			var nm: String = {"fridge": "fridge", "cabinet": "cupboard", "overhead": "overhead cupboard"}[action]
+			return "[E] %s %s" % ["Close" if _doors[action]["open"] else "Open", nm]
+		"battery":
+			return Mounts.prompt(self, action)
 		"bed": return "[E] Sleep in bed"
 		"toilet": return "[E] Use toilet"
 		"lights": return "[E] Interior lights %s" % ("off" if interior_lights else "on")
@@ -676,11 +836,16 @@ func prompt_for(action: String) -> String:
 			if p and is_inside(p.global_position):
 				return "[E] Exit RV"
 			return "[E] Enter RV"
-		"hood": return "[E] Open hood — repair & upgrade"
+		"hood":
+			var mp := Mounts.prompt(self, "hood")
+			return mp if mp != "" else "[E] Open hood — condition, upgrades & paint"
 		"fuel": return "[E] Refuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
 	return ""
 
 func do_action(action: String, player: Node) -> void:
+	if action == "battery" or action.begins_with("wheel") or action == "hood":
+		if Mounts.act(self, action):
+			return
 	match action:
 		"drive":
 			if driver == 0:
@@ -701,10 +866,8 @@ func do_action(action: String, player: Node) -> void:
 				water -= 1.0
 				Game.add_item("coffee", 1)
 				Audio.play("pickup")
-		"fridge":
-			Game.world.hud.open_storage(fridge, "Fridge", func() -> void: pass)
-		"cabinet":
-			Game.world.hud.open_storage(cabinet, "Cabinet", func() -> void: pass)
+		"fridge", "cabinet", "overhead":
+			_toggle_door(action)
 		"bed":
 			Game.world.sleep(player.global_position)
 		"toilet":
@@ -720,7 +883,7 @@ func do_action(action: String, player: Node) -> void:
 			if is_inside(player.global_position):
 				player.teleport(to_global(Vector3(W * 0.5 + 1.0, 0.4, (DOOR_Z0 + DOOR_Z1) * 0.5)))
 			else:
-				player.teleport(to_global(Vector3(W * 0.5 - 0.7, FLOOR_Y + 0.1, (DOOR_Z0 + DOOR_Z1) * 0.5 - 0.6)))
+				player.teleport(to_global(Vector3(0.05, FLOOR_Y + 0.1, (DOOR_Z0 + DOOR_Z1) * 0.5 - 0.1)))
 		"hood":
 			Game.world.hud.open_rv_menu(self)
 		"fuel":
@@ -824,7 +987,7 @@ func seat_global(as_driver: bool) -> Vector3:
 	return to_global(Vector3(-0.55 if as_driver else 0.55, 1.0, 2.3))
 
 func exit_global() -> Vector3:
-	return to_global(Vector3(-0.2, FLOOR_Y + 0.1, FRONT_Z - 1.9))
+	return to_global(Vector3(0.05, FLOOR_Y + 0.1, FRONT_Z - 1.9))
 
 func set_seat(as_driver: bool) -> void:
 	cam_fp.position.x = -0.55 if as_driver else 0.55

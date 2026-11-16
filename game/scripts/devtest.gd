@@ -69,8 +69,9 @@ func _items_sheet() -> void:
 
 func _viewmodels() -> void:
 	for id in ["axe", "knife", "rifle", "bow", "fishing_rod", "pickaxe", "hammer", "flashlight", "canned_food"]:
-		Game.add_item(id, 1, true)
-		Game.assign_hotbar(id)
+		Game.slots[0] = {"id": id, "n": 1}
+		Game.select_slot(0)
+		Game._changed()
 		await _wait(0.4)
 		await _shot("vm_" + id)
 
@@ -150,7 +151,260 @@ func _animals() -> void:
 	await _wait(0.5)
 	await _shot("animals_front")
 
+func _find_loot(mode: String) -> Node:
+	for n in Game.world.find_children("*", "StaticBody3D", true, false):
+		if n.get_script() == load("res://scripts/loot.gd") and n.mode == mode and not Game.removed.has(n.key):
+			return n
+	return null
+
+func _look_at_point(p: Vector3) -> void:
+	var pl = Game.player
+	var eye: Vector3 = pl.camera.global_position
+	var d := p - eye
+	pl.rotation.y = atan2(-d.x, -d.z)
+	pl.pitch = atan2(d.y, Vector2(d.x, d.z).length())
+	pl.head.rotation.x = pl.pitch
+
+## Physical carrying, exact placement, glue-while-driving, part swaps, boxes, cab interior.
+func _hands() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	w.hud.close_modal()
+	Game.time_of_day = 10.5
+	await _settle(pl.global_position)
+	await _wait(1.5)
+	_log("start slots %s worn %s" % [str(Game.slots), str(Game.worn)])
+	var cargo: Node = rv.get_node("Cargo")
+	_log("starter items glued in RV: %d" % cargo.get_child_count())
+	rv.do_action("door", pl)
+	rv.interior_lights = true
+	rv._update_lights()
+	await _wait(0.4)
+	pl.rotation.y = rv.rotation.y + PI * 0.75
+	pl.pitch = -0.35
+	pl.head.rotation.x = -0.35
+	await _wait(0.5)
+	await _shot("h01_rv_interior_galley")
+	pl.rotation.y = rv.rotation.y
+	pl.pitch = -0.25
+	pl.head.rotation.x = -0.25
+	await _wait(0.4)
+	await _shot("h02_rv_interior_rear")
+	pl.rotation.y = rv.rotation.y + PI
+	pl.pitch = -0.1
+	pl.head.rotation.x = -0.1
+	await _wait(0.4)
+	await _shot("h03_rv_interior_cab")
+	# pick up the canned food off the dinette table
+	var can: Node = null
+	for it in cargo.get_children():
+		if it.is_in_group("world_item") and it.id == "canned_food":
+			can = it
+	_look_at_point(can.global_position)
+	await _wait(0.3)
+	pl._update_prompt()
+	_log("looking at: %s / prompt '%s'" % [str(pl.look_target), pl.prompt])
+	await _shot("h04_highlight_item")
+	pl._interact()
+	await _wait(0.2)
+	_log("after pickup slots %s" % str(Game.slots))
+	await _shot("h05_holding_can")
+	var hb = w.hud.hotbar_box
+	_log("hotbar rect %s children %d visible %s" % [str(hb.get_global_rect()), hb.get_child_count(), hb.is_visible_in_tree()])
+	# place it on the counter with the preview
+	_look_at_point(rv.to_global(Vector3(-rv.W * 0.5 + 0.4, rv.FLOOR_Y + 0.95, 0.0)))
+	await _wait(0.3)
+	pl._update_placement()
+	_log("placement valid %s host %s" % [pl._place_valid, str(pl._place_host)])
+	await _shot("h06_place_preview")
+	pl.place_held()
+	await _wait(0.2)
+	var placed: Node = null
+	for it in cargo.get_children():
+		if it.is_in_group("world_item") and it.id == "canned_food":
+			placed = it
+	var lp0: Vector3 = placed.position if placed else Vector3.ZERO
+	_log("placed on counter: %s local %s" % [placed != null, str(lp0)])
+	# drive and check that items stay glued exactly
+	rv.do_action("door", pl)
+	await _wait(0.2)
+	for k in rv.parts:
+		rv.parts[k] = 100.0
+	rv.battery = 100.0
+	rv.fuel = 60.0
+	pl.enter_vehicle(rv, true)
+	Input.action_press("move_forward", 1.0)
+	await _wait(6.0)
+	Input.action_press("move_left", 1.0)
+	await _wait(2.0)
+	Input.action_release("move_left")
+	Input.action_release("move_forward")
+	Input.action_press("jump")
+	await _wait(2.5)
+	Input.action_release("jump")
+	_log("after drive: can local %s (moved %.3f m inside RV), glued items %d" % [str(placed.position), placed.position.distance_to(lp0), cargo.get_child_count()])
+	pl.exit_vehicle()
+	await _wait(0.6)
+	# swap the battery by hand
+	var bat_part: Node = null
+	for ch in rv.get_children():
+		if ch.get_script() == load("res://scripts/rv_part.gd") and ch.action == "battery":
+			bat_part = ch
+	var bp: Vector3 = bat_part.global_position + rv.global_transform.basis.x * -1.6
+	_player_at(Vector3(bp.x, w.gen.height(bp.x, bp.z) + 0.1, bp.z), 0.0)
+	await _wait(0.2)
+	_look_at_point(bat_part.global_position)
+	await _wait(0.3)
+	pl._update_prompt()
+	_log("battery prompt: %s" % pl.prompt)
+	await _shot("h07_battery_tray")
+	Game.select_slot(1)
+	rv.do_action("battery", pl)
+	_log("pulled battery: missing %s, slots %s" % [str(rv.missing), str(Game.slots)])
+	await _wait(0.3)
+	await _shot("h08_battery_removed")
+	rv.try_start_engine()
+	Game.slots[1] = {"id": "car_battery", "n": 1}
+	Game._changed()
+	rv.do_action("battery", pl)
+	_log("fitted battery: missing %s parts %s" % [str(rv.missing), str(rv.parts)])
+	# tire swap (toolkit lies in the RV within reach? place one at our feet)
+	Game.place_item("toolkit", 1, Transform3D(Basis.IDENTITY, _ground(pl.global_position.x + 0.5, pl.global_position.z)))
+	Game.slots[1] = {"id": "", "n": 0}
+	Game._changed()
+	rv.parts["tires"] = 40.0
+	rv.do_action("wheel0", pl)
+	_log("pulled tire: missing %s tires %.1f slots %s" % [str(rv.missing), rv.parts["tires"], str(Game.slots)])
+	var wpos: Vector3 = rv.wheels[0].global_position
+	var cam: Vector3 = wpos + rv.global_transform.basis.x * -2.2 + rv.global_transform.basis.z * 1.0
+	_player_at(Vector3(cam.x, w.gen.height(cam.x, cam.z) + 0.1, cam.z), 0.0)
+	_look_at_point(wpos)
+	await _wait(0.4)
+	await _shot("h09_wheel_removed")
+	Game.slots[1] = {"id": "tire", "n": 1}
+	Game._changed()
+	rv.do_action("wheel0", pl)
+	_log("fitted tire: missing %s tires %.1f" % [str(rv.missing), rv.parts["tires"]])
+	# hands are limited: try picking up with full hands
+	Game.slots = [{"id": "knife", "n": 1}, {"id": "rope", "n": 1}]
+	Game._changed()
+	var stone = Game.spawn_item("stone", 1, pl.global_position + Vector3(0, 0.5, 0))
+	await _wait(0.5)
+	var ok: bool = Game.pick_up(stone)
+	_log("pick up with full hands -> %s (expected false)" % ok)
+	Game.worn["backpack"] = true
+	Game._fit_slots()
+	ok = Game.pick_up(stone)
+	_log("with backpack: slots %d, pick up -> %s" % [Game.slots.size(), ok])
+	# crafting uses items lying within reach
+	Game.drop_pile("fiber", 3, pl.global_position + Vector3(0.5, 0.4, 0))
+	await _wait(0.6)
+	_log("fiber in reach %d, can craft rope: %s" % [Game.count("fiber"), Game.has_cost({"fiber": 3})])
+	Game.pay({"fiber": 3})
+	_log("after crafting: fiber in reach %d" % Game.count("fiber"))
+	# crate carries its contents
+	var cpos := _ground(pl.global_position.x + 2.0, pl.global_position.z + 1.0)
+	Net.place_structure(Game.new_struct_id(), {"type": "crate", "pos": Game.arr(cpos), "rot": 0.0, "data": {}})
+	await _wait(0.3)
+	Game.place_item("canned_food", 1, Transform3D(Basis.IDENTITY, cpos + Vector3(-0.2, 0.12, 0)))
+	Game.place_item("bandage", 2, Transform3D(Basis.IDENTITY, cpos + Vector3(0.2, 0.12, 0)))
+	var crate: Node = null
+	for st in get_tree().get_nodes_in_group("placeable"):
+		if st.type == "crate" and st.global_position.distance_to(cpos) < 0.5:
+			crate = st
+	_player_at(cpos + Vector3(-1.4, 0.1, 1.4), 0.0)
+	_look_at_point(cpos + Vector3(0, 0.3, 0))
+	await _wait(0.4)
+	await _shot("h10_crate_with_items")
+	Game.slots = [{"id": "", "n": 0}, {"id": "", "n": 0}, {"id": "", "n": 0}, {"id": "", "n": 0}]
+	Game.select_slot(0)
+	pl.look_target = crate
+	pl.place_or_grab()
+	_log("carry crate: slots %s" % str(Game.slots))
+	pl.builder.stop()
+	Game.slots = [{"id": "", "n": 0}, {"id": "", "n": 0}, {"id": "", "n": 0}, {"id": "", "n": 0}]
+	Game._changed()
+	# boxes at a location
+	var gen = w.gen
+	for row in range(2, 400):
+		var poi: Dictionary = gen.poi_for_row(row)
+		if not poi.is_empty() and poi["type"] == "gas_station":
+			var pp: Vector3 = poi["pos"]
+			_player_at(_ground(pp.x, pp.z + 10.0), 0.0)
+			await _settle(pp)
+			await _wait(1.0)
+			break
+	var box := _find_loot("box")
+	if box:
+		var bxp: Vector3 = box.global_position
+		var dir: Vector3 = box.get_parent().global_transform.basis.z
+		_player_at(bxp + dir * 1.2 + Vector3(0, 0.05, 0), 0.0)
+		_look_at_point(bxp + Vector3(0, 0.2, 0))
+		await _wait(0.4)
+		pl._update_prompt()
+		_log("box prompt: %s" % pl.prompt)
+		await _shot("h11_box_closed")
+		box.interact(pl)
+		await _wait(0.8)
+		await _shot("h12_box_open_items")
+		for it in get_tree().get_nodes_in_group("world_item"):
+			if it.global_position.distance_to(bxp) < 3.0:
+				_log("  near box: %s x%d at %s (box at %s)" % [it.id, it.amount, str(it.global_position), str(bxp)])
+		for n in Game.world.find_children("*", "StaticBody3D", true, false):
+			if n.get_script() == load("res://scripts/loot.gd") and n.global_position.distance_to(bxp) < 8.0:
+				_log("  loot nearby: %s mode %s at %s" % [n.label, n.mode, str(n.global_position)])
+	else:
+		_log("no cardboard box found")
+	# truck cab interior
+	var z: float = pl.global_position.z - 20.0
+	var x: float = gen.road_x(z) + 3.0
+	var truck = w.spawn_vehicle("cab_test", "pickup", Vector3(x, gen.height(x, z) + 1.0, z), Vector3(0, 0.3, 0), {})
+	await _wait(1.5)
+	pl.enter_vehicle(truck, true)
+	truck.set_camera(false)
+	truck.fp_yaw = 0.0
+	truck.look(Vector2(0.0, 0.0))
+	await _wait(0.5)
+	await _shot("h13_pickup_cab_fp")
+	truck.look(Vector2(-1.2, 0.0))
+	await _wait(0.3)
+	await _shot("h14_pickup_cab_side")
+	pl.exit_vehicle()
+	for kind in ["sedan", "box_truck", "offroader"]:
+		var v = w.spawn_vehicle("cab_" + kind, kind, Vector3(x + 8.0, gen.height(x + 8.0, z) + 1.0, z), Vector3(0, 0.3, 0), {})
+		await _wait(1.2)
+		pl.enter_vehicle(v, true)
+		v.set_camera(false)
+		await _wait(0.4)
+		await _shot("h15_cab_" + kind)
+		pl.exit_vehicle()
+		v.queue_free()
+		await _wait(0.2)
+	# HUD screens
+	w.hud.open_inventory()
+	await _wait(0.4)
+	await _shot("h16_crafting")
+	w.hud.open_rv_menu(rv)
+	await _wait(0.4)
+	await _shot("h17_rv_workshop")
+	w.hud.close_modal()
+	var ok_save := Game.save_game()
+	var data := Game.load_game_data()
+	_log("save ok %s, slots %s, worn %s, loose items %d" % [ok_save, str(data.get("slots")), str(data.get("worn")), data.get("items", []).size()])
+
 func _run() -> void:
+	if "--hands" in OS.get_cmdline_user_args():
+		var mh := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		mh._start_world({})
+		await _wait(1.5)
+		await _hands()
+		var fh := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		fh.store_string("\n".join(log_lines))
+		fh.close()
+		get_tree().quit()
+		return
 	if "--animals" in OS.get_cmdline_user_args():
 		var m2 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
@@ -185,7 +439,7 @@ func _run() -> void:
 	var w = Game.world
 	var rv = Game.rv
 	w.hud.close_modal()
-	_log("start inventory: %s" % str(Game.inventory))
+	_log("start hands: %s worn %s" % [str(Game.slots), str(Game.worn)])
 	Game.time_of_day = 9.5
 	await _settle(Game.player.global_position)
 	await _wait(2.0)
@@ -211,7 +465,6 @@ func _run() -> void:
 	rv.do_action("door", Game.player)
 	await _wait(0.3)
 	# Furniture on the RV + loose cargo
-	Game.add_item("crate", 1, true)
 	rv.attach_structure({"type": "crate", "pos": Game.arr(rv.to_global(Vector3(0.3, rv.FLOOR_Y, -1.0))), "rot": rv.global_rotation.y, "data": {}})
 	rv.attach_structure({"type": "chair", "pos": Game.arr(rv.to_global(Vector3(0.0, rv.ROOF_Y + 0.18, -2.0))), "rot": rv.global_rotation.y, "data": {}})
 	Game.spawn_item("canned_food", 2, rv.to_global(Vector3(0.4, rv.FLOOR_Y + 0.5, -0.4)))
@@ -420,7 +673,7 @@ func _run() -> void:
 	# save/load round trip
 	var ok_save := Game.save_game()
 	var data := Game.load_game_data()
-	_log("save ok %s, structures in save %d, inventory items %d" % [ok_save, data.get("structures", {}).size(), data.get("inventory", {}).size()])
+	_log("save ok %s, structures in save %d, slots %s" % [ok_save, data.get("structures", {}).size(), str(data.get("slots", []))])
 	var f := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
 	f.store_string("\n".join(log_lines))
 	f.close()

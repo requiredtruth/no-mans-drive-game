@@ -131,47 +131,79 @@ func _build_center() -> void:
 	build_info.add_theme_constant_override("outline_size", 5)
 	root.add_child(build_info)
 
+var held_label: Label
+var worn_label: Label
+
 func _build_hotbar() -> void:
 	hotbar_box = HBoxContainer.new()
 	hotbar_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	hotbar_box.position = Vector2(-225, -90)
+	hotbar_box.position = Vector2(-92, -112)
 	hotbar_box.add_theme_constant_override("separation", 6)
 	root.add_child(hotbar_box)
+	held_label = UI.label("", 17, Color(1.0, 0.9, 0.7))
+	held_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	held_label.position = Vector2(-300, -22)
+	held_label.custom_minimum_size = Vector2(600, 0)
+	held_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	held_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	held_label.add_theme_constant_override("outline_size", 5)
+	root.add_child(held_label)
+	worn_label = UI.label("", 13, Color(0.8, 0.85, 0.8))
+	worn_label.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	worn_label.position = Vector2(-300, -132)
+	worn_label.custom_minimum_size = Vector2(600, 0)
+	worn_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	worn_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	worn_label.add_theme_constant_override("outline_size", 4)
+	root.add_child(worn_label)
 
+## Your hands (and backpack slots): big, readable tiles with the item name under the selection.
 func _refresh_hotbar() -> void:
 	for c in hotbar_box.get_children():
 		c.queue_free()
-	for i in range(Game.hotbar.size()):
-		var id: String = Game.hotbar[i]
+	var n := Game.slots.size()
+	hotbar_box.offset_left = -n * 46.0
+	hotbar_box.offset_right = n * 46.0
+	hotbar_box.offset_top = -116.0
+	hotbar_box.offset_bottom = -30.0
+	for i in range(n):
+		var sl: Dictionary = Game.slots[i]
+		var id: String = sl["id"]
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(70, 70)
+		b.custom_minimum_size = Vector2(86, 86)
 		b.focus_mode = Control.FOCUS_NONE
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0, 0, 0, 0.45)
-		sb.set_corner_radius_all(8)
-		sb.border_color = Color(1.0, 0.8, 0.4) if i == Game.selected_slot else Color(1, 1, 1, 0.2)
+		sb.bg_color = Color(0, 0, 0, 0.5)
+		sb.set_corner_radius_all(10)
+		sb.border_color = Color(1.0, 0.8, 0.4) if i == Game.selected_slot else Color(1, 1, 1, 0.22)
 		sb.set_border_width_all(3 if i == Game.selected_slot else 1)
 		b.add_theme_stylebox_override("normal", sb)
 		b.add_theme_stylebox_override("hover", sb)
 		b.add_theme_stylebox_override("pressed", sb)
-		if id != "" and Game.count(id) > 0:
-			var t := UI.item_tile(id, Game.count(id), 58)
+		if id != "":
+			var t := UI.item_tile(id, int(sl["n"]), 74)
 			t.position = Vector2(6, 6)
 			b.add_child(t)
 			b.tooltip_text = Data.item_name(id)
-		var n := UI.label(str(i + 1), 12, Color(1, 1, 1, 0.6))
-		n.position = Vector2(4, 0)
-		b.add_child(n)
+		var tag := UI.label(("BAG %d" % (i - 1)) if i >= Game.BASE_SLOTS else ("LEFT" if i == 1 else "RIGHT"), 11, Color(1, 1, 1, 0.55))
+		tag.position = Vector2(6, 2)
+		b.add_child(tag)
 		var idx := i
 		b.pressed.connect(func() -> void:
 			if Game.selected_slot == idx and Game.player:
 				Game.player.use_primary()
 			Game.select_slot(idx))
 		hotbar_box.add_child(b)
+	var held := Game.equipped()
+	held_label.text = (Data.item_name(held) + ((" ×%d" % int(Game.held()["n"])) if int(Game.held()["n"]) > 1 else "")) if held != "" else "Empty hand"
+	var worn_txt := []
+	for k in Game.worn:
+		worn_txt.append(Data.item_name(k).split(" (")[0])
+	worn_label.text = ("Wearing: " + ", ".join(worn_txt)) if not worn_txt.is_empty() else ""
 
 func _on_inventory() -> void:
 	_refresh_hotbar()
-	if modal and _modal_kind in ["inventory", "cooking", "storage", "rv", "crafting"]:
+	if modal and _modal_kind in ["inventory", "cooking", "rv", "crafting"]:
 		_reopen()
 
 func _build_notes() -> void:
@@ -259,6 +291,8 @@ func _process(delta: float) -> void:
 			build_info.text = ""
 		dash.visible = p.driving
 		hotbar_box.visible = not p.driving
+		held_label.visible = not p.driving
+		worn_label.visible = not p.driving
 		crosshair.visible = not p.driving
 		if p.driving:
 			var rv = p.vehicle
@@ -296,7 +330,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			open_pause()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("inventory"):
-		if modal and _modal_kind in ["inventory", "storage", "cooking", "crafting", "rv", "build", "sink"]:
+		if modal and _modal_kind in ["inventory", "cooking", "crafting", "rv", "build", "sink"]:
 			close_modal()
 		elif not modal and Game.player and not Game.player.dead:
 			open_inventory()
@@ -378,7 +412,6 @@ func _reopen() -> void:
 		"crafting": open_crafting(_modal_ctx)
 		"cooking": open_cooking(_modal_ctx)
 		"rv": open_rv_menu(_modal_ctx)
-		"storage": open_storage(_modal_ctx[0], _modal_ctx[1], _modal_ctx[2])
 
 # ------------------------------------------------------------------ inventory & crafting
 func open_inventory() -> void:
@@ -386,38 +419,61 @@ func open_inventory() -> void:
 
 func open_crafting(station) -> void:
 	var st: String = station if station != null else ""
-	var body := _open_modal("inventory" if st == "" else "crafting", "Backpack & Crafting" if st == "" else "Workbench", st, 1100.0)
+	var body := _open_modal("inventory" if st == "" else "crafting", "Crafting" if st == "" else "Workbench", st, 1100.0)
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", 20)
 	body.add_child(cols)
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cols.add_child(left)
-	left.add_child(UI.label("Inventory — tap an item to use it or assign it to the selected hotbar slot (%d)" % (Game.selected_slot + 1), 15, Color(0.8, 0.8, 0.75)))
-	var grid := GridContainer.new()
-	grid.columns = 6
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	left.add_child(grid)
-	var keys := Game.inventory.keys()
-	keys.sort()
-	for id in keys:
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(76, 76)
-		b.focus_mode = Control.FOCUS_NONE
-		var t := UI.item_tile(id, Game.count(id), 64)
-		t.position = Vector2(6, 6)
-		b.add_child(t)
-		b.tooltip_text = Data.item_name(id)
-		b.pressed.connect(_item_menu.bind(id))
-		grid.add_child(b)
-	var detail := VBoxContainer.new()
-	detail.name = "Detail"
-	left.add_child(detail)
+	left.add_child(UI.label("In your hands", 18, Color(1.0, 0.8, 0.5)))
+	var hands := HBoxContainer.new()
+	hands.add_theme_constant_override("separation", 6)
+	left.add_child(hands)
+	for i in range(Game.slots.size()):
+		var sl: Dictionary = Game.slots[i]
+		if sl["id"] == "":
+			var e := Panel.new()
+			e.custom_minimum_size = Vector2(76, 76)
+			hands.add_child(e)
+			continue
+		hands.add_child(UI.item_tile(sl["id"], int(sl["n"]), 76))
+	if not Game.worn.is_empty():
+		left.add_child(UI.label("Wearing", 16, Color(1.0, 0.8, 0.5)))
+		for k in Game.worn.keys():
+			var row := HBoxContainer.new()
+			var l := UI.label(Data.item_name(k), 15)
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(l)
+			row.add_child(UI.button("Take off", func() -> void: Game.take_off(k), 100))
+			left.add_child(row)
+	var near := {}
+	for it in Game.nearby_items():
+		near[it.id] = int(near.get(it.id, 0)) + int(it.amount)
+	left.add_child(UI.label("Within reach (%.0f m)" % Game.NEAR, 16, Color(1.0, 0.8, 0.5)))
+	if near.is_empty():
+		var none := UI.label("Nothing. Gather materials into a pile next to you or your workbench.", 14, Color(0.7, 0.7, 0.66))
+		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		none.custom_minimum_size = Vector2(420, 0)
+		left.add_child(none)
+	else:
+		var grid := GridContainer.new()
+		grid.columns = 6
+		grid.add_theme_constant_override("h_separation", 4)
+		grid.add_theme_constant_override("v_separation", 4)
+		left.add_child(grid)
+		var keys := near.keys()
+		keys.sort()
+		for id in keys:
+			grid.add_child(UI.item_tile(id, int(near[id]), 60))
+	var help := UI.label("You carry only what fits in your hands%s. Recipes use what you hold plus everything lying within reach, so stockpile materials beside your workbench or campfire. Crafted items go into a free hand or are set down at your feet." % (" and backpack" if Game.worn.has("backpack") else " — craft a Backpack for 2 more slots"), 14, Color(0.75, 0.75, 0.7))
+	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	help.custom_minimum_size = Vector2(420, 0)
+	left.add_child(help)
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cols.add_child(right)
-	right.add_child(UI.label("Crafting" + (" (workbench recipes unlocked)" if st == "workbench" else " — build a Workbench for advanced recipes"), 18, Color(1.0, 0.8, 0.5)))
+	right.add_child(UI.label("Recipes" + (" (workbench recipes unlocked)" if st == "workbench" else " — build a Workbench for advanced recipes"), 18, Color(1.0, 0.8, 0.5)))
 	for r in Data.RECIPES:
 		if r["station"] == "workbench" and st != "workbench":
 			continue
@@ -433,35 +489,6 @@ func open_crafting(station) -> void:
 		btn.disabled = not can
 		row.add_child(btn)
 		right.add_child(row)
-	var info_l := UI.label("Equipped: %s   ·   Jacket: %s" % [Data.item_name(Game.equipped()) if Game.equipped() != "" else "Bare hands", "yes" if Game.count("jacket") > 0 else "no"], 14, Color(0.75, 0.75, 0.7))
-	left.add_child(info_l)
-
-func _item_menu(id: String) -> void:
-	if modal == null:
-		return
-	var detail: Node = modal.find_child("Detail", true, false)
-	if detail == null:
-		return
-	for c in detail.get_children():
-		c.queue_free()
-	var it: Dictionary = Data.ITEMS.get(id, {})
-	var desc := "%s — %d" % [Data.item_name(id), Game.count(id)]
-	if it.get("kind", "") == "food":
-		desc += "   (food %+d, water %+d%s)" % [it.get("food", 0), it.get("water", 0), (", health %+d" % it["health"]) if it.has("health") else ""]
-	detail.add_child(UI.label(desc, 17))
-	var row := HBoxContainer.new()
-	detail.add_child(row)
-	if it.get("kind", "") in ["food", "medical"]:
-		row.add_child(UI.button("Eat / Use", func() -> void: Game.consume(id)))
-	row.add_child(UI.button("Put in hotbar slot %d" % (Game.selected_slot + 1), func() -> void:
-		Game.assign_hotbar(id)
-		Game.notify("%s → slot %d" % [Data.item_name(id), Game.selected_slot + 1])))
-	row.add_child(UI.button("Drop 1", func() -> void: Game.player.drop_item(id, 1)))
-	if it.get("kind", "") == "placeable":
-		row.add_child(UI.button("Place it", func() -> void:
-			Game.assign_hotbar(id)
-			close_modal()
-			Game.player.builder.place_kit(id)))
 
 # ------------------------------------------------------------------ cooking
 func open_cooking(fire) -> void:
@@ -499,60 +526,6 @@ func open_cooking(fire) -> void:
 		row.add_child(cook_all)
 		body.add_child(row)
 
-# ------------------------------------------------------------------ storage
-func open_storage(items: Dictionary, title: String, on_change: Callable) -> void:
-	var body := _open_modal("storage", title, [items, title, on_change], 1000.0)
-	var cols := HBoxContainer.new()
-	cols.add_theme_constant_override("separation", 24)
-	body.add_child(cols)
-	var mine := VBoxContainer.new()
-	mine.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var theirs := VBoxContainer.new()
-	theirs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cols.add_child(mine)
-	cols.add_child(theirs)
-	mine.add_child(UI.label("Backpack", 20, Color(1.0, 0.8, 0.5)))
-	theirs.add_child(UI.label(title, 20, Color(1.0, 0.8, 0.5)))
-	var keys := Game.inventory.keys()
-	keys.sort()
-	for id in keys:
-		if Data.ITEMS.get(id, {}).get("kind", "") == "tool" and Game.hotbar.has(id):
-			continue
-		var row := HBoxContainer.new()
-		var l := UI.label("%s ×%d" % [Data.item_name(id), Game.count(id)], 16)
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(l)
-		for amt in [1, -1]:
-			row.add_child(UI.button("→1" if amt == 1 else "→All", func() -> void:
-				var n := 1 if amt == 1 else Game.count(id)
-				if Game.remove_item(id, n):
-					items[id] = int(items.get(id, 0)) + n
-					on_change.call()
-					_reopen(), 64))
-		mine.add_child(row)
-	var ckeys := items.keys()
-	ckeys.sort()
-	for id in ckeys:
-		if int(items[id]) <= 0:
-			continue
-		var row := HBoxContainer.new()
-		for amt in [1, -1]:
-			row.add_child(UI.button("1←" if amt == 1 else "All←", func() -> void:
-				var have := int(items.get(id, 0))
-				var n := 1 if amt == 1 else have
-				n = mini(n, have)
-				if n > 0:
-					items[id] = have - n
-					if items[id] <= 0:
-						items.erase(id)
-					on_change.call()
-					Game.add_item(id, n, true), 64))
-		var l := UI.label("%s ×%d" % [Data.item_name(id), int(items[id])], 16)
-		row.add_child(l)
-		theirs.add_child(row)
-	if ckeys.is_empty():
-		theirs.add_child(UI.label("(empty)", 16, Color(0.6, 0.6, 0.6)))
-
 # ------------------------------------------------------------------ RV
 func open_rv_menu(rv) -> void:
 	var body := _open_modal("rv", "%s Workshop" % rv.display_name(), rv, 1000.0)
@@ -568,13 +541,22 @@ func open_rv_menu(rv) -> void:
 		b.value = rv.parts[part]
 		b.custom_minimum_size = Vector2(200, 16)
 		row.add_child(b)
-		row.add_child(UI.label("  %d%%  " % int(rv.parts[part]), 16))
-		var cost := "Repair: %s%s" % [Data.cost_text(spec["repair"]), " + toolkit" if spec["needs_toolkit"] else ""]
-		var rb := UI.button(cost, func() -> void: rv.repair(part))
-		rb.disabled = rv.parts[part] >= 99.9
-		row.add_child(rb)
+		var state := ""
+		if part == "battery" and rv.missing.has("battery"):
+			state = "  NO BATTERY  "
+		elif part == "tires":
+			var gone := 0
+			for k in rv.missing:
+				if str(k).begins_with("wheel"):
+					gone += 1
+			state = ("  %d%% · %d wheel(s) bare  " % [int(rv.parts[part]), gone]) if gone > 0 else ""
+		row.add_child(UI.label(state if state != "" else "  %d%%  " % int(rv.parts[part]), 16))
+		var hint := UI.label(spec["where"], 14, Color(0.78, 0.78, 0.72))
+		hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(hint)
 		body.add_child(row)
-	body.add_child(UI.label("Upgrades (toolkit required)", 20, Color(1.0, 0.8, 0.5)))
+	body.add_child(UI.label("Upgrades (toolkit and materials in hand or within reach)", 20, Color(1.0, 0.8, 0.5)))
 	for up in rv.upgrade_list():
 		var spec: Dictionary = Data.RV_UPGRADES[up]
 		var row := HBoxContainer.new()
@@ -698,18 +680,23 @@ func open_cheats() -> void:
 		grid.add_child(UI.button(label, func() -> void:
 			cb.call()
 			Game.notify("Cheat: " + label), 360))
-	add.call("Give every item ×5", func() -> void:
+	add.call("Drop one of every item here", func() -> void:
+		var i := 0
+		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 2.0
 		for id in Data_.ITEMS:
-			Game.add_item(id, 1 if Data_.ITEMS[id]["kind"] == "tool" else 5, true))
+			var p := base + Vector3((i % 6) * 0.6 - 1.5, 0.8 + (i / 36) * 0.5, ((i / 6) % 6) * 0.6 - 1.5)
+			Game.spawn_item(id, 1 if Data_.stack(id) == 1 else 5, p)
+			i += 1)
 	add.call("Building materials +50", func() -> void:
+		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 1.8 + Vector3(0, 0.8, 0)
 		for id in ["wood", "stone", "cloth", "rope", "scrap", "fiber"]:
-			Game.add_item(id, 50, true))
+			Game.drop_pile(id, 50, base))
 	add.call("All tools & weapons", func() -> void:
-		for id in ["knife", "axe", "pickaxe", "hammer", "bow", "rifle", "fishing_rod", "flashlight"]:
-			if Game.count(id) == 0:
-				Game.add_item(id, 1, true)
-		Game.add_item("arrow", 30, true)
-		Game.add_item("ammo", 30, true))
+		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 1.5 + Vector3(0, 0.8, 0)
+		var i := 0
+		for id in ["knife", "axe", "pickaxe", "hammer", "bow", "rifle", "fishing_rod", "arrow", "ammo", "backpack", "toolkit"]:
+			Game.spawn_item(id, Data_.stack(id), base + Vector3((i % 4) * 0.45 - 0.7, 0, (i / 4) * 0.45))
+			i += 1)
 	add.call("Restore health & needs", func() -> void:
 		for k in Game.stats:
 			Game.stats[k] = 100.0)
@@ -720,6 +707,7 @@ func open_cheats() -> void:
 		var rv = Game.rv
 		for k in rv.parts:
 			rv.parts[k] = 100.0
+		rv.missing = {}
 		rv.battery = 100.0
 		rv._apply_visuals())
 	add.call("Fill fuel & water", func() -> void:
@@ -779,13 +767,17 @@ func show_intro() -> void:
 
 • Keep your health, food, water, energy and warmth up. Nights are cold; tundra is colder.
 • Search gas stations, houses, farms and wrecks along the road for fuel, food and parts.
-• Repair and upgrade the RV at its hood. Refuel at pumps or with fuel cans.
+• You carry only what fits in your two hands (a backpack adds two slots). Look at an item and
+  press E to pick it up, G to place it exactly where the preview shows, Q to throw it.
+  Things you set down inside the RV stay put while you drive. Your supplies are in the RV.
+• Replace worn parts by hand: pull the old battery or tire off with an empty hand, carry the
+  new one over and fit it. Weld scrap and fit engine parts at the open hood (toolkit nearby).
 • Hunt deer, boar, turkey and rabbits. Wolves and bears will hunt you back.
 • Build a camp: campfires for heat and cooking, tents and beds to sleep and save,
   planters for crops, and full houses from foundations, walls, doors, windows and roofs.
 • Grow tomatoes, potatoes and coffee in the RV's plant pots or in garden planters.
 
-Equip the Builder's Hammer and press B (or the BUILD button) to start building.""", 16))
+Hold the Builder's Hammer and press B (or the BUILD button) to start building.""", 16))
 	body.add_child(UI.button("Hit the road", close_modal))
 
 func fade_sleep(hours: float) -> void:

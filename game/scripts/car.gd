@@ -5,6 +5,7 @@ extends VehicleBody3D
 const Data = preload("res://scripts/data.gd")
 const Shapes = preload("res://scripts/shapes.gd")
 const RvPart = preload("res://scripts/rv_part.gd")
+const Mounts = preload("res://scripts/mounts.gd")
 
 const SPECS := {
 	"pickup": {"name": "Pickup Truck", "mass": 2100.0, "power": 7200.0, "top": 33.0, "fuel": 75.0, "w": 1.95, "wr": 0.42, "wz": [-1.75, 1.6], "wx": 0.86, "awd": true, "grip": 3.2,
@@ -26,6 +27,7 @@ var color := Color.WHITE
 var fuel := 10.0
 var battery := 40.0
 var parts := {"engine": 40.0, "tires": 50.0, "battery": 40.0, "body": 50.0}
+var missing := {}
 var upgrades := {}
 var paint := 0
 var water := 0.0
@@ -49,6 +51,69 @@ var _head_mat: StandardMaterial3D
 var _tail_mat: StandardMaterial3D
 var _engine_audio: AudioStreamPlayer3D
 var _passenger := false
+var _battery_vis: MeshInstance3D
+
+## Cab interior: carpet, door cards, pillars, headliner, rear wall and a gauge cluster, so from
+## the driver's seat you sit inside a real cab instead of looking out through a glass shell.
+const CABS := {
+	# z_rear, z_ws_bottom, z_ws_top, belt, roof, floor, rear window [y0, y1, half-width] or [], pillars [[z, width]]
+	"sedan": [-1.42, 1.15, 0.52, 1.0, 1.37, 0.42, [], [[-0.15, 0.08], [-1.38, 0.08]]],
+	"pickup": [-0.72, 1.28, 0.74, 1.3, 1.88, 0.62, [1.38, 1.82, 0.7], [[-0.66, 0.12]]],
+	"box_truck": [0.98, 2.95, 2.62, 1.55, 2.44, 1.02, [], [[1.2, 0.5]]],
+	"offroader": [-1.98, 1.02, 0.77, 1.38, 1.94, 0.74, [], [[-0.26, 0.12], [-1.88, 0.2]]],
+}
+
+func _build_cab(w: float, _light_y: float) -> void:
+	var c: Array = CABS[kind]
+	var zr: float = c[0]
+	var zb: float = c[1]
+	var zt: float = c[2]
+	var belt: float = c[3]
+	var roof: float = c[4]
+	var fl: float = c[5]
+	var liner := Lib.mat("canvas", Color(0.55, 0.53, 0.5), 2.0, false, 0.95)
+	var card := Lib.mat("leather", Color(0.32, 0.31, 0.3), 2.0, false, 0.75)
+	var plastic := Lib.color_mat(Color(0.13, 0.13, 0.14), 0.6)
+	var carpet := Lib.mat("carpet", Color(0.28, 0.28, 0.29), 2.0, false)
+	var iw := w * 0.5 - 0.07
+	Lib.box(self, Vector3(0, fl, (zr + zb) * 0.5), Vector3(w - 0.14, 0.03, zb - zr), carpet)
+	for s in [-1.0, 1.0]:
+		var x: float = s * iw
+		Lib.box(self, Vector3(x, (fl + belt) * 0.5, (zr + zb) * 0.5), Vector3(0.04, belt - fl, zb - zr), card)
+		Lib.box(self, Vector3(x - s * 0.04, belt - 0.12, (zr + zb) * 0.5 + 0.1), Vector3(0.06, 0.05, (zb - zr) * 0.5), plastic)
+		Lib.box(self, Vector3(x, belt, (zr + zb) * 0.5), Vector3(0.06, 0.03, zb - zr), plastic)
+		for pl in c[7]:
+			Lib.box(self, Vector3(x, (belt + roof) * 0.5, pl[0]), Vector3(0.05, roof - belt, pl[1]), liner)
+		# A-pillar along the windscreen edge
+		var a := Vector3(x, belt, zb)
+		var b := Vector3(x, roof, zt)
+		var mid := (a + b) * 0.5
+		var len := a.distance_to(b)
+		var ap := Lib.box(self, mid, Vector3(0.06, len, 0.07), plastic)
+		ap.rotation.x = atan2(zt - zb, roof - belt)
+	Lib.box(self, Vector3(0, roof - 0.04, (zr + zt) * 0.5), Vector3(w - 0.12, 0.03, zt - zr), liner)
+	# rear wall of the cab (with the rear window cut out where there is one)
+	var rw: Array = c[6]
+	if rw.is_empty():
+		Lib.box(self, Vector3(0, (fl + roof) * 0.5, zr + 0.03), Vector3(w - 0.12, roof - fl, 0.03), liner)
+	else:
+		Lib.box(self, Vector3(0, (fl + rw[0]) * 0.5, zr + 0.03), Vector3(w - 0.12, rw[0] - fl, 0.03), card)
+		Lib.box(self, Vector3(0, (rw[1] + roof) * 0.5, zr + 0.03), Vector3(w - 0.12, roof - rw[1], 0.03), liner)
+		var side_w: float = (w - 0.12) * 0.5 - rw[2]
+		for s in [-1.0, 1.0]:
+			Lib.box(self, Vector3(s * (rw[2] + side_w * 0.5), (rw[0] + rw[1]) * 0.5, zr + 0.03), Vector3(side_w, rw[1] - rw[0], 0.03), liner)
+	# gauge cluster + centre stack on the dash
+	var sp_seat: Vector3 = spec["seat"]
+	var gy: float = sp_seat.y + 0.3
+	var gz: float = sp_seat.z + 0.66
+	var hood := Lib.box(self, Vector3(sp_seat.x, gy + 0.02, gz + 0.04), Vector3(0.42, 0.16, 0.12), plastic)
+	hood.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for gx in [-0.1, 0.1]:
+		Lib.cyl(self, Vector3(sp_seat.x + gx, gy, gz - 0.025), 0.042, 0.042, 0.01, Lib.color_mat(Color(0.08, 0.08, 0.09), 0.3, 0.0, Color(1.0, 0.55, 0.2), 0.35), Vector3(PI * 0.5, 0, 0))
+		Lib.box(self, Vector3(sp_seat.x + gx + 0.012, gy + 0.012, gz - 0.032), Vector3(0.004, 0.034, 0.003), Lib.color_mat(Color(1, 0.4, 0.2), 0.3, 0.0, Color(1, 0.3, 0.1), 1.0), false, Vector3(0, 0, -0.6))
+	Lib.box(self, Vector3(0, gy - 0.08, gz + 0.02), Vector3(0.2, 0.2, 0.05), plastic)
+	Lib.box(self, Vector3(0, gy - 0.03, gz - 0.005), Vector3(0.14, 0.07, 0.01), Lib.color_mat(Color(0.1, 0.15, 0.12), 0.3, 0.0, Color(0.4, 0.9, 0.5), 0.4))
+	Lib.box(self, Vector3(0, fl + 0.15, (zr + zb) * 0.5 + 0.3), Vector3(0.22, 0.28, 0.6), plastic)
 
 func setup(p_id: String, p_kind: String, state: Dictionary) -> void:
 	vid = p_id
@@ -90,10 +155,11 @@ func _apply_state(s: Dictionary) -> void:
 	upgrades = s.get("upgrades", {})
 	paint = int(s.get("paint", paint))
 	odometer = float(s.get("odometer", 0.0))
+	missing = s.get("missing", {})
 
 func save_state() -> Dictionary:
 	return {"kind": kind, "xform": [Game.arr(global_position), Game.arr(rotation)], "fuel": fuel, "battery": battery,
-		"parts": parts, "upgrades": upgrades, "paint": paint, "odometer": odometer,
+		"parts": parts, "upgrades": upgrades, "paint": paint, "odometer": odometer, "missing": missing,
 		"trailer": trailer.vid if trailer and is_instance_valid(trailer) else "",
 		"cargo": Game.world.cargo_records(self) if Game.world else []}
 
@@ -318,11 +384,26 @@ func _build() -> void:
 		tire.mesh = Items.mesh("tire")
 		tire.position.y = -0.12
 		holder.add_child(tire)
+		vw.set_meta("tire_mesh", tire)
+		vw.set_meta("hub_mesh", Mounts.hub(holder))
+		_part(Vector3(sx * (float(spec["wx"]) + 0.12), wr + 0.12, wz[1] if front else wz[0]), Vector3(0.35, wr * 2.2, wr * 2.4), "wheel%d" % wheels.size())
 		wheels.append(vw)
 	# interaction hotspots
 	_part(Vector3(-w * 0.5 - 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "drive")
 	_part(Vector3(w * 0.5 + 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "passenger")
 	_part(Vector3(0, light_y + 0.35, front_z - 0.5), Vector3(w - 0.2, 0.2, 0.9), "hood")
+	# battery under a flip-up cover at the front corner of the hood
+	var bpos := Vector3(w * 0.3, light_y + 0.47, front_z - 0.4)
+	if kind == "box_truck":
+		bpos = Vector3(-w * 0.5 - 0.15, 0.9, 1.25)
+	_battery_vis = MeshInstance3D.new()
+	_battery_vis.mesh = Items.mesh("car_battery")
+	_battery_vis.scale = Vector3.ONE * 1.2
+	# sits down in the engine bay (only the box truck's hangs on the chassis, in view)
+	_battery_vis.position = bpos + (Vector3(0, -0.12, 0) if kind == "box_truck" else Vector3(0, -0.62, 0))
+	add_child(_battery_vis)
+	_part(bpos + Vector3(0, 0.08, 0), Vector3(0.38, 0.2, 0.32), "battery")
+	_build_cab(w, light_y)
 	_part(Vector3(-w * 0.5 - 0.08, by + 0.55, rear_z + 0.7), Vector3(0.2, 0.3, 0.3), "fuel")
 	# cameras
 	cam_fp = Camera3D.new()
@@ -340,8 +421,9 @@ func _apply_visuals() -> void:
 	if _paint_mat:
 		_paint_mat.albedo_color = COLORS[paint % COLORS.size()]
 	var grip: float = float(spec["grip"]) * (1.15 if upgrades.has("offroad_tires") else 1.0) * lerpf(0.6, 1.0, parts["tires"] / 100.0)
-	for w in wheels:
-		w.wheel_friction_slip = grip
+	Mounts.apply_wheels(self, grip)
+	if _battery_vis:
+		_battery_vis.visible = not missing.has("battery")
 
 # ------------------------------------------------------------------ shared vehicle API
 func fuel_capacity() -> float:
@@ -397,8 +479,11 @@ func try_start_engine() -> void:
 	if fuel <= 0.1:
 		Game.notify("The tank is empty. Pour in a fuel can at the filler cap.")
 		return
+	if missing.has("battery"):
+		Game.notify("There's no battery fitted. Carry a Car Battery to the battery tray.")
+		return
 	if battery < 5.0 or parts["battery"] < 5.0:
-		Game.notify("Dead battery. Fit a car battery at the hood.")
+		Game.notify("Dead battery. Pull it out under the hood and fit a Car Battery.")
 		return
 	if parts["engine"] <= 1.0:
 		Game.notify("The engine is seized. Repair it at the hood.")
@@ -476,7 +561,7 @@ func _physics_process(delta: float) -> void:
 		handbrake = Input.is_action_pressed("jump")
 	var fwd := linear_velocity.dot(global_transform.basis.z)
 	var tow := 0.75 if trailer and is_instance_valid(trailer) else 1.0
-	var power: float = float(spec["power"]) * (1.3 if upgrades.has("engine_tune") else 1.0) * lerpf(0.6, 1.0, parts["engine"] / 100.0) * tow
+	var power: float = float(spec["power"]) * (1.3 if upgrades.has("engine_tune") else 1.0) * lerpf(0.6, 1.0, parts["engine"] / 100.0) * tow * maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
 	var top: float = spec["top"]
 	var force := 0.0
 	var brk := 0.0
@@ -539,14 +624,21 @@ func _physics_process(delta: float) -> void:
 
 # ------------------------------------------------------------------ interaction (same names as the RV)
 func prompt_for(action: String) -> String:
+	if action == "battery" or action.begins_with("wheel"):
+		return Mounts.prompt(self, action)
+	if action == "hood" and Mounts.prompt(self, "hood") != "":
+		return Mounts.prompt(self, "hood")
 	match action:
 		"drive": return "[E] Drive %s" % spec["name"] if driver == 0 else "Occupied"
 		"passenger": return "[E] Ride as passenger"
-		"hood": return "[E] Open hood — %s workshop" % spec["name"]
+		"hood": return "[E] Open hood — %s condition, upgrades & paint" % spec["name"]
 		"fuel": return "[E] Refuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
 	return ""
 
 func do_action(action: String, player: Node) -> void:
+	if action == "battery" or action.begins_with("wheel") or action == "hood":
+		if Mounts.act(self, action):
+			return
 	match action:
 		"drive":
 			if driver == 0:

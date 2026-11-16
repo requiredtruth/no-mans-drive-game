@@ -117,7 +117,22 @@ func start(loaded: Dictionary) -> void:
 		var it = Game.spawn_item(str(r["id"]), int(r["n"]), Game.v3(r["pos"]))
 		if it:
 			it.global_rotation = Game.v3(r["rot"])
+			if r.has("c"):
+				it.contents = r["c"]
+			if r.get("placed", false):
+				it.settle()
 	Game.pending_items = []
+	# saves from before 1.3: the old backpack contents become piles by the RV door
+	if not Game.legacy_inventory.is_empty():
+		var at: Vector3 = rv.to_global(Vector3(RV.W * 0.5 + 1.4, 0.0, 0.0))
+		at.y = gen.height(at.x, at.z) + 0.5
+		for k in Game.legacy_inventory:
+			if Game.worn.has(k) or not Game.Data.ITEMS.has(k):
+				continue
+			Game.drop_pile(k, int(Game.legacy_inventory[k]), at)
+		Game.legacy_inventory = {}
+	if not loaded.has("player"):
+		rv.stock_starter_supplies()
 	Game.playing = true
 	apply_settings()
 	if loaded.get("in_rv", false):
@@ -684,6 +699,16 @@ func on_removed(key: String) -> void:
 	if is_instance_valid(body):
 		body.queue_free()
 
+## Harvested materials fall to the ground as physical items you pick up.
+func _drop(body: Node3D, id: String, n: int) -> void:
+	var p: Vector3 = body.global_position
+	if Game.player:
+		var toward: Vector3 = (Game.player.global_position - p) * Vector3(1, 0, 1)
+		if toward.length() > 0.1:
+			p += toward.normalized() * minf(toward.length() * 0.5, 1.2)
+	p.y = maxf(p.y, gen.height(p.x, p.z)) + 0.6
+	Game.drop_pile(id, n, p)
+
 func hit_resource(body: Node3D, at: Vector3) -> void:
 	var hits: int = int(body.get_meta("hits")) + 1
 	body.set_meta("hits", hits)
@@ -693,38 +718,38 @@ func hit_resource(body: Node3D, at: Vector3) -> void:
 		var kind: String = body.get_meta("tree_kind")
 		if hits >= (3 if kind in ["dead", "cactus"] else 4):
 			if kind == "cactus":
-				Game.add_item("fiber", randi_range(2, 4))
-				Game.add_item("water_dirty", 1)
+				_drop(body, "fiber", randi_range(2, 4))
+				_drop(body, "water_dirty", 1)
 			else:
-				Game.add_item("wood", randi_range(4, 6))
+				_drop(body, "wood", randi_range(4, 6))
 				if randf() < 0.5:
-					Game.add_item("fiber", randi_range(1, 2))
+					_drop(body, "fiber", randi_range(1, 2))
 			Audio.play_at("chop", at, 4.0, 0.6)
 			Net.mark_removed(key, true)
 	else:
 		if hits >= 4:
-			Game.add_item("stone", randi_range(3, 5))
+			_drop(body, "stone", randi_range(3, 5))
 			if randf() < 0.25:
-				Game.add_item("scrap", 1)
+				_drop(body, "scrap", 1)
 			Net.mark_removed(key, true)
 		elif randf() < 0.35:
-			Game.add_item("stone", 1)
+			_drop(body, "stone", 1)
 
 func harvest_bush(body: Node3D) -> void:
 	var kind: String = body.get_meta("bush_kind")
 	match kind:
 		"berry":
-			Game.add_item("berries", randi_range(2, 4))
+			_drop(body, "berries", randi_range(2, 4))
 			if randf() < 0.15:
-				Game.add_item("seeds_tomato", 1)
+				_drop(body, "seeds_tomato", 1)
 		"mushroom":
-			Game.add_item("mushroom", randi_range(1, 3))
+			_drop(body, "mushroom", randi_range(1, 3))
 		_:
-			Game.add_item("fiber", randi_range(2, 3))
+			_drop(body, "fiber", randi_range(2, 3))
 			if randf() < 0.35:
-				Game.add_item("wood", 1)
+				_drop(body, "wood", 1)
 			if randf() < 0.08:
-				Game.add_item("seeds_potato", 1)
+				_drop(body, "seeds_potato", 1)
 	Audio.play("pickup", -4.0)
 	Net.mark_removed(body.get_meta("res_key"), Game.day)
 
@@ -992,7 +1017,7 @@ func restore_cargo(v: Node, list: Array) -> void:
 func vehicle_states() -> Dictionary:
 	var out := {}
 	for vid in vehicle_nodes:
-		var v: Node = vehicle_nodes[vid]
+		var v = vehicle_nodes[vid]
 		if is_instance_valid(v):
 			out[vid] = v.save_state()
 	return out
