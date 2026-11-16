@@ -35,7 +35,7 @@ void fragment() {
 	vec3 grass = two_scale(tex_grass, uv);
 	vec3 dirt = two_scale(tex_dirt, uv);
 	vec3 forest_floor = mix(grass * vec3(0.78, 0.86, 0.66), dirt, 0.42);
-	vec3 sand = two_scale(tex_sand, uv);
+	vec3 sand = two_scale(tex_sand, uv) * vec3(0.82, 0.76, 0.68);
 	vec3 snow = two_scale(tex_snow, uv);
 	vec3 alb = grass * plains + forest_floor * forest + sand * desert + snow * tundra;
 	float macro = texture(tex_grass, uv * 0.0045).g;

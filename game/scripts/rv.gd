@@ -14,25 +14,26 @@ const FRONT_Z := 3.4
 const DOOR_Z0 := 0.55
 const DOOR_Z1 := 1.45
 
-var fuel := 45.0
-var water := 25.0
-var battery := 80.0
-var parts := {"engine": 62.0, "tires": 70.0, "battery": 85.0, "body": 75.0}
+var fuel := 18.0
+var water := 6.0
+var battery := 45.0
+var parts := {"engine": 38.0, "tires": 52.0, "battery": 48.0, "body": 55.0}
 var upgrades := {}
 var paint := 0
-var fridge := {"raw_meat": 1, "tomato": 1}
-var cabinet := {"rope": 1, "scrap": 2}
+var fridge := {}
+var cabinet := {"seeds_tomato": 1}
 var pots := [{}, {}]
 var interior_lights := false
 var headlights := false
 var engine_on := false
 var driver := 0 # peer id of the driver (0 = nobody)
 var odometer := 0.0
+var attached: Array = [] # furniture placed inside / on top of the RV: {type, pos(local), rot(local), data}
 
 var wheels: Array[VehicleWheel3D] = []
 var cam_fp: Camera3D
 var cam_tp: Camera3D
-var use_tp := false
+var use_tp := true
 var fp_yaw := 0.0
 var fp_pitch := 0.0
 var tp_yaw := 0.0
@@ -54,7 +55,7 @@ var _steer := 0.0
 func _ready() -> void:
 	mass = 3200.0
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
-	center_of_mass = Vector3(0, 0.75, 0.2)
+	center_of_mass = Vector3(0, 0.4, 0.2)
 	collision_layer = 16
 	collision_mask = 1 | 16
 	contact_monitor = true
@@ -70,6 +71,9 @@ func _ready() -> void:
 	_engine_audio.position = Vector3(0, 1.0, 3.5)
 	_engine_audio.max_distance = 120.0
 	_engine_audio.stop()
+	var cargo := Node3D.new()
+	cargo.name = "Cargo"
+	add_child(cargo)
 	apply_state(Game.rv_state)
 	add_to_group("rv")
 
@@ -101,8 +105,6 @@ func _build_collision() -> void:
 	_shape(Vector3(W * 0.5, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.1, DOOR_H, DOOR_Z1 - DOOR_Z0))
 
 func _build_wheels() -> void:
-	var tire_mat := Lib.color_mat(Color(0.06, 0.06, 0.06), 0.95)
-	var hub_mat := Lib.color_mat(Color(0.75, 0.75, 0.72), 0.35, 0.8)
 	for spec in [[-1.08, 2.55, true], [1.08, 2.55, true], [-1.08, -2.35, false], [1.08, -2.35, false]]:
 		var w := VehicleWheel3D.new()
 		w.position = Vector3(spec[0], 0.62, spec[1])
@@ -111,33 +113,21 @@ func _build_wheels() -> void:
 		w.wheel_radius = 0.46
 		w.wheel_rest_length = 0.32
 		w.suspension_travel = 0.28
-		w.suspension_stiffness = 38.0
+		w.suspension_stiffness = 50.0
 		w.suspension_max_force = 80000.0
 		w.damping_compression = 1.6
 		w.damping_relaxation = 2.2
 		w.wheel_friction_slip = 2.4
-		w.wheel_roll_influence = 0.12
+		w.wheel_roll_influence = 0.04
 		add_child(w)
+		var holder := Node3D.new()
+		holder.rotation.z = -PI * 0.5 if spec[0] > 0.0 else PI * 0.5
+		holder.scale = Vector3.ONE * 1.31
+		w.add_child(holder)
 		var tire := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.46
-		cm.bottom_radius = 0.46
-		cm.height = 0.3
-		cm.radial_segments = 20
-		tire.mesh = cm
-		tire.material_override = tire_mat
-		tire.rotation.z = PI * 0.5
-		w.add_child(tire)
-		var hub := MeshInstance3D.new()
-		var hm := CylinderMesh.new()
-		hm.top_radius = 0.26
-		hm.bottom_radius = 0.26
-		hm.height = 0.32
-		hm.radial_segments = 12
-		hub.mesh = hm
-		hub.material_override = hub_mat
-		hub.rotation.z = PI * 0.5
-		w.add_child(hub)
+		tire.mesh = Items.mesh("tire")
+		tire.position.y = -0.12
+		holder.add_child(tire)
 		wheels.append(w)
 
 func _paint_mat() -> StandardMaterial3D:
@@ -258,6 +248,11 @@ func _wall_x(parent: Node3D, x: float, m: Material, holes: Array) -> void:
 				if hole[2] > FLOOR_Y + 0.1 and hole[3] - hole[2] < 2.0:
 					var g := Lib.box(parent, Vector3(x, (hole[2] + hole[3]) * 0.5, zc), Vector3(0.03, hole[3] - hole[2], z1 - z0), Lib.glass_mat())
 					g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					var trim := Lib.mat("rubber", Color(0.6, 0.6, 0.6), 2.0, false, 0.8)
+					for yy in [hole[2], hole[3]]:
+						Lib.box(parent, Vector3(x, yy, zc), Vector3(0.08, 0.05, z1 - z0 + 0.05), trim)
+					for zz in [z0, z1]:
+						Lib.box(parent, Vector3(x, (hole[2] + hole[3]) * 0.5, zz), Vector3(0.08, hole[3] - hole[2] + 0.05, 0.05), trim)
 		for yr in ys:
 			if yr[1] - yr[0] > 0.01:
 				Lib.box(parent, Vector3(x, (yr[0] + yr[1]) * 0.5, zc), Vector3(0.06, yr[1] - yr[0], z1 - z0), m)
@@ -398,7 +393,7 @@ func water_capacity() -> float:
 func save_state() -> Dictionary:
 	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
-		"cabinet": cabinet, "pots": pots, "odometer": odometer}
+		"cabinet": cabinet, "pots": pots, "odometer": odometer, "attached": attached, "cargo": _cargo_records()}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
@@ -421,6 +416,14 @@ func apply_state(s: Dictionary) -> void:
 	var sp: Array = s.get("pots", pots)
 	pots = sp if sp.size() == 2 else pots
 	odometer = float(s.get("odometer", 0.0))
+	for ch in get_node("Cargo").get_children():
+		ch.queue_free()
+	attached = []
+	for rec in s.get("attached", []):
+		_spawn_attached(rec)
+		attached.append(rec)
+	for it in s.get("cargo", []):
+		_spawn_cargo(it)
 	for i in range(2):
 		var pot := get_node_or_null("Interior/Pot%d" % i)
 		if pot:
@@ -433,7 +436,7 @@ func _apply_visuals() -> void:
 		m.albedo_color = c
 	_solar.visible = upgrades.has("solar")
 	_bullbar.visible = upgrades.has("bullbar")
-	var grip := 2.4 if not upgrades.has("offroad_tires") else 3.1
+	var grip := 3.0 if not upgrades.has("offroad_tires") else 3.6
 	grip *= lerpf(0.55, 1.0, parts["tires"] / 100.0)
 	for w in wheels:
 		w.wheel_friction_slip = grip
@@ -494,7 +497,7 @@ func _physics_process(delta: float) -> void:
 		steer_in = Input.get_action_strength("move_left") - Input.get_action_strength("move_right")
 		handbrake = Input.is_action_pressed("jump")
 	var fwd_speed := linear_velocity.dot(global_transform.basis.z)
-	var power := 3600.0 * (1.35 if upgrades.has("engine_tune") else 1.0) * lerpf(0.45, 1.0, parts["engine"] / 100.0)
+	var power := 9500.0 * (1.35 if upgrades.has("engine_tune") else 1.0) * lerpf(0.65, 1.0, parts["engine"] / 100.0)
 	var top := 27.0 * (1.12 if upgrades.has("engine_tune") else 1.0)
 	var force := 0.0
 	var brk := 0.0
@@ -503,7 +506,7 @@ func _physics_process(delta: float) -> void:
 			force = power * throttle * clampf(1.0 - fwd_speed / top, 0.0, 1.0)
 		if brake_in > 0.05:
 			if fwd_speed > 1.0:
-				brk = 70.0 * brake_in
+				brk = 140.0 * brake_in
 			else:
 				force = -power * 0.6 * brake_in * clampf(1.0 + fwd_speed / 8.0, 0.0, 1.0)
 	else:
@@ -514,8 +517,24 @@ func _physics_process(delta: float) -> void:
 		brk = 120.0
 	engine_force = force
 	brake = brk
-	var steer_limit := lerpf(0.55, 0.16, clampf(absf(fwd_speed) / 25.0, 0.0, 1.0))
-	_steer = move_toward(_steer, steer_in * steer_limit, delta * 1.6)
+	var steer_limit := lerpf(0.6, 0.2, clampf(absf(fwd_speed) / 25.0, 0.0, 1.0))
+	_steer = move_toward(_steer, steer_in * steer_limit, delta * (3.5 if absf(steer_in) > 0.05 else 5.0))
+	if throttle < 0.05 and brake_in < 0.05 and brk < 10.0:
+		brk = 6.0 # engine braking when coasting
+		brake = brk
+	# Arcade stability: bleed off sideways slide and excess spin, keep the RV upright.
+	if driver != 0:
+		var lateral := linear_velocity.dot(global_transform.basis.x)
+		apply_central_force(-global_transform.basis.x * lateral * mass * 1.8)
+		var yaw_rate := angular_velocity.y
+		if absf(steer_in) < 0.05:
+			apply_torque(Vector3(0, -yaw_rate * mass * 2.5, 0))
+		var up := global_transform.basis.y
+		if up.y < 0.5 and linear_velocity.length() < 3.0:
+			rotation = Vector3(0, rotation.y, 0)
+			global_position += Vector3(0, 1.0, 0)
+			angular_velocity = Vector3.ZERO
+			Game.notify("The RV was set back on its wheels")
 	steering = _steer
 	_throttle = throttle
 	var sw := get_node_or_null("Interior/SteeringWheel")
@@ -734,6 +753,56 @@ func install(upgrade: String) -> void:
 	Audio.play("hammer")
 	_apply_visuals()
 	Game.notify("Installed: %s" % spec["name"])
+
+## Bounding test used for items and furniture riding inside or on the roof.
+func contains_point(p: Vector3) -> bool:
+	var l := to_local(p)
+	return absf(l.x) < W * 0.5 + 0.1 and l.z > REAR_Z - 0.2 and l.z < FRONT_Z + 1.4 and l.y > FLOOR_Y - 0.3 and l.y < ROOF_Y + 1.6
+
+func attach_structure(world_rec: Dictionary) -> void:
+	var rec := world_rec.duplicate(true)
+	var lp := to_local(Game.v3(rec["pos"]))
+	rec["pos"] = Game.arr(lp)
+	rec["rot"] = float(rec["rot"]) - global_rotation.y
+	attached.append(rec)
+	_spawn_attached(rec)
+
+func _spawn_attached(rec: Dictionary) -> Node:
+	var s := StaticBody3D.new()
+	s.set_script(Structure)
+	s.persistent = false
+	get_node("Cargo").add_child(s)
+	s.setup("", rec)
+	s.collision_layer = 2
+	s.collision_mask = 0
+	s.remove_from_group("roof")
+	s.set_meta("rv_rec", rec)
+	s.save_cb = func(d: Dictionary) -> void: rec["data"] = d
+	return s
+
+func detach_structure(s: Node) -> void:
+	var rec: Dictionary = s.get_meta("rv_rec")
+	attached.erase(rec)
+	s.queue_free()
+
+func _cargo_records() -> Array:
+	var out := []
+	for ch in get_node("Cargo").get_children():
+		if ch.is_in_group("world_item") and is_instance_valid(ch):
+			out.append({"id": ch.id, "n": ch.amount, "pos": Game.arr(ch.position), "rot": Game.arr(ch.rotation)})
+	return out
+
+func _spawn_cargo(r: Dictionary) -> void:
+	var it := RigidBody3D.new()
+	it.set_script(load("res://scripts/world_item.gd"))
+	it.setup(str(r["id"]), int(r["n"]))
+	it._attached = true
+	it.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
+	it.freeze = true
+	it.collision_mask = 0
+	get_node("Cargo").add_child(it)
+	it.position = Game.v3(r["pos"])
+	it.rotation = Game.v3(r["rot"])
 
 func set_paint(i: int) -> void:
 	paint = i

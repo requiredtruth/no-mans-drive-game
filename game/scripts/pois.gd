@@ -137,7 +137,7 @@ static func _house(root: Node3D, key: String, rng: RandomNumberGenerator) -> voi
 	var ang := 0.55
 	var rl := (d * 0.5 + 0.6) / cos(ang)
 	for s in [-1.0, 1.0]:
-		Lib.box(root, Vector3(0, y + h + tan(ang) * (d * 0.25 + 0.3) - 0.1, s * (d * 0.25 + 0.3)), Vector3(w + 0.8, 0.18, rl), Lib.mat("rust", Color(0.6, 0.55, 0.5), 0.5), true, Vector3(-s * ang, 0, 0))
+		Lib.box(root, Vector3(0, y + h + tan(ang) * (d * 0.25 + 0.3) - 0.1, s * (d * 0.25 + 0.3)), Vector3(w + 0.8, 0.18, rl), Lib.mat("shingles", Color.WHITE, 0.4), true, Vector3(-s * ang, 0, 0))
 	for s in [-1.0, 1.0]:
 		for k in range(4):
 			var gh := (tan(ang) * d * 0.5) * (1.0 - k / 4.0)

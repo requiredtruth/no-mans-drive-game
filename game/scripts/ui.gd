@@ -100,7 +100,19 @@ static func item_tile(id: String, n: int, size := 64.0) -> Control:
 	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(8)
 	p.add_theme_stylebox_override("panel", sb)
-	var l := label(abbrev(id), int(size * 0.2))
+	var tex: Texture2D = Items.icon(id)
+	if tex:
+		sb.bg_color = Color(0.1, 0.1, 0.1, 0.55)
+		sb.border_color = c.lightened(0.1)
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.position = Vector2(2, 2)
+		tr.size = Vector2(size - 4, size - 4)
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(tr)
+	var l := label(abbrev(id) if tex == null else "", int(size * 0.2))
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.set_anchors_preset(Control.PRESET_FULL_RECT)

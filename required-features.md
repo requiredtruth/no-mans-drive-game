@@ -14,6 +14,19 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - **All items need real 3D models and textures ("models and textures galore").** The nature already looks good, and everything else (items, tools, weapons, RV, buildings, furniture, animals, props) must match that quality. 🔄
 - Save all user requirements to this file.
 
+### Feedback on 1.0 (all addressed in 1.1)
+
+- ✅ No rain inside buildings or the RV.
+- ✅ No grass growing through floors of buildings or placed foundations.
+- ✅ Less "squares everything": bevelled, rounded edges on all built geometry, and real 3D models for items.
+- ✅ The build dialog must be easy to dismiss: build mode is a toggle (B / BUILD), and tapping outside any dialog closes it.
+- ✅ Don't start with a fully equipped RV: you start with a rundown RV and a pocket knife, flashlight and a few supplies.
+- ✅ A cheat / testing menu (Pause → Cheats / testing).
+- ✅ Physically pick up and place objects: loot drops as items you pick up, loose sticks and stones lie on the ground, items can be dropped, and placed objects (crates, campfires, beds, chairs, tables…) can be picked back up (G / GRAB) and moved.
+- ✅ Build on the RV: place furniture inside or on the roof; loose items left in the RV ride along.
+- ✅ Easier driving: stronger engine, quicker steering, stability assist, auto-righting, a third-person camera by default, and GAS/REV pedals on touch.
+- ✅ More natural world generation: groves and clearings, single-species stands, larger and gentler biomes, no trees on cliffs, grass in natural patches.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.
@@ -39,14 +52,14 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ Camps: campfire (light, heat, cooking, burns wood, rain wears it down), tent and bed (sleep, set respawn, save), storage crates, rain collectors, lantern posts, workbench.
 - ✅ Full houses: foundations, floors and ceilings, walls, door walls with opening doors, window walls, flat and sloped roofs, stairs and fences, all with a grid-snapped placement preview, rotation, resource costs, 50% refunds on demolish, and shelter warmth.
 
-## Next version (1.1) — quality pass 🔄
+## Quality pass (1.1)
 
-- Detailed 3D models with PBR textures for every item and tool: hatchet, pickaxe, knife, hammer, bow, arrows, rifle, fishing rod, flashlight, food, cans, bottles, fuel cans, parts, seeds.
-- First-person hands and held-item models with animations.
-- Higher-detail RV (rounded shell, trim, decals, detailed interior props).
-- Detailed buildings and furniture, with textured logs for walls and shingles for roofs.
-- Better animal models (fur shading, proper anatomy, animations).
-- Rendered item icons in the inventory instead of text tiles.
+- ✅ Detailed 3D models with PBR textures for every item and tool: hatchet, pickaxe, knife, hammer, bow, arrows, rifle, fishing rod, flashlight, food, cans, bottles, fuel cans, parts, seeds.
+- ✅ First-person hands and held-item models.
+- 🔄 Higher-detail RV (window trim and real tires done; rounded shell still to do).
+- ✅ Log-cabin walls, shingle roofs, stone foundations, and window and door trim.
+- 🔄 Better animal models (fur textures done; anatomy and animation still to improve).
+- ✅ Rendered 3D item icons in the inventory and hotbar.
 
 ## Release acceptance
 

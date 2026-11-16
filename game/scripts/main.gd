@@ -246,4 +246,6 @@ Fox model — glTF Sample Assets (Khronos Group). Model by PixelMannen (CC0); ri
 
 Lantern model — glTF Sample Assets (Khronos Group), CC0.
 
+Barramundi fish model — glTF Sample Assets (Khronos Group), by Microsoft, CC0.
+
 Built with the Godot Engine (MIT license)."""

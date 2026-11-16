@@ -25,6 +25,8 @@ var modal: Control
 var _modal_kind := ""
 var _modal_ctx = null
 var _note_items: Array = []
+var _icon_dirty := false
+var _icon_timer := 0.0
 
 func _ready() -> void:
 	layer = 5
@@ -44,6 +46,8 @@ func _ready() -> void:
 	Game.notified.connect(_on_note)
 	Game.hotbar_changed.connect(_refresh_hotbar)
 	Game.inventory_changed.connect(_on_inventory)
+	Items.icon_ready.connect(func(_id: String) -> void: _icon_dirty = true)
+	Items.prewarm()
 	_refresh_hotbar()
 
 func _build_overlays() -> void:
@@ -249,7 +253,8 @@ func _process(delta: float) -> void:
 		var b = p.builder
 		if b.active and not p.driving:
 			var pc: String = b.piece()
-			build_info.text = "BUILD: %s  (%s)\n%s\n[LMB/RT] place · [R] rotate · [B] choose piece · [RMB/LT] demolish" % [Data.PIECES[pc]["name"], Data.cost_text(Data.PIECES[pc]["cost"]), b.reason if not b.valid else "Ready to place"]
+			var cost_txt: String = ("carried ×%d" % Game.count(b.kit)) if b.kit != "" else Data.cost_text(Data.PIECES[pc]["cost"])
+			build_info.text = "PLACING: %s  (%s) — %s\n[USE] place · [R/ROT] rotate · [RMB] demolish · [B/BUILD] stop" % [Data.PIECES[pc]["name"], cost_txt, b.reason if not b.valid else "ready"]
 		else:
 			build_info.text = ""
 		dash.visible = p.driving
@@ -277,6 +282,11 @@ func _process(delta: float) -> void:
 		elif item[1] < 1.0 and is_instance_valid(item[0]):
 			item[0].modulate.a = item[1]
 	compass.queue_redraw()
+	_icon_timer -= delta
+	if _icon_dirty and _icon_timer <= 0.0:
+		_icon_dirty = false
+		_icon_timer = 0.5
+		_refresh_hotbar()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
@@ -291,11 +301,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif not modal and Game.player and not Game.player.dead:
 			open_inventory()
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("build_menu") and not modal and Game.player and Game.equipped() != "hammer":
-		var i := Game.hotbar.find("hammer")
-		if i >= 0:
-			Game.select_slot(i)
-			open_build_menu()
+	elif event.is_action_pressed("build_menu") and Game.player and not Game.player.dead and not Game.player.driving:
+		if modal and _modal_kind == "build":
+			close_modal()
+		elif Game.player.builder.active:
+			Game.player.builder.stop()
+			Game.notify("Stopped building")
+		elif not modal:
+			if Game.count("hammer") > 0:
+				open_build_menu()
+			else:
+				Game.notify("Craft a Builder's Hammer first (2 Wood, 1 Stone, 1 Rope)")
+		get_viewport().set_input_as_handled()
 
 func flash_damage() -> void:
 	damage_rect.color.a = 0.45
@@ -314,8 +331,13 @@ func _open_modal(kind: String, title: String, ctx = null, width := 900.0) -> VBo
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(dim)
 	modal = dim
+	if kind != "death":
+		dim.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+				close_modal())
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dim.add_child(center)
 	var panel := PanelContainer.new()
 	var vp := get_viewport().get_visible_rect().size
@@ -434,7 +456,12 @@ func _item_menu(id: String) -> void:
 	row.add_child(UI.button("Put in hotbar slot %d" % (Game.selected_slot + 1), func() -> void:
 		Game.assign_hotbar(id)
 		Game.notify("%s → slot %d" % [Data.item_name(id), Game.selected_slot + 1])))
-	row.add_child(UI.button("Drop 1", func() -> void: Game.remove_item(id, 1)))
+	row.add_child(UI.button("Drop 1", func() -> void: Game.player.drop_item(id, 1)))
+	if it.get("kind", "") == "placeable":
+		row.add_child(UI.button("Place it", func() -> void:
+			Game.assign_hotbar(id)
+			close_modal()
+			Game.player.builder.place_kit(id)))
 
 # ------------------------------------------------------------------ cooking
 func open_cooking(fire) -> void:
@@ -644,6 +671,7 @@ func open_pause() -> void:
 	if not Net.is_client():
 		body.add_child(UI.button("Save game", func() -> void: Game.save_game()))
 	body.add_child(UI.button("Settings", open_settings))
+	body.add_child(UI.button("Cheats / testing", open_cheats))
 	body.add_child(UI.button("Controls", func() -> void:
 		var b := _open_modal("controls", "Controls", null, 900.0)
 		b.add_child(UI.label(UI.CONTROLS_TEXT, 16))))
@@ -657,6 +685,79 @@ func open_pause() -> void:
 		Game.paused = false
 		Game.ui_open = false
 		get_tree().root.get_node("Main").quit_to_menu()))
+
+func open_cheats() -> void:
+	var body := _open_modal("cheats", "Cheats & testing", null, 820.0)
+	Game.paused = true
+	var Data_ = Data
+	var grid := GridContainer.new()
+	grid.columns = 2
+	body.add_child(grid)
+	var add := func(label: String, cb: Callable) -> void:
+		grid.add_child(UI.button(label, func() -> void:
+			cb.call()
+			Game.notify("Cheat: " + label), 360))
+	add.call("Give every item ×5", func() -> void:
+		for id in Data_.ITEMS:
+			Game.add_item(id, 1 if Data_.ITEMS[id]["kind"] == "tool" else 5, true))
+	add.call("Building materials +50", func() -> void:
+		for id in ["wood", "stone", "cloth", "rope", "scrap", "fiber"]:
+			Game.add_item(id, 50, true))
+	add.call("All tools & weapons", func() -> void:
+		for id in ["knife", "axe", "pickaxe", "hammer", "bow", "rifle", "fishing_rod", "flashlight"]:
+			if Game.count(id) == 0:
+				Game.add_item(id, 1, true)
+		Game.add_item("arrow", 30, true)
+		Game.add_item("ammo", 30, true))
+	add.call("Restore health & needs", func() -> void:
+		for k in Game.stats:
+			Game.stats[k] = 100.0)
+	add.call("God mode " + ("OFF" if Game.god_mode else "ON"), func() -> void:
+		Game.god_mode = not Game.god_mode
+		open_cheats())
+	add.call("Repair RV fully", func() -> void:
+		var rv = Game.rv
+		for k in rv.parts:
+			rv.parts[k] = 100.0
+		rv.battery = 100.0
+		rv._apply_visuals())
+	add.call("Fill fuel & water", func() -> void:
+		Game.rv.fuel = Game.rv.fuel_capacity()
+		Game.rv.water = Game.rv.water_capacity())
+	add.call("Install all RV upgrades", func() -> void:
+		for u in Data_.RV_UPGRADES:
+			Game.rv.upgrades[u] = true
+		Game.rv._apply_visuals())
+	add.call("Skip 3 hours", func() -> void:
+		Game.time_of_day = fmod(Game.time_of_day + 3.0, 24.0))
+	add.call("Set noon", func() -> void: Game.time_of_day = 12.0)
+	add.call("Set night", func() -> void: Game.time_of_day = 22.0)
+	add.call("Next weather", func() -> void:
+		var order := ["clear", "cloudy", "rain"]
+		Game.weather = order[(order.find(Game.weather) + 1) % order.size()])
+	for sp in ["deer", "wolf", "bear", "boar", "rabbit", "turkey", "fox"]:
+		add.call("Spawn " + sp, func() -> void:
+			var p: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 12.0
+			p.y = Game.world.gen.height(p.x, p.z) + 0.5
+			Game.world.spawn_animal(sp, p))
+	add.call("Teleport to next location", func() -> void:
+		var gen = Game.world.gen
+		var row := int(floor(Game.player.global_position.z / gen.CHUNK))
+		for k in range(1, 200):
+			var poi: Dictionary = gen.poi_for_row(row - k)
+			if not poi.is_empty():
+				var p: Vector3 = poi["pos"]
+				var road := Vector3(gen.road_x(p.z), 0, p.z)
+				road.y = gen.height(road.x, road.z) + 1.0
+				Game.player.teleport(road)
+				break)
+	add.call("Bring RV to me", func() -> void:
+		var p: Vector3 = Game.player.global_position + Game.player.global_transform.basis.x * 5.0
+		p.y = Game.world.gen.height(p.x, p.z) + 1.0
+		Game.rv.global_position = p
+		Game.rv.linear_velocity = Vector3.ZERO
+		Game.rv.angular_velocity = Vector3.ZERO
+		Game.rv.rotation = Vector3(0, Game.rv.rotation.y, 0))
 
 func open_settings() -> void:
 	var body := _open_modal("settings", "Settings", null, 820.0)

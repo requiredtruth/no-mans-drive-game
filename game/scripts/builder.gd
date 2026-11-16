@@ -31,15 +31,34 @@ func _ready() -> void:
 func piece() -> String:
 	return Data.PIECE_ORDER[piece_index]
 
-func set_active(on: bool) -> void:
-	active = on
-	if not on and _ghost:
+var kit := "" # when placing a carried object instead of paying the build cost
+
+## Start building the given piece (from the build menu).
+func select(i: int) -> void:
+	piece_index = wrapi(i, 0, Data.PIECE_ORDER.size())
+	kit = ""
+	active = true
+
+## Start placing a carried object (crate, campfire...) from the inventory.
+func place_kit(id: String) -> void:
+	var idx := Data.PIECE_ORDER.find(id)
+	if idx < 0:
+		return
+	piece_index = idx
+	kit = id
+	active = true
+
+func stop() -> void:
+	active = false
+	kit = ""
+	if _ghost:
 		_ghost.queue_free()
 		_ghost = null
 		_ghost_type = ""
 
-func select(i: int) -> void:
-	piece_index = wrapi(i, 0, Data.PIECE_ORDER.size())
+func set_active(on: bool) -> void:
+	if not on:
+		stop()
 
 func _make_ghost() -> void:
 	if _ghost:
@@ -94,8 +113,6 @@ func _process(delta: float) -> void:
 		return
 	if Input.is_action_just_pressed("rotate"):
 		user_rot = wrapf(user_rot + PI * 0.25, 0.0, TAU)
-	if Input.is_action_just_pressed("build_menu"):
-		Game.world.hud.open_build_menu()
 	if Input.is_action_pressed("primary") and _cd <= 0.0:
 		place()
 		_cd = 0.35
@@ -108,7 +125,7 @@ func _ray() -> Dictionary:
 	var space := get_world_3d().direct_space_state
 	var from := cam.global_position
 	var to := from - cam.global_transform.basis.z * 9.0
-	var q := PhysicsRayQueryParameters3D.create(from, to, 1)
+	var q := PhysicsRayQueryParameters3D.create(from, to, 1 | 16)
 	q.exclude = [player.get_rid()]
 	return space.intersect_ray(q)
 
@@ -136,10 +153,14 @@ func _compute() -> void:
 	var p: Vector3 = hit["position"]
 	var n: Vector3 = hit["normal"]
 	var s := _structure_of(hit["collider"])
+	var on_rv := _is_rv(hit["collider"])
+	if on_rv and snap != "free":
+		reason = "Only furniture and camp items can go on the RV"
+		return
 	var cam_fwd: Vector3 = -player.camera.global_transform.basis.z
 	match snap:
 		"free":
-			placement = {"pos": p, "rot": player.rotation.y + PI + user_rot}
+			placement = {"pos": p, "rot": player.rotation.y + PI + user_rot, "rv": on_rv}
 			valid = n.y > 0.7
 			if not valid:
 				reason = "Too steep"
@@ -230,12 +251,24 @@ func _compute() -> void:
 	if valid and Game.world.occupied(t, placement["pos"], placement["rot"]):
 		valid = false
 		reason = "Something is already built here"
-	if valid and not Game.has_cost(Data.PIECES[t]["cost"]):
+	if valid and kit == "" and not Game.has_cost(Data.PIECES[t]["cost"]):
 		valid = false
 		reason = "Need: " + Data.cost_text(Data.PIECES[t]["cost"])
-	if valid and Game.rv and Game.rv.global_position.distance_to(placement["pos"]) < 4.5 and t != "fence":
+	if valid and not Game.has_cost(Data.PIECES[t]["cost"]) and kit != "":
+		valid = true
+	if valid and Game.rv and not placement.get("rv", false) and Game.rv.global_position.distance_to(placement["pos"]) < 4.5 and t != "fence":
 		valid = false
 		reason = "Too close to the RV"
+
+func _is_rv(col: Object) -> bool:
+	var n := col as Node
+	for i in range(4):
+		if n == null:
+			return false
+		if n.is_in_group("rv"):
+			return true
+		n = n.get_parent()
+	return false
 
 func _min_corner(center: Vector3) -> float:
 	var gen = Game.world.gen
@@ -251,15 +284,24 @@ func place() -> void:
 		Game.notify(reason)
 		return
 	var t := piece()
-	if not Game.pay(Data.PIECES[t]["cost"]):
+	if kit != "":
+		if not Game.remove_item(kit, 1):
+			stop()
+			return
+	elif not Game.pay(Data.PIECES[t]["cost"]):
 		return
 	var rec := {"type": t, "pos": Game.arr(placement["pos"]), "rot": placement["rot"], "data": {}}
 	if placement.has("depth"):
 		rec["data"]["depth"] = placement["depth"]
 	if t == "campfire":
 		rec["data"]["fuel"] = 240.0
-	Net.place_structure(Game.new_struct_id(), rec)
+	if placement.get("rv", false):
+		Game.rv.attach_structure(rec)
+	else:
+		Net.place_structure(Game.new_struct_id(), rec)
 	Audio.play_at("hammer", placement["pos"])
+	if kit != "" and Game.count(kit) <= 0:
+		stop()
 
 func demolish() -> void:
 	var hit := _ray()

@@ -1,18 +1,23 @@
-## No Man's Drive 1.0.0
+## No Man's Drive 1.1.0
 
-This is the first full build: an original open-road survival game for Android, rebuilt from scratch in Godot 4.6.
+A quality pass based on play-testing feedback.
 
-**What's in it**
-- An endless procedural highway through forest, grassland, desert and snowy tundra, with lakes and mountains.
-- A drivable, walk-in motorhome with a kitchen, fridge, bed, toilet, plant pots, part wear and repairs, upgrades and paint.
-- Survival needs: health, food, water, energy and warmth, with day/night, weather, rain and snow.
-- Scavenging at gas stations (working pumps), houses, farms, wrecks and camp ruins.
-- Hunting deer, boar, turkeys, rabbits and foxes with a knife, bow or rifle. Wolves and bears hunt back.
-- Camps with campfires, tents, beds, storage, planters, rain collectors and lanterns.
-- Full house building: foundations, walls, doors, windows, floors, roofs, stairs and fences.
-- Crafting, cooking, coffee, fishing and gardening.
-- Co-op for up to 4 players over LAN or direct IP. Touch, controller and keyboard controls. Save anytime.
+**Models & textures**
+- Every item and tool now has a detailed 3D model with PBR materials. The inventory and hotbar show rendered 3D icons.
+- First-person hands hold your tool, weapon or food.
+- New high-resolution materials: brushed and painted metal, leather, rubber, fur, shingles, log siding, cardboard, plaid and denim.
+- Log-cabin walls, shingle roofs, stone foundations, and window and door trim. Built geometry has softened, rounded edges.
+- The RV gets real tires and rims plus window trim. Animals have fur textures. A scanned CC0 fish model is included.
 
-**Install:** download the APK below and open it on your Android device (allow installs from unknown sources). If you installed the earlier preview, uninstall it first.
+**Gameplay fixes**
+- No more rain inside buildings or the RV, and no grass growing through floors.
+- Build mode is now a toggle (B / BUILD to start and stop), and tapping outside any dialog closes it.
+- You start with a rundown RV and almost nothing: a pocket knife, a flashlight and a few supplies. Gather sticks and stones, craft tools, scavenge.
+- Loot drops as physical items you pick up. You can drop items, and placed objects (crates, campfires, beds, chairs, tables…) can be picked up with G / GRAB and moved.
+- Place furniture inside the RV or on its roof. Loose items left in the RV ride along.
+- New placeables: camp chair and wooden table.
+- Much easier driving: about twice the acceleration, quicker steering, stability assist, auto-righting, a third-person camera by default, and GAS/REV pedals on touch.
+- More natural world generation: groves and clearings, species stands, bigger and smoother biomes, grass in patches, no trees on cliffs.
+- **Cheats / testing menu** in Pause: items, materials, god mode, RV repair, fuel, upgrades, time, weather, spawning animals, teleporting, and bringing the RV to you.
 
-**Next (1.1):** detailed models and textures for every item, tool, weapon, the RV, buildings and animals.
+Install the APK below. If an install fails over an older version, uninstall the older version first (the signing key changes between builds until a release key is configured).

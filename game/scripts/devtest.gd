@@ -42,7 +42,50 @@ func _settle(p: Vector3) -> void:
 		await get_tree().process_frame
 	await _wait(0.6)
 
+func _items_sheet() -> void:
+	var Data = load("res://scripts/data.gd")
+	var ids: Array = Data.ITEMS.keys()
+	for id in ids:
+		Items.icon(id)
+	for i in range(600):
+		var done := true
+		for id in ids:
+			if Items.icon(id) == null:
+				done = false
+		if done:
+			break
+		await get_tree().process_frame
+	var cols := 9
+	var sheet := Image.create(128 * cols, 128 * int(ceil(ids.size() / float(cols))), false, Image.FORMAT_RGBA8)
+	sheet.fill(Color(0.18, 0.2, 0.22))
+	for i in range(ids.size()):
+		var t: Texture2D = Items.icon(ids[i])
+		if t:
+			var img := t.get_image()
+			img.convert(Image.FORMAT_RGBA8)
+			sheet.blend_rect(img, Rect2i(0, 0, 128, 128), Vector2i((i % cols) * 128, (i / cols) * 128))
+	sheet.save_png("%s/items_sheet.png" % out)
+	_log("items sheet: %d items" % ids.size())
+
+func _viewmodels() -> void:
+	for id in ["axe", "knife", "rifle", "bow", "fishing_rod", "pickaxe", "hammer", "flashlight", "canned_food"]:
+		Game.add_item(id, 1, true)
+		Game.assign_hotbar(id)
+		await _wait(0.4)
+		await _shot("vm_" + id)
+
 func _run() -> void:
+	if "--items" in OS.get_cmdline_user_args():
+		var main0 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		main0._start_world({})
+		await _wait(1.0)
+		Game.world.hud.close_modal()
+		await _items_sheet()
+		Game.player.pitch = -0.1
+		await _viewmodels()
+		get_tree().quit()
+		return
 	var main := get_tree().root.get_node("Main")
 	Game.new_game(4242, "Normal")
 	main._start_world({})
@@ -50,6 +93,7 @@ func _run() -> void:
 	var w = Game.world
 	var rv = Game.rv
 	w.hud.close_modal()
+	_log("start inventory: %s" % str(Game.inventory))
 	Game.time_of_day = 9.5
 	await _settle(Game.player.global_position)
 	await _wait(2.0)
@@ -74,6 +118,17 @@ func _run() -> void:
 	await _shot("04_rv_interior_rear")
 	rv.do_action("door", Game.player)
 	await _wait(0.3)
+	# Furniture on the RV + loose cargo
+	Game.add_item("crate", 1, true)
+	rv.attach_structure({"type": "crate", "pos": Game.arr(rv.to_global(Vector3(0.3, rv.FLOOR_Y, -1.0))), "rot": rv.global_rotation.y, "data": {}})
+	rv.attach_structure({"type": "chair", "pos": Game.arr(rv.to_global(Vector3(0.0, rv.ROOF_Y + 0.18, -2.0))), "rot": rv.global_rotation.y, "data": {}})
+	Game.spawn_item("canned_food", 2, rv.to_global(Vector3(0.4, rv.FLOOR_Y + 0.5, -0.4)))
+	await _wait(2.0)
+	_log("rv attached: %d, cargo nodes: %d" % [rv.attached.size(), rv.get_node("Cargo").get_child_count()])
+	for k in rv.parts:
+		rv.parts[k] = 100.0
+	rv.fuel = 60.0
+	rv.battery = 100.0
 	# Driving test
 	Game.player.enter_vehicle(rv, true)
 	rv.set_camera(true)
@@ -82,6 +137,7 @@ func _run() -> void:
 	await _wait(8.0)
 	var spd: float = rv.speed_kmh()
 	Input.action_release("move_forward")
+	_log("cargo after drive: %d" % rv.get_node("Cargo").get_child_count())
 	_log("drive: speed after 8s %.1f km/h, moved %.1f m, fuel %.1f, engine_on %s" % [spd, rv.global_position.distance_to(p0), rv.fuel, rv.engine_on])
 	await _shot("05_driving_tp")
 	Input.action_press("move_left", 1.0)
@@ -99,6 +155,34 @@ func _run() -> void:
 	_log("braked: speed %.1f km/h" % rv.speed_kmh())
 	Game.player.exit_vehicle()
 	await _wait(0.5)
+	# Loot as physical items
+	var lootb = null
+	for n in get_tree().get_nodes_in_group("world_item"):
+		pass
+	var before_items := get_tree().get_nodes_in_group("world_item").size()
+	var any_loot: Node = null
+	for n in w.get_children():
+		if n.name.begins_with("Chunk"):
+			for d in n.get_children():
+				if d.get_script() == load("res://scripts/loot.gd") and d.mode == "loot":
+					any_loot = d
+	if any_loot == null:
+		for n in w.find_children("*", "StaticBody3D", true, false):
+			if n.get_script() == load("res://scripts/loot.gd") and n.mode == "loot":
+				any_loot = n
+				break
+	if any_loot:
+		any_loot.interact(Game.player)
+		await _wait(1.5)
+		var spawned := get_tree().get_nodes_in_group("world_item").size() - before_items
+		var picked := 0
+		for it in get_tree().get_nodes_in_group("world_item"):
+			if it.get_parent() == w:
+				it.interact(Game.player)
+				picked += 1
+		_log("loot spawned %d physical items, picked up %d" % [spawned, picked])
+	else:
+		_log("no loot container loaded nearby")
 	# Build a small house next to the road
 	var base: Vector3 = Game.player.global_position + Game.player.global_transform.basis.z * -14.0
 	var gx: float = floor(base.x / 3.0) * 3.0

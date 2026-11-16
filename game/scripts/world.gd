@@ -49,6 +49,8 @@ var _fire_scan := 0.0
 var _amb_scan := 0.0
 var _near_water := 0.0
 var _anim_id := 0
+var _shelter_timer := 0.0
+var _cam_sheltered := false
 
 func start(loaded: Dictionary) -> void:
 	Game.world = self
@@ -100,6 +102,11 @@ func start(loaded: Dictionary) -> void:
 	player.make_current()
 	for id in Game.structures:
 		spawn_structure(id, Game.structures[id])
+	for r in Game.pending_items:
+		var it = Game.spawn_item(str(r["id"]), int(r["n"]), Game.v3(r["pos"]))
+		if it:
+			it.global_rotation = Game.v3(r["rot"])
+	Game.pending_items = []
 	Game.playing = true
 	apply_settings()
 	if loaded.get("in_rv", false):
@@ -316,8 +323,14 @@ func _update_weather(delta: float) -> void:
 	_overcast = move_toward(_overcast, 0.85 if raining else (0.25 if Game.weather == "cloudy" else 0.0), delta * 0.03)
 	_wet = move_toward(_wet, 1.0 if raining else 0.0, delta * (0.05 if raining else 0.01))
 	var tundra: bool = gen.biome_weights(player.global_position.x, player.global_position.z).w > 0.5
-	rain.emitting = raining and _overcast > 0.5 and not tundra
-	snow.emitting = raining and _overcast > 0.5 and tundra
+	_shelter_timer -= delta
+	if _shelter_timer <= 0.0:
+		_shelter_timer = 0.3
+		var cam := get_viewport().get_camera_3d()
+		_cam_sheltered = cam != null and (player.driving or (rv and rv.is_inside(cam.global_position)) or is_sheltered(cam.global_position - Vector3(0, 1.6, 0)))
+	rain.emitting = raining and _overcast > 0.5 and not tundra and not _cam_sheltered
+	snow.emitting = raining and _overcast > 0.5 and tundra and not _cam_sheltered
+
 	terrain_mat.set_shader_parameter("wetness", _wet * (0.0 if tundra else 1.0))
 	terrain_mat.set_shader_parameter("snow_cover", 0.0)
 	road_mat.set_shader_parameter("wetness", _wet)
@@ -537,6 +550,28 @@ func _instantiate(d: Dictionary) -> void:
 				bb.set_meta("res_key", bkey)
 				root.add_child(bb)
 				info["res"][bkey] = [bb, null, -1]
+			"pickup":
+				var pk: String = f["key"]
+				var pb := StaticBody3D.new()
+				pb.collision_layer = 2
+				pb.collision_mask = 0
+				pb.position = lp
+				pb.rotation.y = f["rot"]
+				var model := Items.instance(str(f["item"]))
+				if f["item"] == "wood":
+					model.scale = Vector3(0.6, 0.6, 1.4)
+				pb.add_child(model)
+				var pcs := CollisionShape3D.new()
+				var psh := SphereShape3D.new()
+				psh.radius = 0.35
+				pcs.shape = psh
+				pcs.position.y = 0.1
+				pb.add_child(pcs)
+				pb.set_meta("res_kind", "pickup")
+				pb.set_meta("res_key", pk)
+				pb.set_meta("item", f["item"])
+				root.add_child(pb)
+				info["res"][pk] = [pb, null, -1]
 			"scrap":
 				var pile := Pois.loot(root, lp, Vector3(1.4, 0.5, 1.0), Lib.mat("rust"), f["key"], "Scrap pile", "scrap_pile")
 				pile.rotation.y = f["rot"]
@@ -565,6 +600,12 @@ func _instantiate(d: Dictionary) -> void:
 		gmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
 		gmi.visible = Game.settings["grass"]
 		root.add_child(gmi)
+		info["grass"] = gp
+		info["grass_mm"] = mm
+		for id in structures:
+			var s: Node3D = structures[id]
+			if is_instance_valid(s):
+				_clear_grass_at(s.global_position, s.type, info)
 	# roadside location
 	var poi := gen.poi_for_row(key.y)
 	if not poi.is_empty() and _chunk_of(poi["pos"]) == key:
@@ -626,6 +667,8 @@ func harvest_bush(body: Node3D) -> void:
 			Game.add_item("mushroom", randi_range(1, 3))
 		_:
 			Game.add_item("fiber", randi_range(2, 3))
+			if randf() < 0.35:
+				Game.add_item("wood", 1)
 			if randf() < 0.08:
 				Game.add_item("seeds_potato", 1)
 	Audio.play("pickup", -4.0)
@@ -794,6 +837,20 @@ func occupied(t: String, pos: Vector3, rot: float) -> bool:
 		return false
 	return occupancy.has(k)
 
+func _clear_grass_at(p: Vector3, t: String, info: Dictionary) -> void:
+	if not info.has("grass"):
+		return
+	var half := 1.7 if t in ["foundation", "floor", "stairs"] else (1.3 if t in ["tent", "bed", "workbench", "planter"] else 0.0)
+	if half <= 0.0 or t in ["wall", "doorway", "window", "fence", "roof", "roof_slope", "lantern"]:
+		return
+	var gp: PackedVector3Array = info["grass"]
+	var mm: MultiMesh = info["grass_mm"]
+	var root: Node3D = info["node"]
+	for i in range(gp.size()):
+		var g := gp[i]
+		if absf(g.x - p.x) < half and absf(g.z - p.z) < half and g.y < p.y + 1.0:
+			mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * 0.0001), g - root.position))
+
 func spawn_structure(id: String, rec: Dictionary) -> void:
 	if structures.has(id):
 		return
@@ -803,6 +860,12 @@ func spawn_structure(id: String, rec: Dictionary) -> void:
 	add_child(s)
 	s.setup(id, rec)
 	structures[id] = s
+	var ck := _chunk_of(s.global_position)
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var k := Vector2i(ck.x + dx, ck.y + dz)
+			if chunks.has(k):
+				_clear_grass_at(s.global_position, s.type, chunks[k])
 	var k := _occ_key(rec["type"], Game.v3(rec["pos"]), float(rec.get("rot", 0.0)))
 	if k != "":
 		occupancy[k] = id

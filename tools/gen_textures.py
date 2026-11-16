@@ -312,3 +312,134 @@ for fn in [grass, dirt, sand, snow, rock, asphalt, bark, planks, metal_paint, ru
            fabric, concrete, water_normal, grass_card, leaf_card, needle_card]:
     fn()
     print("generated", fn.__name__)
+
+
+# --- v1.1 material set ------------------------------------------------------
+def brushed_metal():
+    streak = band(N, 2, 300, 200, aniso=(1.0, 40.0))
+    large = spectral(N, 1.8, 201)
+    scratches = np.clip((band(N, 200, 512, 202, aniso=(30.0, 1.0)) - 0.8) * 4, 0, 1)
+    t = 0.55 * streak + 0.3 * large + 0.15 * scratches
+    col = ramp(t, [(0, rgb("6e7175")), (0.5, rgb("a3a7ab")), (1, rgb("d2d5d8"))])
+    save_rgb("metal", col)
+    save_normal("metal", streak * 0.4 + scratches * 0.3, 3)
+
+
+def paint_chipped():
+    large = spectral(N, 1.7, 210)
+    chips = np.clip((spectral(N, 1.2, 211) - 0.72) * 8, 0, 1)
+    grime = np.clip((spectral(N, 2.0, 212) - 0.5) * 1.5, 0, 1)
+    base = np.ones((N, N, 3)) * (0.88 + 0.12 * large)[..., None]
+    base = lerp(base, np.array(rgb("6a6e70")), chips)
+    base = lerp(base, np.array(rgb("4a3f33")), grime * 0.35)
+    save_rgb("paint", base)
+    save_normal("paint", -chips * 0.6 + large * 0.1, 4)
+
+
+def leather():
+    cells = band(N, 60, 200, 220)
+    creases = 1 - np.abs(spectral(N, 1.6, 221) * 2 - 1)
+    large = spectral(N, 1.8, 222)
+    t = 0.4 * cells + 0.4 * large + 0.2 * creases
+    col = ramp(t, [(0, rgb("2e1c12")), (0.5, rgb("5a3a24")), (1, rgb("8a6040"))])
+    save_rgb("leather", col)
+    save_normal("leather", cells * 0.6 + np.clip((creases - 0.9) * 8, 0, 1) * -0.5, 5)
+
+
+def rubber():
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    tread = (np.sin(2 * np.pi * (yy * 32 + np.abs(((xx * 4) % 1) - 0.5) * 3)) > 0.2).astype(float)
+    grain = band(N, 200, 512, 230)
+    col = ramp(0.6 * tread + 0.4 * grain, [(0, rgb("101010")), (1, rgb("2c2c2c"))])
+    save_rgb("rubber", col)
+    save_normal("rubber", tread * 0.8 + grain * 0.2, 8)
+
+
+def fur():
+    strands = band(N, 30, 400, 240, aniso=(1.0, 6.0))
+    clumps = spectral(N, 1.6, 241)
+    t = 0.65 * strands + 0.35 * clumps
+    col = ramp(t, [(0, rgb("3a3a3a")), (0.5, rgb("8a8a8a")), (1, rgb("e8e8e8"))])
+    save_rgb("fur", col)
+    save_normal("fur", strands, 6)
+
+
+def shingles():
+    yy, xx = np.mgrid[0:N, 0:N]
+    rows = 16
+    rh = N // rows
+    row = yy // rh
+    off = (row % 2) * (N // 16)
+    tile_w = N // 8
+    edge_y = (yy % rh) / rh
+    seam = ((xx + off) % tile_w) < 4
+    rng = np.random.default_rng(250)
+    tint = rng.uniform(0.75, 1.15, size=(rows, 9))[row, ((xx + off) // tile_w) % 9]
+    grain = band(N, 150, 512, 251)
+    col = ramp(grain, [(0, rgb("3a3330")), (1, rgb("6a5c52"))]) * tint[..., None]
+    col *= (0.65 + 0.35 * edge_y)[..., None]
+    col[seam] *= 0.4
+    save_rgb("shingles", col)
+    h = edge_y * 0.6 + grain * 0.2
+    h[seam] -= 0.4
+    save_normal("shingles", h, 6)
+
+
+def logs():
+    yy, xx = np.mgrid[0:N, 0:N]
+    rows = 8
+    rh = N // rows
+    v = (yy % rh) / rh
+    profile = np.sqrt(np.clip(1 - (2 * v - 1) ** 2, 0, 1))
+    grain = band(N, 4, 80, 260, aniso=(16.0, 1.0))
+    knots = np.clip((band(N, 20, 60, 261) - 0.85) * 6, 0, 1)
+    rng = np.random.default_rng(262)
+    tint = rng.uniform(0.85, 1.1, size=rows)[yy // rh]
+    t = 0.6 * grain + 0.25 * profile - knots * 0.4
+    col = ramp(t, [(0, rgb("3b2616")), (0.5, rgb("7a5232")), (1, rgb("b08356"))]) * tint[..., None]
+    col *= (0.45 + 0.55 * profile)[..., None]
+    save_rgb("logs", col)
+    save_normal("logs", profile * 1.2 + grain * 0.15, 10)
+
+
+def cardboard():
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    flutes = 0.5 + 0.5 * np.sin(2 * np.pi * xx * 96)
+    large = spectral(N, 1.8, 270)
+    col = ramp(0.2 * flutes + 0.8 * large, [(0, rgb("8a6a44")), (1, rgb("c49c6a"))])
+    save_rgb("cardboard", col)
+
+
+def skin():
+    large = spectral(N, 2.0, 280)
+    pores = band(N, 250, 512, 281)
+    col = ramp(0.7 * large + 0.3 * pores, [(0, rgb("a8765a")), (1, rgb("dcab8c"))])
+    save_rgb("skin", col)
+    save_normal("skin", pores, 2)
+
+
+def denim():
+    yy, xx = np.mgrid[0:N, 0:N]
+    twill = ((xx + yy) % 8 < 4).astype(float)
+    large = spectral(N, 1.8, 290)
+    fine = band(N, 200, 512, 291)
+    col = ramp(0.3 * twill + 0.5 * large + 0.2 * fine, [(0, rgb("1e2a3c")), (1, rgb("4a5f80"))])
+    save_rgb("denim", col)
+    save_normal("denim", twill * 0.5 + fine * 0.5, 3)
+
+
+def fabric_plaid():
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    a = (np.sin(2 * np.pi * xx * 8) > 0.3).astype(float)
+    b = (np.sin(2 * np.pi * yy * 8) > 0.3).astype(float)
+    fine = band(N, 250, 512, 300)
+    base = np.ones((N, N, 3)) * np.array(rgb("8a2f2a"))
+    base = lerp(base, np.array(rgb("2a2422")), (a * b) * 0.8)
+    base = lerp(base, np.array(rgb("b05a40")), (np.maximum(a, b) - a * b) * 0.35)
+    base *= (0.9 + 0.1 * fine)[..., None]
+    save_rgb("plaid", base)
+
+
+for fn in [brushed_metal, paint_chipped, leather, rubber, fur, shingles, logs, cardboard, skin, denim, fabric_plaid]:
+    fn()
+    print("generated", fn.__name__)

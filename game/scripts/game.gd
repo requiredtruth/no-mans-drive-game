@@ -2,6 +2,7 @@ extends Node
 ## Global game state, settings, input map and save/load. Autoloaded as "Game".
 
 const Data = preload("res://scripts/data.gd")
+const WorldItem = preload("res://scripts/world_item.gd")
 const SAVE_PATH := "user://savegame.json"
 const SETTINGS_PATH := "user://settings.cfg"
 const DAY_LENGTH := 1440.0 # real seconds per in-game day (24 minutes)
@@ -39,6 +40,7 @@ var rv_state := {}
 var playing := false
 var paused := false
 var ui_open := false
+var god_mode := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -92,6 +94,7 @@ func _setup_input() -> void:
 	_key("lights", [KEY_L], [JOY_BUTTON_DPAD_LEFT])
 	_key("flashlight", [KEY_F], [JOY_BUTTON_DPAD_RIGHT])
 	_key("crouch", [KEY_CTRL], [JOY_BUTTON_RIGHT_STICK])
+	_key("pickup", [KEY_G], [JOY_BUTTON_B])
 	for i in range(6):
 		_key("slot_%d" % (i + 1), [KEY_1 + i])
 
@@ -144,7 +147,7 @@ func add_item(id: String, n: int = 1, quiet := false) -> void:
 	if n <= 0:
 		return
 	inventory[id] = count(id) + n
-	if Data.ITEMS.get(id, {}).get("kind", "") == "tool" and not hotbar.has(id):
+	if Data.ITEMS.get(id, {}).get("kind", "") in ["tool", "placeable"] and not hotbar.has(id):
 		for i in range(hotbar.size()):
 			if hotbar[i] == "":
 				hotbar[i] = id
@@ -161,7 +164,7 @@ func remove_item(id: String, n: int = 1) -> bool:
 	if inventory[id] <= 0:
 		inventory.erase(id)
 		var i := hotbar.find(id)
-		if i >= 0 and Data.ITEMS.get(id, {}).get("kind", "") == "tool":
+		if i >= 0 and Data.ITEMS.get(id, {}).get("kind", "") in ["tool", "placeable"]:
 			hotbar[i] = ""
 			hotbar_changed.emit()
 	inventory_changed.emit()
@@ -230,11 +233,9 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	time_of_day = 8.0
 	day = 1
 	weather = "clear"
-	inventory = {"knife": 1, "axe": 1, "hammer": 1, "fishing_rod": 1, "flashlight": 1,
-		"canned_food": 3, "water_clean": 4, "wood": 10, "stone": 6, "cloth": 4, "rope": 2,
-		"seeds_tomato": 2, "seeds_potato": 2, "seeds_coffee": 1, "coffee_beans": 2, "fuel_can": 1,
-		"engine_parts": 1, "scrap": 4, "bandage": 2}
-	hotbar = ["knife", "axe", "hammer", "fishing_rod", "flashlight", ""]
+	# A rough start: a pocket knife, a flashlight and a few supplies. Everything else is scavenged.
+	inventory = {"knife": 1, "flashlight": 1, "canned_food": 1, "water_clean": 2, "bandage": 1, "rope": 1}
+	hotbar = ["knife", "flashlight", "", "", "", ""]
 	selected_slot = 0
 	stats = {"health": 100.0, "food": 80.0, "water": 80.0, "energy": 90.0, "warmth": 100.0}
 	structures = {}
@@ -242,6 +243,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	spawn_point = null
 	next_struct_id = 1
 	rv_state = {}
+	pending_items = []
 
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
@@ -257,7 +259,19 @@ func world_snapshot() -> Dictionary:
 		"seed": seed_value, "difficulty": difficulty, "time": time_of_day, "day": day,
 		"weather": weather, "structures": structures, "removed": removed, "next_id": next_struct_id,
 		"rv": rv.save_state() if rv else rv_state,
+		"items": _loose_items(),
 	}
+
+var pending_items: Array = []
+
+func _loose_items() -> Array:
+	var out := []
+	if world == null:
+		return pending_items
+	for it in world.get_tree().get_nodes_in_group("world_item"):
+		if is_instance_valid(it) and it.get_parent() == world:
+			out.append(it.save_record())
+	return out
 
 func apply_world_snapshot(d: Dictionary) -> void:
 	seed_value = int(d["seed"])
@@ -272,6 +286,7 @@ func apply_world_snapshot(d: Dictionary) -> void:
 	removed = d.get("removed", {})
 	next_struct_id = int(d.get("next_id", 1))
 	rv_state = d.get("rv", {})
+	pending_items = d.get("items", [])
 
 func save_game() -> bool:
 	if not playing or not world:
@@ -314,6 +329,20 @@ func load_game_data() -> Dictionary:
 		stats[k] = float(st[k])
 	spawn_point = v3(d["spawn"]) if d.get("spawn") != null else null
 	return d
+
+## Drop a physical item into the world.
+func spawn_item(id: String, n: int, pos: Vector3, impulse := Vector3.ZERO) -> Node:
+	if world == null:
+		return null
+	var it := RigidBody3D.new()
+	it.set_script(WorldItem)
+	it.setup(id, n)
+	world.add_child(it)
+	it.global_position = pos
+	it.rotation.y = randf() * TAU
+	if impulse != Vector3.ZERO:
+		it.apply_central_impulse(impulse)
+	return it
 
 func new_struct_id() -> String:
 	var id := "%d_%d" % [Net.my_id(), next_struct_id]

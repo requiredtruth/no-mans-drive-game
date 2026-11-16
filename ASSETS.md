@@ -8,3 +8,5 @@
 | `Fox.glb` | [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Fox) — model by PixelMannen (CC0), rigging & animation by tomkranis (CC BY 4.0), glTF conversion by @AsoboStudio and @scurest (CC BY 4.0) | CC0 / CC BY 4.0 |
 | `Lantern.glb` | [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/Lantern) | CC0 |
 | Engine | [Godot Engine 4.6.3](https://godotengine.org) | MIT |
+| `BarramundiFish.glb` | [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/BarramundiFish) — Microsoft | CC0 |
+| Item models, first-person hands | Procedural geometry in `game/scripts/items.gd` | CC0 |

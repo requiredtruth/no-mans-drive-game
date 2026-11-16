@@ -54,6 +54,17 @@ const ITEMS := {
 	"fishing_rod": {"name": "Fishing Rod", "color": Color("4f7f5f"), "kind": "tool"},
 	"flashlight": {"name": "Flashlight", "color": Color("e8d36a"), "kind": "tool"},
 	"jacket": {"name": "Hide Jacket", "color": Color("6f4a2f"), "kind": "wear", "insulation": 12},
+	# Carried objects you can place, pick up and move (also built from the build menu)
+	"campfire": {"name": "Campfire", "color": Color("b05a30"), "kind": "placeable"},
+	"tent": {"name": "Tent", "color": Color("7b8a5c"), "kind": "placeable"},
+	"crate": {"name": "Storage Crate", "color": Color("8a6440"), "kind": "placeable"},
+	"planter": {"name": "Garden Planter", "color": Color("6a5030"), "kind": "placeable"},
+	"bed": {"name": "Bed", "color": Color("5a6a8a"), "kind": "placeable"},
+	"workbench": {"name": "Workbench", "color": Color("7a5a3a"), "kind": "placeable"},
+	"rain_collector": {"name": "Rain Collector", "color": Color("5a7090"), "kind": "placeable"},
+	"lantern": {"name": "Lantern Post", "color": Color("c8a040"), "kind": "placeable"},
+	"chair": {"name": "Camp Chair", "color": Color("4f7f5f"), "kind": "placeable"},
+	"table": {"name": "Wooden Table", "color": Color("8a6440"), "kind": "placeable"},
 }
 
 ## Crafting recipes. "station": "" (hands), "workbench", "fire".
@@ -106,10 +117,12 @@ const PIECES := {
 	"rain_collector": {"name": "Rain Collector", "cost": {"wood": 3, "cloth": 2}, "snap": "free"},
 	"lantern": {"name": "Lantern Post", "cost": {"wood": 2, "scrap": 2}, "snap": "free"},
 	"fence": {"name": "Fence", "cost": {"wood": 2}, "snap": "edge"},
+	"chair": {"name": "Camp Chair", "cost": {"wood": 2, "cloth": 1}, "snap": "free"},
+	"table": {"name": "Wooden Table", "cost": {"wood": 4}, "snap": "free"},
 }
 
 const PIECE_ORDER := ["foundation", "floor", "wall", "doorway", "window", "roof", "roof_slope", "stairs",
-	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern"]
+	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table"]
 
 ## RV parts (condition 0..100).
 const RV_PARTS := {

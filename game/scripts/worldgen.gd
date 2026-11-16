@@ -14,10 +14,12 @@ var n_biome := FastNoiseLite.new()
 var n_mtn := FastNoiseLite.new()
 var n_lake := FastNoiseLite.new()
 var n_dune := FastNoiseLite.new()
+var n_grove := FastNoiseLite.new()
+var n_species := FastNoiseLite.new()
 
 func _init(s: int) -> void:
 	seed_value = s
-	var all := [n_low, n_mid, n_detail, n_biome, n_mtn, n_lake, n_dune]
+	var all := [n_low, n_mid, n_detail, n_biome, n_mtn, n_lake, n_dune, n_grove, n_species]
 	for i in range(all.size()):
 		var n: FastNoiseLite = all[i]
 		n.seed = s + i * 7919
@@ -26,9 +28,13 @@ func _init(s: int) -> void:
 	n_low.fractal_octaves = 2
 	n_mid.frequency = 0.011
 	n_mid.fractal_octaves = 3
-	n_detail.frequency = 0.07
+	n_detail.frequency = 0.05
 	n_detail.fractal_octaves = 2
-	n_biome.frequency = 0.0007
+	n_grove.frequency = 0.018
+	n_grove.fractal_octaves = 3
+	n_species.frequency = 0.012
+	n_species.fractal_octaves = 1
+	n_biome.frequency = 0.00045
 	n_biome.fractal_octaves = 2
 	n_mtn.frequency = 0.004
 	n_mtn.fractal_type = FastNoiseLite.FRACTAL_RIDGED
@@ -209,33 +215,53 @@ func build_chunk(cx: int, cz: int, removed: Dictionary, detail: bool) -> Diction
 	rng.seed = hash3(cx, cz, 1)
 	var cw := biome_weights(ox + 32.0, oz + 32.0)
 	var feats := []
-	var tree_count := int(4 + cw.y * 6 + cw.z * 48 + cw.w * 16 + cw.x * 4)
-	for t in range(tree_count):
+	# Trees grow in groves with clearings between them; species form stands rather than a random mix.
+	for t in range(140):
 		var lx := rng.randf() * CHUNK
 		var lz := rng.randf() * CHUNK
 		var x := ox + lx
 		var z := oz + lz
 		var key := "t%d_%d_%d" % [cx, cz, t]
 		var w := biome_weights(x, z)
+		var grove := smoothstep(-0.25, 0.35, n_grove.get_noise_2d(x, z))
+		var density := w.z * (0.05 + 0.55 * grove) + w.w * 0.28 * grove + w.y * 0.035 * grove + w.x * 0.012
+		if rng.randf() > density:
+			continue
 		if absf(x - road_x(z)) < ROAD_HALF + 6.5 or removed.has(key):
 			continue
 		var y := hs_sample(hs, lx, lz)
+		var slope := Vector2(hs_sample(hs, lx + 1.0, lz) - hs_sample(hs, lx - 1.0, lz), hs_sample(hs, lx, lz + 1.0) - hs_sample(hs, lx, lz - 1.0)).length() * 0.5
+		if slope > 0.75:
+			continue
 		if lake_mask(x, z, w) > 0.05 and y < water_level(x, z) + 0.4:
 			continue
 		if _near_poi(x, z, 4.0):
 			continue
-		var kind := "broadleaf"
+		var sp := n_species.get_noise_2d(x, z)
 		var r := rng.randf()
+		var kind := "broadleaf"
 		if w.x > 0.5:
-			kind = "cactus" if r < 0.7 else "dead"
+			kind = "cactus" if r < 0.75 else "dead"
 		elif w.w > 0.5:
-			kind = "pine" if r < 0.85 else "dead"
+			kind = "pine" if r < 0.92 else "dead"
 		elif w.z > 0.4:
-			kind = "pine" if r < 0.45 else ("broadleaf" if r < 0.95 else "dead")
+			kind = ("pine" if sp > 0.0 else "broadleaf") if r < 0.9 else ("broadleaf" if sp > 0.0 else "pine")
+			if r > 0.98:
+				kind = "dead"
 		else:
-			kind = "broadleaf" if r < 0.7 else "pine"
-		feats.append({"t": "tree", "kind": kind, "pos": Vector3(x, y, z), "rot": rng.randf() * TAU,
-			"scale": rng.randf_range(0.75, 1.3), "key": key, "tint": rng.randf_range(0.8, 1.15)})
+			kind = "broadleaf" if sp < 0.25 else "pine"
+		var s := lerpf(0.75, 1.3, grove) * rng.randf_range(0.85, 1.15)
+		feats.append({"t": "tree", "kind": kind, "pos": Vector3(x, y - 0.1, z), "rot": rng.randf() * TAU,
+			"scale": s, "key": key, "tint": rng.randf_range(0.85, 1.1)})
+	# Fallen sticks and loose stones you can pick up by hand.
+	for t in range(int(3 + cw.z * 8 + cw.w * 3)):
+		var x := ox + rng.randf() * CHUNK
+		var z := oz + rng.randf() * CHUNK
+		var key := "p%d_%d_%d" % [cx, cz, t]
+		if removed.has(key) or absf(x - road_x(z)) < ROAD_HALF + 1.0 or _near_poi(x, z, 1.0) or is_water(x, z, 0.0):
+			continue
+		var item := "wood" if rng.randf() < 0.6 + cw.z * 0.3 - cw.x * 0.5 else "stone"
+		feats.append({"t": "pickup", "item": item, "pos": Vector3(x, hs_sample(hs, x - ox, z - oz), z), "rot": rng.randf() * TAU, "key": key})
 	var rock_count := int(3 + cw.w * 8 + cw.x * 5)
 	for t in range(rock_count):
 		var x := ox + rng.randf() * CHUNK
@@ -278,10 +304,12 @@ func build_chunk(cx: int, cz: int, removed: Dictionary, detail: bool) -> Diction
 		for g in range(gcount):
 			var x := ox + rng.randf() * CHUNK
 			var z := oz + rng.randf() * CHUNK
-			if absf(x - road_x(z)) < ROAD_HALF + 0.8:
+			if absf(x - road_x(z)) < ROAD_HALF + 0.8 or _near_poi(x, z, 1.0):
 				continue
 			var w := biome_weights(x, z)
-			if rng.randf() > w.y + w.z * 0.7 + w.w * 0.15:
+			var patch := 0.3 + 0.7 * smoothstep(-0.35, 0.25, n_species.get_noise_2d(x * 2.0, z * 2.0))
+			var under_canopy := smoothstep(-0.25, 0.35, n_grove.get_noise_2d(x, z)) * w.z
+			if rng.randf() > (w.y + w.z * 0.7 + w.w * 0.15) * patch * (1.0 - under_canopy * 0.6):
 				continue
 			var y := hs_sample(hs, x - ox, z - oz)
 			if lake_mask(x, z, w) > 0.05 and y < water_level(x, z) + 0.1:

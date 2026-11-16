@@ -70,10 +70,19 @@ func interact(_player: Node) -> void:
 		var id: String = e[0]
 		if Data.ITEMS[id]["kind"] == "tool" and (Game.count(id) > 0 or rng.randf() < 0.5):
 			continue
-		Game.add_item(id, rng.randi_range(e[1], e[2]))
+		var top := 1.0
+		for ch in get_children():
+			if ch is CollisionShape3D and ch.shape is BoxShape3D:
+				top = ch.position.y + ch.shape.size.y * 0.5
+		var toward: Vector3 = (Game.player.global_position - global_position) * Vector3(1, 0, 1)
+		toward = toward.normalized() * 0.25 if toward.length() > 0.01 else Vector3.ZERO
+		var spot := global_position + Vector3(0, top + 0.15 + i * 0.12, 0) + toward + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
+		Game.spawn_item(id, rng.randi_range(e[1], e[2]), spot)
 		got = true
 	if not got:
 		Game.notify("Found nothing useful")
+	else:
+		Game.notify("You found something — pick it up")
 	Audio.play("pickup")
 	Net.mark_removed(key, true)
 

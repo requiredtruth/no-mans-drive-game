@@ -72,28 +72,40 @@ func _wall_with_hole(m: Material, hole_w: float, hole_h: float, hole_y: float, h
 func _build() -> void:
 	var planks := Lib.mat("planks", Color.WHITE, 0.33)
 	var dark := Lib.mat("planks", Color(0.7, 0.62, 0.55), 0.33)
+	var logs := Lib.mat("logs", Color.WHITE, 0.333)
+	var shingle := Lib.mat("shingles", Color.WHITE, 0.4)
+	var stone := Lib.mat("rock", Color(0.92, 0.9, 0.86), 0.7)
+	var trim := Lib.mat("planks", Color(0.5, 0.4, 0.32), 1.0)
 	match type:
 		"foundation":
 			var depth: float = float(data.get("depth", 1.2))
-			_solid(Vector3(0, -depth * 0.5, 0), Vector3(GRID, depth, GRID), Lib.mat("concrete", Color.WHITE, 0.3))
+			_solid(Vector3(0, -depth * 0.5, 0), Vector3(GRID, depth, GRID), stone)
 			Lib.box(self, Vector3(0, 0.01, 0), Vector3(GRID - 0.04, 0.02, GRID - 0.04), planks)
 		"floor":
 			_solid(Vector3(0, 0.1, 0), Vector3(GRID, 0.2, GRID), planks)
 		"roof":
-			_solid(Vector3(0, 0.1, 0), Vector3(GRID + 0.1, 0.2, GRID + 0.1), dark)
+			_solid(Vector3(0, 0.1, 0), Vector3(GRID + 0.1, 0.2, GRID + 0.1), shingle)
 		"roof_slope":
 			var ang := atan2(1.5, GRID)
 			var length := sqrt(GRID * GRID + 2.25) + 0.1
-			_solid(Vector3(0, 0.75, 0), Vector3(GRID + 0.1, 0.2, length), dark, Vector3(ang, 0, 0))
+			_solid(Vector3(0, 0.75, 0), Vector3(GRID + 0.1, 0.2, length), shingle, Vector3(ang, 0, 0))
 			# gable triangles approximated with stepped boards
 			for s in [-1.0, 1.0]:
 				for k in range(3):
 					var hh := 1.5 * (1.0 - k / 3.0)
-					Lib.box(self, Vector3(s * (GRID * 0.5 - 0.05), hh * 0.5, -GRID * 0.5 + 0.5 + k * 1.0), Vector3(0.1, hh, 1.0), planks)
+					Lib.box(self, Vector3(s * (GRID * 0.5 - 0.05), hh * 0.5, -GRID * 0.5 + 0.5 + k * 1.0), Vector3(0.1, hh, 1.0), logs)
 		"wall":
-			_solid(Vector3(0, GRID * 0.5, 0), Vector3(GRID, GRID, 0.2), planks)
+			_solid(Vector3(0, GRID * 0.5, 0), Vector3(GRID, GRID, 0.24), logs)
+			for x in [-GRID * 0.5, GRID * 0.5]:
+				Lib.box(self, Vector3(x, GRID * 0.5, 0), Vector3(0.26, GRID, 0.3), trim)
 		"window":
-			_wall_with_hole(planks, 1.3, 1.1, 1.1)
+			_wall_with_hole(logs, 1.3, 1.1, 1.1)
+			for y in [1.1, 2.2]:
+				Lib.box(self, Vector3(0, y, 0), Vector3(1.45, 0.08, 0.3), trim)
+			for x in [-0.68, 0.68]:
+				Lib.box(self, Vector3(x, 1.65, 0), Vector3(0.08, 1.2, 0.3), trim)
+			Lib.box(self, Vector3(0, 1.65, 0), Vector3(0.05, 1.1, 0.06), trim)
+			Lib.box(self, Vector3(0, 1.65, 0), Vector3(1.3, 0.05, 0.06), trim)
 			var g := MeshInstance3D.new()
 			var bm := BoxMesh.new()
 			bm.size = Vector3(1.3, 1.1, 0.04)
@@ -104,7 +116,10 @@ func _build() -> void:
 			_col(Vector3(0, 1.65, 0), Vector3(1.3, 1.1, 0.06))
 			Lib.box(self, Vector3(0, 1.1, 0.12), Vector3(1.5, 0.08, 0.2), dark)
 		"doorway":
-			_wall_with_hole(planks, 1.2, 2.3, 0.0)
+			_wall_with_hole(logs, 1.2, 2.3, 0.0)
+			for x in [-0.64, 0.64]:
+				Lib.box(self, Vector3(x, 1.15, 0), Vector3(0.08, 2.3, 0.3), trim)
+			Lib.box(self, Vector3(0, 2.34, 0), Vector3(1.36, 0.1, 0.3), trim)
 			_door_pivot = Node3D.new()
 			_door_pivot.position = Vector3(-0.6, 0, 0)
 			add_child(_door_pivot)
@@ -185,7 +200,22 @@ func _build() -> void:
 				lan.position = Vector3(0.55, 1.95 - 0.55, 0)
 				add_child(lan)
 			_lamp = Lib.light(self, Vector3(0.55, 1.55, 0), Color(1.0, 0.75, 0.45), 1.6, 12.0)
-	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern"]:
+	match type:
+		"chair":
+			var canvas := Lib.mat("canvas", Color(0.6, 0.8, 0.65), 1.0, false)
+			for x in [-0.22, 0.22]:
+				for z in [-0.2, 0.2]:
+					Lib.cyl(self, Vector3(x, 0.22, z), 0.018, 0.018, 0.48, Lib.mat("metal", Color(0.4, 0.4, 0.42), 2.0, false, 0.4, 0.8), Vector3(z * 0.8, 0, -x * 0.5))
+			Lib.box(self, Vector3(0, 0.45, 0), Vector3(0.5, 0.05, 0.45), canvas)
+			Lib.box(self, Vector3(0, 0.75, 0.22), Vector3(0.5, 0.55, 0.04), canvas, false, Vector3(-0.15, 0, 0))
+			_col(Vector3(0, 0.35, 0), Vector3(0.5, 0.7, 0.45))
+		"table":
+			Lib.box(self, Vector3(0, 0.76, 0), Vector3(1.4, 0.06, 0.8), planks)
+			for x in [-0.62, 0.62]:
+				for z in [-0.32, 0.32]:
+					Lib.box(self, Vector3(x, 0.37, z), Vector3(0.07, 0.74, 0.07), dark)
+			_col(Vector3(0, 0.4, 0), Vector3(1.4, 0.8, 0.8))
+	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table"]:
 		add_to_group("placeable")
 
 func _build_campfire() -> void:
@@ -353,6 +383,12 @@ func is_sheltered() -> bool:
 
 # ------------------------------------------------------------------ interaction
 func get_prompt() -> String:
+	var p := _prompt()
+	if is_in_group("placeable") and type not in ["chair", "table"] and p != "":
+		p += "   [G] Pick up"
+	return p
+
+func _prompt() -> String:
 	match type:
 		"campfire":
 			var fuel: float = float(data.get("fuel", 0.0))
@@ -376,6 +412,10 @@ func get_prompt() -> String:
 			return "[E] Use workbench"
 		"rain_collector":
 			return "[E] Collect water (%d)" % int(data.get("water", 0))
+		"chair":
+			return "[E] Sit and rest   [G] Pick up"
+		"table":
+			return "Wooden table   [G] Pick up"
 	return ""
 
 func interact(player: Node) -> void:
@@ -406,6 +446,9 @@ func interact(player: Node) -> void:
 			_planter_interact()
 		"workbench":
 			Game.world.hud.open_crafting("workbench")
+		"chair":
+			Game.stats["energy"] = minf(Game.stats["energy"] + 5.0, 100.0)
+			Game.notify("You rest for a moment")
 		"rain_collector":
 			var w := int(data.get("water", 0))
 			if w > 0:

@@ -64,7 +64,7 @@ func _ready() -> void:
 	head.add_child(camera)
 	ray = RayCast3D.new()
 	ray.target_position = Vector3(0, 0, -3.2)
-	ray.collision_mask = 1 | 2 | 8 | 16
+	ray.collision_mask = 1 | 2 | 8 | 16 | 32
 	ray.collide_with_areas = false
 	ray.add_exception(self)
 	camera.add_child(ray)
@@ -112,6 +112,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			Game.select_slot(i)
 	if event.is_action_pressed("interact"):
 		_interact()
+	if event.is_action_pressed("pickup"):
+		_pickup()
 	if event.is_action_pressed("flashlight"):
 		toggle_flashlight()
 	if driving:
@@ -272,6 +274,8 @@ func _resource_prompt(t: Node) -> String:
 	match str(t.get_meta("res_kind")):
 		"tree": return "Tree — chop with a hatchet [Use]"
 		"rock": return "Rock — mine with a pickaxe [Use]"
+		"pickup":
+			return "[E] Pick up %s" % ("branch (wood)" if t.get_meta("item") == "wood" else "stone")
 		"bush":
 			var k: String = t.get_meta("bush_kind")
 			return "[E] Gather %s" % {"fiber": "plant fiber", "berry": "berries", "mushroom": "mushrooms"}.get(k, k)
@@ -288,6 +292,38 @@ func _interact() -> void:
 		look_target.interact(self)
 	elif look_target.has_meta("res_kind") and look_target.get_meta("res_kind") == "bush":
 		Game.world.harvest_bush(look_target)
+	elif look_target.has_meta("res_kind") and look_target.get_meta("res_kind") == "pickup":
+		Game.add_item(look_target.get_meta("item"), 1)
+		Audio.play("pickup", -6.0)
+		Net.mark_removed(look_target.get_meta("res_key"), true)
+
+## Grab a loose item, or pick a placed object (crate, campfire, chair...) back up to move it.
+func _pickup() -> void:
+	if driving or look_target == null:
+		return
+	var t := look_target as Node
+	if t.is_in_group("world_item"):
+		t.interact(self)
+		return
+	if t.get_script() == Builder.Structure and t.is_in_group("placeable"):
+		var type: String = t.type
+		if type == "crate" and t.data.has("items"):
+			for k in t.data["items"]:
+				Game.add_item(k, int(t.data["items"][k]), true)
+		if t.has_meta("rv_rec"):
+			Game.rv.detach_structure(t)
+		elif t.persistent:
+			Net.remove_structure(t.id)
+		else:
+			return
+		Game.add_item(type, 1)
+		Audio.play("pickup")
+
+func drop_item(id: String, n := 1) -> void:
+	if not Game.remove_item(id, n):
+		return
+	var fwd := -camera.global_transform.basis.z
+	Game.spawn_item(id, n, camera.global_position + fwd * 0.8 + Vector3(0, -0.3, 0), fwd * 1.5)
 
 func enter_vehicle(rv: Node, as_driver: bool) -> void:
 	if as_driver and not Net.claim_driver(true):
@@ -339,42 +375,58 @@ func _refresh_viewmodel() -> void:
 	for c in viewmodel.get_children():
 		c.queue_free()
 	_aiming = false
-	var wood := Lib.mat("bark", Color(0.9, 0.75, 0.6), 4.0, false)
-	var steel := Lib.color_mat(Color(0.7, 0.72, 0.75), 0.25, 0.9)
-	var dark := Lib.color_mat(Color(0.12, 0.12, 0.12), 0.4, 0.6)
+	# grip pose per item: [position, rotation, scale]
+	var pose := [Vector3(0.0, 0.0, 0.0), Vector3(-0.35, 0.15, 0.08), 1.0]
 	match id:
 		"axe", "pickaxe", "hammer":
-			Lib.box(viewmodel, Vector3(0, 0.05, 0), Vector3(0.04, 0.5, 0.04), wood, false, Vector3(0.3, 0, 0))
-			if id == "axe":
-				Lib.box(viewmodel, Vector3(0.06, 0.27, -0.08), Vector3(0.16, 0.1, 0.03), steel, false, Vector3(0.3, 0, 0))
-			elif id == "pickaxe":
-				Lib.box(viewmodel, Vector3(0, 0.27, -0.08), Vector3(0.36, 0.05, 0.05), steel, false, Vector3(0.3, 0, 0.2))
-			else:
-				Lib.box(viewmodel, Vector3(0, 0.27, -0.08), Vector3(0.16, 0.07, 0.07), dark, false, Vector3(0.3, 0, 0))
+			pose = [Vector3(0, 0, 0), Vector3(-0.45, 0.2, 0.15), 1.0]
 		"knife":
-			Lib.box(viewmodel, Vector3(0, -0.02, 0.02), Vector3(0.035, 0.035, 0.13), dark, false, Vector3(0.25, 0, 0))
-			Lib.box(viewmodel, Vector3(0, 0.0, -0.13), Vector3(0.008, 0.035, 0.2), steel, false, Vector3(0.25, 0, 0))
-		"bow":
-			for s in [-1.0, 1.0]:
-				Lib.box(viewmodel, Vector3(-0.1, s * 0.22, -0.1), Vector3(0.025, 0.45, 0.025), wood, false, Vector3(0, 0, s * -0.25))
-			Lib.box(viewmodel, Vector3(-0.02, 0, -0.1), Vector3(0.004, 0.86, 0.004), Lib.color_mat(Color(0.9, 0.9, 0.85)))
+			pose = [Vector3(0, 0, 0), Vector3(-0.75, 0.25, 0.1), 1.2]
 		"rifle":
-			Lib.box(viewmodel, Vector3(-0.05, 0.02, -0.3), Vector3(0.05, 0.06, 0.9), dark)
-			Lib.box(viewmodel, Vector3(-0.05, -0.04, 0.05), Vector3(0.06, 0.12, 0.35), wood)
-			Lib.box(viewmodel, Vector3(-0.05, 0.08, -0.15), Vector3(0.035, 0.035, 0.25), dark)
+			pose = [Vector3(-0.1, 0.04, -0.2), Vector3(-PI * 0.5, 0.0, 0.0), 1.0]
+		"bow":
+			pose = [Vector3(-0.2, 0.08, -0.08), Vector3(-0.05, 0.0, 0.25), 1.0]
 		"fishing_rod":
-			Lib.box(viewmodel, Vector3(0, 0.3, -0.35), Vector3(0.02, 0.02, 1.4), wood, false, Vector3(0.6, 0, 0))
-			Lib.cyl(viewmodel, Vector3(0, -0.02, 0.0), 0.04, 0.04, 0.04, dark, Vector3(0, 0, PI * 0.5))
+			pose = [Vector3(0, 0, 0), Vector3(-0.95, 0.1, 0.0), 1.0]
 		"flashlight":
-			Lib.cyl(viewmodel, Vector3(0, 0, -0.1), 0.03, 0.025, 0.22, dark, Vector3(PI * 0.5, 0, 0))
+			pose = [Vector3(0, 0.02, 0), Vector3(-1.1, 0.1, 0.0), 1.2]
+		"arrow":
+			pose = [Vector3(0, 0, 0), Vector3(-PI * 0.5, 0.0, 0.0), 1.0]
 		"":
-			pass
+			pose = [Vector3(0, 0, 0), Vector3.ZERO, 1.0]
 		_:
-			var it: Dictionary = Data.ITEMS.get(id, {})
-			if not it.is_empty():
-				Lib.box(viewmodel, Vector3(-0.05, -0.02, -0.05), Vector3(0.1, 0.1, 0.1), Lib.color_mat(it["color"], 0.6))
+			pose = [Vector3(0, -0.02, -0.03), Vector3(0.2, 0.6, 0.0), 0.9]
+	if id != "":
+		var item := Items.instance(id)
+		item.position = pose[0]
+		item.rotation = pose[1]
+		item.scale = Vector3.ONE * pose[2]
+		_set_no_shadow(item)
+		viewmodel.add_child(item)
+	var arm := MeshInstance3D.new()
+	arm.mesh = Items.arm_mesh()
+	arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	arm.rotation = Vector3(0.0, 0.0, 0.25 if id != "" else 0.0)
+	viewmodel.add_child(arm)
+	if id in ["bow", "rifle"]:
+		var left := MeshInstance3D.new()
+		left.mesh = Items.arm_mesh()
+		left.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		left.scale = Vector3(-1, 1, 1)
+		left.position = Vector3(-0.3, 0.06, -0.12) if id == "bow" else Vector3(-0.1, 0.03, -0.32)
+		left.rotation = Vector3(0.3, 0.3, -0.2)
+		viewmodel.add_child(left)
 	if builder:
-		builder.set_active(id == "hammer" and not driving)
+		if Data.ITEMS.get(id, {}).get("kind", "") == "placeable" and not driving:
+			builder.place_kit(id)
+		elif builder.kit != "":
+			builder.stop()
+
+func _set_no_shadow(n: Node) -> void:
+	if n is GeometryInstance3D:
+		(n as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for ch in n.get_children():
+		_set_no_shadow(ch)
 
 func _handle_tools(delta: float) -> void:
 	_swing = maxf(_swing - delta * 4.0, 0.0)
@@ -626,7 +678,7 @@ func _survival(delta: float) -> void:
 				Audio.play_at("howl", global_position + Vector3(cos(a), 0, sin(a)) * 120.0, 4.0)
 
 func hurt(amount: float, cause: String, flash := true) -> void:
-	if dead or amount <= 0.0:
+	if dead or amount <= 0.0 or Game.god_mode:
 		return
 	Game.stats["health"] = maxf(Game.stats["health"] - amount, 0.0)
 	if flash and _hurt_cd <= 0.0:

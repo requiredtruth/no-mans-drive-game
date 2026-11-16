@@ -40,6 +40,7 @@ func _ready() -> void:
 		_btn("BUILD", "build_menu", Color(0.7, 0.55, 0.25), 0.8),
 		_btn("ROT", "rotate", Color(0.7, 0.55, 0.25), 0.7),
 		_btn("LIGHT", "flashlight", Color(0.6, 0.6, 0.3), 0.7),
+		_btn("GRAB", "pickup", Color(0.3, 0.6, 0.85), 0.85),
 	]
 	_drive_buttons = [
 		_btn("EXIT", "interact", Color(0.3, 0.6, 0.85), 1.05),
@@ -47,6 +48,8 @@ func _ready() -> void:
 		_btn("START", "primary", Color(0.35, 0.7, 0.35), 0.9),
 		_btn("LIGHTS", "lights", Color(0.6, 0.6, 0.3), 0.8),
 		_btn("CAM", "camera", Color(0.45, 0.45, 0.45), 0.8),
+		_btn("GAS", "move_forward", Color(0.35, 0.75, 0.35), 1.25),
+		_btn("REV", "move_back", Color(0.8, 0.45, 0.25), 1.0),
 	]
 	var bag := _btn("BAG", "inventory", Color(0.45, 0.45, 0.45), 0.75)
 	var pause := _btn("II", "pause", Color(0.3, 0.3, 0.3), 0.6)
@@ -127,15 +130,18 @@ func _layout() -> void:
 	_place(f[6], Vector2(r - px.call(f[6]), vp.y * 0.3))
 	_place(f[7], Vector2(r - px.call(f[6]) - px.call(f[7]) - 10, vp.y * 0.3))
 	_place(f[8], Vector2(r - px.call(f[8]), vp.y * 0.3 - px.call(f[8]) - 10))
-	_place(f[9], Vector2(24, vp.y * 0.42))
-	_place(f[10], Vector2(vp.x * 0.5 + 250, 14))
+	_place(f[9], Vector2(r - px.call(f[9]), vp.y * 0.3 + px.call(f[6]) + 10))
+	_place(f[10], Vector2(24, vp.y * 0.42))
+	_place(f[11], Vector2(vp.x * 0.5 + 250, 14))
 	var d := _drive_buttons
-	_place(d[0], Vector2(r - px.call(d[1]) - px.call(d[0]) - 18, b - px.call(d[0])))
-	_place(d[1], Vector2(r - px.call(d[1]), b - px.call(d[1]) - 30))
-	_place(d[2], Vector2(r - px.call(d[2]) - 10, b - px.call(d[1]) - px.call(d[2]) - 50))
+	_place(d[5], Vector2(r - px.call(d[5]), b - px.call(d[5])))
+	_place(d[6], Vector2(r - px.call(d[5]) - px.call(d[6]) - 16, b - px.call(d[6])))
+	_place(d[1], Vector2(r - px.call(d[5]) - px.call(d[6]) - px.call(d[1]) - 32, b - px.call(d[1])))
+	_place(d[0], Vector2(r - px.call(d[0]), b - px.call(d[5]) - px.call(d[0]) - 20))
+	_place(d[2], Vector2(r - px.call(d[0]) - px.call(d[2]) - 16, b - px.call(d[5]) - px.call(d[2]) - 20))
 	_place(d[3], Vector2(r - px.call(d[3]), vp.y * 0.3))
 	_place(d[4], Vector2(r - px.call(d[3]) - px.call(d[4]) - 10, vp.y * 0.3))
-	_place(d[5], Vector2(vp.x * 0.5 + 250, 14))
+	_place(d[7], Vector2(vp.x * 0.5 + 250, 14))
 	_stick_center = Vector2(40 + STICK_R * _scale + 30, vp.y - STICK_R * _scale - 60)
 	_update_stick_visual()
 

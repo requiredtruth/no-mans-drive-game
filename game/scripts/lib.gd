@@ -76,11 +76,9 @@ func foliage_mat(tex_name: String, wind := 0.12, sway := 1.0, tint := Color.WHIT
 
 # ------------------------------------------------------------------ node helpers
 ## Adds a textured box. Returns the MeshInstance3D. If solid, also adds a StaticBody3D collider.
-func box(parent: Node3D, pos: Vector3, size: Vector3, material: Material, solid := false, rot := Vector3.ZERO) -> MeshInstance3D:
+func box(parent: Node3D, pos: Vector3, size: Vector3, material: Material, solid := false, rot := Vector3.ZERO, bevel := -1.0) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
+	mi.mesh = rounded_box(size, bevel)
 	mi.material_override = material
 	mi.position = pos
 	mi.rotation = rot
@@ -94,6 +92,67 @@ func box(parent: Node3D, pos: Vector3, size: Vector3, material: Material, solid 
 		sb.add_child(cs)
 		mi.add_child(sb)
 	return mi
+
+## Box mesh with softened (bevelled, smooth-shaded) edges. Cached by size.
+func rounded_box(size: Vector3, bevel := -1.0) -> Mesh:
+	var r := bevel
+	if r < 0.0:
+		r = clampf(minf(minf(size.x, size.y), size.z) * 0.18, 0.0, 0.035)
+	if r < 0.004:
+		var bm := BoxMesh.new()
+		bm.size = size
+		return bm
+	var key := "rb|%.3f|%.3f|%.3f|%.3f" % [size.x, size.y, size.z, r]
+	if _meshes.has(key):
+		return _meshes[key]
+	var h := size * 0.5
+	var inner := h - Vector3.ONE * r
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var axes := [Vector3.RIGHT, Vector3.UP, Vector3.BACK]
+	for ai in range(3):
+		for sgn in [-1.0, 1.0]:
+			var n: Vector3 = axes[ai] * sgn
+			var u: Vector3 = axes[(ai + 1) % 3]
+			var v: Vector3 = axes[(ai + 2) % 3]
+			var hu: float = absf(h.dot(u))
+			var hv: float = absf(h.dot(v))
+			var hn: float = absf(h.dot(axes[ai]))
+			var ru: float = minf(r, hu)
+			var rv: float = minf(r, hv)
+			var us := [-hu, -hu + ru, hu - ru, hu]
+			var vs := [-hv, -hv + rv, hv - rv, hv]
+			var grid := []
+			var norms := []
+			for i in range(4):
+				var row := []
+				var nrow := []
+				for j in range(4):
+					var p: Vector3 = n * hn + u * us[i] + v * vs[j]
+					var cl := Vector3(clampf(p.x, -inner.x, inner.x), clampf(p.y, -inner.y, inner.y), clampf(p.z, -inner.z, inner.z))
+					var d := p - cl
+					var nn := d.normalized() if d.length() > 0.00001 else n
+					row.append(cl + nn * r)
+					nrow.append(nn)
+				grid.append(row)
+				norms.append(nrow)
+			for i in range(3):
+				for j in range(3):
+					var a: Vector3 = grid[i][j]
+					var b: Vector3 = grid[i + 1][j]
+					var c: Vector3 = grid[i + 1][j + 1]
+					var d2: Vector3 = grid[i][j + 1]
+					var na: Vector3 = norms[i][j]
+					var nb: Vector3 = norms[i + 1][j]
+					var nc: Vector3 = norms[i + 1][j + 1]
+					var nd: Vector3 = norms[i][j + 1]
+					if (b - a).length() < 0.00001 and (d2 - a).length() < 0.00001:
+						continue
+					_tri(st, [a, b, c], [na, nb, nc], [Vector2(a.x + a.z, a.y), Vector2(b.x + b.z, b.y), Vector2(c.x + c.z, c.y)])
+					_tri(st, [a, c, d2], [na, nc, nd], [Vector2(a.x + a.z, a.y), Vector2(c.x + c.z, c.y), Vector2(d2.x + d2.z, d2.y)])
+	var m := st.commit()
+	_meshes[key] = m
+	return m
 
 func cyl(parent: Node3D, pos: Vector3, r_top: float, r_bot: float, h: float, material: Material, rot := Vector3.ZERO, segs := 16) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()

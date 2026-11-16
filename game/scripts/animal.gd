@@ -53,9 +53,9 @@ func _leg(pos: Vector3, length: float, r: float, m: Material) -> void:
 
 func _build_model() -> void:
 	var c: Color = spec["color"]
-	var fur := Lib.color_mat(c, 0.95)
-	var light := Lib.color_mat(c.lightened(0.35), 0.95)
-	var dark := Lib.color_mat(c.darkened(0.5), 0.9)
+	var fur := Lib.mat("fur", c.lightened(0.15), 3.0, false, 0.95)
+	var light := Lib.mat("fur", c.lightened(0.5), 3.0, false, 0.95)
+	var dark := Lib.mat("fur", c.darkened(0.35), 3.0, false, 0.9)
 	var eye := Lib.color_mat(Color(0.03, 0.03, 0.03), 0.2)
 	match species:
 		"deer":
