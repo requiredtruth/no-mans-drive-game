@@ -1,0 +1,11 @@
+config_version=5
+[application]
+config/name="No Man's Drive"
+run/main_scene="res://world.tscn"
+[display]
+window/size/viewport_width=1152
+window/size/viewport_height=648
+window/stretch/mode="canvas_items"
+window/handheld/orientation=0
+[rendering]
+renderer/rendering_method="gl_compatibility"
