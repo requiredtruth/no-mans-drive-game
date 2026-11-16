@@ -22,7 +22,7 @@ jobs:
           curl -fLsS --retry 3 "$base/Godot_v4.6.3-stable_export_templates.tpz" -o templates.zip
           unzip -qo godot.zip
           mkdir -p ~/.local/share/godot/export_templates/4.6.3.stable ~/.config/godot dist
-          unzip -jo templates.zip 'templates/android_release.apk' -d ~/.local/share/godot/export_templates/4.6.3.stable
+          unzip -jo templates.zip 'templates/android_release.apk' 'templates/android_debug.apk' -d ~/.local/share/godot/export_templates/4.6.3.stable
           printf '[gd_resource type="EditorSettings" format=3]\n\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME" > ~/.config/godot/editor_settings-4.6.tres
           ./Godot_v4.6.3-stable_linux.x86_64 --headless --path game --export-release Android "$PWD/dist/unsigned.apk"
           signer="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"

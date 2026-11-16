@@ -9,3 +9,4 @@ window/stretch/mode="canvas_items"
 window/handheld/orientation=0
 [rendering]
 renderer/rendering_method="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
