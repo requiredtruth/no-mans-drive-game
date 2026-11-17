@@ -77,6 +77,11 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ A car and a truck at the starting point.
 - ✅ For now, tons of every kind of item at the start until everything is confirmed working.
 
+### Requests after 1.7.1 (addressed in 1.7.2)
+
+- ✅ Put a steering wheel next to the tires.
+- ✅ Remove the trees and grass where all the test items are laid out.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.

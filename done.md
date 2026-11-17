@@ -2,6 +2,11 @@
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.
 
+## Version 1.7.2
+
+- [x] Starting steering wheel lies on top of the tires next to the van.
+- [x] No trees, bushes, rocks, sticks or grass where the test items are laid out.
+
 ## Version 1.7.1: playtest fixes
 
 - [x] Steering wheel raised into the driver's view; driving readout moved to the top of the screen.

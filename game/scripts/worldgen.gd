@@ -315,7 +315,7 @@ func build_chunk(cx: int, cz: int, removed: Dictionary, detail: bool) -> Diction
 		var x := ox + rng.randf() * CHUNK
 		var z := oz + rng.randf() * CHUNK
 		var key := "s%d_%d" % [cx, cz]
-		if not removed.has(key) and absf(x - road_x(z)) > 8.0:
+		if not removed.has(key) and absf(x - road_x(z)) > 8.0 and not in_start_clearing(x, z):
 			feats.append({"t": "scrap", "pos": Vector3(x, hs_sample(hs, x - ox, z - oz), z), "rot": rng.randf() * TAU, "key": key})
 	out["features"] = feats
 	# Grass cards
@@ -356,7 +356,20 @@ func is_water(x: float, z: float, depth := 0.3) -> bool:
 	var w := biome_weights(x, z)
 	return lake_mask(x, z, w) > 0.02 and height(x, z) < water_level(x, z) - depth
 
+## The test-item depot next to the starting lot (see World.test_depot) is kept clear of trees,
+## bushes, rocks and grass. Rectangle in the start van's frame: across the road from the lot.
+func in_start_clearing(x: float, z: float) -> bool:
+	if absf(z) > 60.0:
+		return false
+	var d := road_dir(0.0)
+	var ang := atan2(d.x, d.z)
+	var rel := Vector3(x - (road_x(0.0) + 1.8), 0.0, z)
+	var l := Basis(Vector3.UP, ang).inverse() * rel
+	return l.x > -27.0 and l.x < -5.6 and l.z > -38.0 and l.z < 4.5
+
 func _near_poi(x: float, z: float, margin: float) -> bool:
+	if in_start_clearing(x, z):
+		return true
 	var ci := int(floor(z / CHUNK))
 	for k in [ci - 1, ci, ci + 1]:
 		var poi := poi_for_row(k)

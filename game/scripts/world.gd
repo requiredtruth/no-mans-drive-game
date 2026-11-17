@@ -910,7 +910,7 @@ func _starter_lot() -> void:
 		["tire", 1, Vector3(5.5, 0, 0.2), 1.9],
 		["tire", 1, Vector3(6.3, 0, -0.5), 2.6],
 		["tire", 1, Vector3(7.2, 0, 0.5), 1.2], # a spare, in case one gets damaged
-		["steering_wheel", 1, Vector3(3.0, 0, 0.6), 0.3],
+		["steering_wheel", 1, Vector3(5.6, 0, 1.6), 0.3, "tire"], # lying on top of the first tire
 		["car_seat", 1, Vector3(4.3, 0, 1.0), -1.4],
 		["van_door", 1, Vector3(2.8, 0, -1.2), PI * 0.5],
 		["toolkit", 1, Vector3(3.4, 0, -0.4), 0.9],
@@ -929,6 +929,8 @@ func _starter_lot() -> void:
 		var gp: Vector3 = rv.to_global(e[2])
 		var bb: AABB = Items.display_bounds(e[0])
 		gp.y = gen.height(gp.x, gp.z) - bb.position.y + 0.01
+		if e.size() > 4:
+			gp.y += Items.display_bounds(e[4]).size.y
 		Game.place_item(e[0], e[1], Transform3D(Basis(Vector3.UP, rv.rotation.y + e[3]), gp))
 	var bp: Vector3 = rv.to_global(Vector3(4.9, 0, -2.9))
 	bp.y = gen.height(bp.x, bp.z)

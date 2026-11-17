@@ -1,3 +1,8 @@
+## No Man's Drive 1.7.2
+
+- **Steering wheel by the tires:** at the start the van's steering wheel lies on top of the tires next to the van, easy to spot.
+- **Clear ground for the test items:** the area across the road where every item is laid out no longer has trees, bushes, rocks, loose sticks or grass, so nothing is hidden.
+
 ## No Man's Drive 1.7.1: fixes from playtesting
 
 **The van**
