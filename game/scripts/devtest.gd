@@ -1710,7 +1710,7 @@ func _v110() -> void:
 		if state["fuel"] <= 10.0 or state["battery"] < 5.0 or not state["missing"].is_empty() or plan.size() < 3 or plan.size() > 5:
 			valid = false
 		for item in plan:
-			if not Data.ITEMS.has(item["id"]):
+			if not Game.Data.ITEMS.has(item["id"]):
 				valid = false
 	_check_quality(valid and kinds.size() > 3, "Starter has one of several four-wheel types, road-ready medium condition and just 3-5 supplies")
 	_check_quality(WorldClass.starter_kind_for_seed(4242) == WorldClass.starter_kind_for_seed(4242) and WorldClass.starter_supply_plan(4242) == WorldClass.starter_supply_plan(4242), "Starter choices repeat for the same world seed")
@@ -1884,6 +1884,40 @@ func _v111() -> void:
 	w.animals = prev_animals
 
 func _run() -> void:
+	if "--starter-smoke" in OS.get_cmdline_user_args():
+		Game.new_game(4242, "Normal")
+		_check_quality(Game.map_mode == "starter", "Starter is the new default map")
+		var expected_kind: String = load("res://scripts/world.gd").starter_kind_for_seed(Game.seed_value)
+		get_tree().root.get_node("Main")._start_world({})
+		await _wait(1.5)
+		var w = Game.world
+		var primary = Game.rv
+		_check_quality(w != null and primary != null, "Starter world and primary vehicle load")
+		if w != null and primary != null:
+			var actual_kind: String = str(primary.save_state().get("kind", ""))
+			_check_quality(actual_kind == expected_kind, "Starter vehicle matches seeded selection: " + actual_kind)
+			_check_quality(primary.wheels.size() == 4, "Starter primary has exactly four wheels")
+			_check_quality(primary.missing_for_drive().is_empty(), "Starter is road-ready with necessary parts fitted")
+			_check_quality(primary.fuel >= 12.0 and primary.fuel <= 27.0, "Starter fuel is limited")
+			_check_quality(primary.parts["engine"] >= 43.0 and primary.parts["engine"] <= 70.0 and primary.parts["body"] <= 74.0, "Starter vehicle has medium random wear")
+			var nearby := 0
+			for item in get_tree().get_nodes_in_group("world_item"):
+				if is_instance_valid(item) and item.global_position.distance_to(primary.global_position) <= 16.0:
+					nearby += 1
+			_check_quality(nearby >= 3 and nearby <= 5, "Only three to five nearby supplies, no assembly lot")
+			var local_vehicles := 0
+			for v in w.vehicle_nodes.values():
+				if v.global_position.distance_to(primary.global_position) < 240.0:
+					local_vehicles += 1
+			_check_quality(local_vehicles == 0, "No second vehicle/trailer by the starter")
+			var snapshot: Dictionary = Game.world_snapshot()
+			_check_quality(str(snapshot["rv"].get("kind", "")) == actual_kind, "Starter primary kind survives world snapshot")
+			_check_quality(snapshot["rv"]["parts"]["engine"] == primary.parts["engine"], "Starter condition survives world snapshot")
+		var file := FileAccess.open("%s/starter.log" % out, FileAccess.WRITE)
+		file.store_string("\n".join(log_lines))
+		file.close()
+		get_tree().quit(1 if quality_failures else 0)
+		return
 	if "--v111" in OS.get_cmdline_user_args() or "--v110" in OS.get_cmdline_user_args():
 		Game.new_game(4242, "Normal")
 		Game.map_mode = "regular"

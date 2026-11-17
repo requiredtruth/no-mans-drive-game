@@ -6,7 +6,7 @@
 - ✅ Existing Regular and Everything choices remain playable as before, and existing saves keep their selected map type.
 - ✅ Save and restore the chosen starter vehicle, condition, cargo and world seed without rerolling. Treat any selected four-wheel Car as the primary game vehicle, including in ENet.
 - ✅ Default dedicated server map to Starter, retaining MAP=regular/MAP=everything flags.
-- ✅ Added quality checks for starter kind/condition/supply invariants; signed APK automated release v1.15.5.
+- ✅ Added seeded invariants **and actual headless starter-world smoke test** covering the one car, four wheels, road-ready condition, sparse supplies and persisted primary vehicle; signed APK automated release v1.15.5.
 - ☐ Physical Android smoke test and multiplayer WAN testing still needed.
 
 - ✅ Keyboard I opens the new Equip/Character panel while the mouse is captured; Tab still opens the separate notebook.

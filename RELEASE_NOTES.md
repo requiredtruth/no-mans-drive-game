@@ -7,3 +7,5 @@
 - **Regular** remains the prior broken-van assembly-lot mode with its supplies and starter traffic; **Everything** retains the fully fitted flagship RV, all vehicle types, trailers and item depot. Existing saves continue to load in their original mode.
 - The single starter vehicle uses the game's primary save slot, compass and multiplayer synchronization, including when it is not a van. The notebook and cheats handle other vehicle types safely.
 - The Linux server's default map is now Starter; set MAP=regular or MAP=everything for the original modes. No change to UDP port or server requirements.
+
+- The GitHub release quality gate now starts a real headless Starter game and checks its one vehicle, four fitted wheels, drivable condition, 3–5 nearby supplies, lack of nearby other vehicles, and snapshot persistence before signing the APK.

@@ -25,6 +25,8 @@ jobs:
           mkdir -p quality
           "$engine" --headless --path game --import 2>&1 | tee quality/import.log
           ! grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' quality/import.log
+          "$engine" --headless --path game -- --devtest="$PWD/quality/starter" --starter-smoke 2>&1 | tee quality/starter-run.log
+          ! grep -E 'FAIL:|SCRIPT ERROR|Parse Error' quality/starter-run.log
           xvfb-run -a -s '-screen 0 1280x720x24' "$engine" --path game --resolution 1280x720 -- --devtest="$PWD/quality" --v111 2>&1 | tee quality/runtime.log
           ! grep -E 'FAIL:|SCRIPT ERROR|Parse Error' quality/runtime.log
           test -s quality/quality_printed_labels.png
