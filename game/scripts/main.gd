@@ -31,7 +31,7 @@ func _ready() -> void:
 	if "--dedicated" in args:
 		Net.dedicated = true
 		var server_seed := 4242
-		var server_map := "everything"
+		var server_map := "starter"
 		for a in args:
 			if a.begins_with("--port="):
 				Net.port = clampi(int(a.trim_prefix("--port=")), 1, 65535)
@@ -48,7 +48,7 @@ func _ready() -> void:
 			_start_world(Game.load_game_data())
 		else:
 			Game.new_game(server_seed, "Normal")
-			Game.map_mode = "everything" if server_map == "everything" else "regular"
+			Game.map_mode = server_map if server_map in ["starter", "regular", "everything"] else "starter"
 			_start_world({})
 		print("Dedicated server ready on UDP %d" % Net.port)
 		return
@@ -170,8 +170,9 @@ func _show_new() -> void:
 	content.add_child(diff)
 	content.add_child(UI.label("Starting map", 16))
 	var map_choice := OptionButton.new()
-	map_choice.add_item("Regular — roadside survival (broken van)")
-	map_choice.add_item("Everything — complete RV, every vehicle and item depot")
+	map_choice.add_item("Starter — one random four-wheel vehicle, just enough to drive (default)")
+	map_choice.add_item("Regular — original broken van and repair lot")
+	map_choice.add_item("Everything — complete RV, vehicles and full item depot")
 	map_choice.select(0)
 	map_choice.custom_minimum_size = Vector2(0, 44)
 	content.add_child(map_choice)
@@ -182,7 +183,7 @@ func _show_new() -> void:
 	content.add_child(seed_edit)
 	content.add_child(UI.button("Start", func() -> void:
 		Game.new_game(int(seed_edit.text.hash() if not seed_edit.text.is_valid_int() else seed_edit.text.to_int()), diff.get_item_text(diff.selected))
-		Game.map_mode = "everything" if map_choice.selected == 1 else "regular"
+		Game.map_mode = ["starter", "regular", "everything"][map_choice.selected]
 		_start_world({})))
 	content.add_child(UI.button("Back", _show_main))
 

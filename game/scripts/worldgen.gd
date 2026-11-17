@@ -359,6 +359,8 @@ func is_water(x: float, z: float, depth := 0.3) -> bool:
 ## The test-item depot next to the starting lot (see World.test_depot) is kept clear of trees,
 ## bushes, rocks and grass. Rectangle in the start van's frame: across the road from the lot.
 func in_start_clearing(x: float, z: float) -> bool:
+	if Game.map_mode == "starter":
+		return false # no giant artificial item-depot clearing
 	if absf(z) > 60.0:
 		return false
 	var d := road_dir(0.0)

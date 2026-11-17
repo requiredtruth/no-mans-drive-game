@@ -56,6 +56,8 @@ var wheels: Array[VehicleWheel3D] = []
 var trailer: Node = null
 var _steer := 0.0
 var _prev_vel := Vector3.ZERO
+var _remote_target := Transform3D.IDENTITY
+var _remote_has := false
 var _paint_mat: StandardMaterial3D
 var _head_spots: Array[SpotLight3D] = []
 var _head_mat: StandardMaterial3D
@@ -189,6 +191,34 @@ func _apply_state(s: Dictionary) -> void:
 	rear_open = bool(s.get("rear_open", false))
 	engine_kind = str(s.get("engine_kind", "engine_block"))
 	_camper_drawer_state = s.get("camper_drawers", {}).duplicate(true)
+
+## Compatibility with the primary RV save and multiplayer path.
+func apply_state(s: Dictionary) -> void:
+	_apply_state(s)
+	var xf: Array = s.get("xform", [])
+	if xf.size() == 2:
+		global_position = Game.v3(xf[0])
+		rotation = Game.v3(xf[1])
+	_apply_visuals()
+
+func remote_transform(xf: Transform3D) -> void:
+	_remote_target = xf
+	_remote_has = true
+
+func heat_spots() -> Array:
+	return []
+
+func missing_for_drive() -> Array:
+	var needed := []
+	if missing.has("engine") or parts["engine"] <= 1.0:
+		needed.append("Engine")
+	if missing.has("battery") or battery < 5.0 or parts["battery"] < 5.0:
+		needed.append("Battery")
+	if fuel <= 0.1:
+		needed.append("Fuel")
+	if Mounts.missing_count(self) > 0:
+		needed.append("Wheels")
+	return needed
 
 func save_state() -> Dictionary:
 	return {"kind": kind, "xform": [Game.arr(global_position), Game.arr(rotation)], "fuel": fuel, "battery": battery,
@@ -598,6 +628,10 @@ func speed_kmh() -> float:
 	return linear_velocity.dot(global_transform.basis.z) * 3.6
 
 func is_authority() -> bool:
+	if Game.rv == self:
+		if driver != 0:
+			return driver == Net.my_id()
+		return not Net.is_client()
 	return true
 
 func is_driven_locally() -> bool:
@@ -711,6 +745,11 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if Game.world == null:
 		return
+	if Game.rv == self and not is_authority():
+		freeze = true
+		if _remote_has:
+			global_transform = global_transform.interpolate_with(_remote_target, clampf(delta * 10.0, 0.0, 1.0))
+		return
 	if not Game.world.ground_ready(global_position):
 		freeze = true
 		return
@@ -786,6 +825,8 @@ func _physics_process(delta: float) -> void:
 			Game.player.hurt(dmg * 0.5, "crash")
 	_prev_vel = linear_velocity
 	_tail_mat.emission_energy_multiplier = 2.5 if brk > mass * 0.01 and driver != 0 else (0.8 if headlights else 0.1)
+	if Game.rv == self and is_driven_locally():
+		Net.send_rv(global_transform, linear_velocity)
 
 func set_rear_open(open: bool, animate := true) -> void:
 	rear_open = open

@@ -1726,7 +1726,7 @@ func water_capacity() -> float:
 	return 60.0 if modules.has("water_tank") else 0.0
 
 func save_state() -> Dictionary:
-	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
+	return {"kind": "van", "xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
 		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records(),
 		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open, "rear_open": rear_open,

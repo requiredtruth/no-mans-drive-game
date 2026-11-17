@@ -5,7 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 PORT="${PORT:-24680}"
 SEED="${SEED:-4242}"
-MAP="${MAP:-everything}"
+MAP="${MAP:-starter}"
 case "$PORT" in ''|*[!0-9]*) echo "PORT must be numeric" >&2; exit 2;; esac
 if (( PORT < 1 || PORT > 65535 )); then echo "PORT must be 1..65535" >&2; exit 2; fi
 GODOT_VERSION=4.6.3

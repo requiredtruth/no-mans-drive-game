@@ -321,7 +321,7 @@ func _draw_compass() -> void:
 		var d := wrapf(ra - heading, -PI, PI)
 		var x := clampf(w * 0.5 + d / 1.2 * w * 0.5, 6, w - 6)
 		compass.draw_rect(Rect2(x - 5, 2, 10, 8), Color(1.0, 0.75, 0.3))
-		compass.draw_string(font, Vector2(x - 12, 40), "RV %dm" % int(to.length()), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.8, 0.4))
+		compass.draw_string(font, Vector2(x - 12, 40), "%s %dm" % [rv.display_name() if rv.has_method("display_name") else "RV", int(to.length())], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.8, 0.4))
 	compass.draw_line(Vector2(w * 0.5, 0), Vector2(w * 0.5, 30), Color(1, 1, 1, 0.5), 1.0)
 
 # ------------------------------------------------------------------ update
@@ -693,18 +693,19 @@ func open_book() -> void:
 			left.add_child(row)
 	var rv = Game.rv
 	if rv and rv.has_method("missing_for_drive"):
-		left.add_child(UI.label("Your van", 18, Color(1.0, 0.8, 0.5)))
+		left.add_child(UI.label("Your vehicle", 18, Color(1.0, 0.8, 0.5)))
 		var need: Array = rv.missing_for_drive()
 		var vl := UI.label(("Ready to drive." if need.is_empty() else "Still needs to drive: " + ", ".join(need)) + "\nFuel %d/%d L · Water %d/%d L · Battery %d%% · Engine %d%% · Tires %d%% · Body %d%%" % [int(rv.fuel), int(rv.fuel_capacity()), int(rv.water), int(rv.water_capacity()), int(rv.battery), int(rv.parts["engine"]), int(rv.parts["tires"]), int(rv.parts["body"])], 14, Color(0.9, 0.88, 0.82))
 		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		left.add_child(vl)
-		var fitted := []
-		var empty := []
-		for slot in Data.VAN_SLOTS:
-			(fitted if rv.modules.has(slot) else empty).append(Data.VAN_SLOTS[slot]["name"])
-		var ml := UI.label("Fitted (%d): %s\nEmpty (%d): %s" % [fitted.size(), ", ".join(fitted) if not fitted.is_empty() else "nothing yet", empty.size(), ", ".join(empty)], 13, Color(0.78, 0.78, 0.72))
-		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		left.add_child(ml)
+		if rv.has_method("has_mod"):
+			var fitted := []
+			var empty := []
+			for slot in Data.VAN_SLOTS:
+				(fitted if rv.modules.has(slot) else empty).append(Data.VAN_SLOTS[slot]["name"])
+			var ml := UI.label("Fitted (%d): %s\nEmpty (%d): %s" % [fitted.size(), ", ".join(fitted) if not fitted.is_empty() else "nothing yet", empty.size(), ", ".join(empty)], 13, Color(0.78, 0.78, 0.72))
+			ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			left.add_child(ml)
 	var help := UI.label("Carry a part to the van and press E to fit it; while you hold one, the spot it goes in glows green. Furniture (counter, fridge, cupboard, dinette, toilet, bed, heater) goes anywhere on the floor: aim where you want it, R turns it, G fits it. G with empty hands takes a module back out. You carry only what fits in your hands%s." % (" and backpack" if Game.slot_count() > Game.BASE_SLOTS else " (5 slots; a backpack adds 1 to 5 more)"), 14, Color(0.75, 0.75, 0.7))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	left.add_child(help)
@@ -841,14 +842,15 @@ func open_cheats() -> void:
 		rv.missing = {}
 		rv.battery = 100.0
 		rv._apply_visuals())
-	add.call("Fit every van module", func() -> void:
-		for slot in Data_.VAN_SLOTS:
-			Game.rv.modules[slot] = true
-		Game.rv.missing = {}
-		Game.rv.parts["engine"] = maxf(Game.rv.parts["engine"], 60.0)
-		Game.rv.battery = maxf(Game.rv.battery, 80.0)
-		Game.rv.parts["battery"] = 100.0
-		Game.rv._apply_visuals())
+	if Game.rv.has_method("has_mod"):
+		add.call("Fit every van module", func() -> void:
+			for slot in Data_.VAN_SLOTS:
+				Game.rv.modules[slot] = true
+			Game.rv.missing = {}
+			Game.rv.parts["engine"] = maxf(Game.rv.parts["engine"], 60.0)
+			Game.rv.battery = maxf(Game.rv.battery, 80.0)
+			Game.rv.parts["battery"] = 100.0
+			Game.rv._apply_visuals())
 	add.call("Van parts kit here", func() -> void:
 		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 2.0 + Vector3(0, 0.8, 0)
 		var i := 0
@@ -858,12 +860,13 @@ func open_cheats() -> void:
 	add.call("Fill fuel & water", func() -> void:
 		Game.rv.fuel = Game.rv.fuel_capacity()
 		Game.rv.water = Game.rv.water_capacity())
-	add.call("Fit all van upgrades", func() -> void:
-		for u in Game.rv.ADDONS:
-			Game.rv.modules[u] = true
-		for i in range(4):
-			Game.rv.wheel_kind["wheel%d" % i] = "offroad_tire"
-		Game.rv._apply_visuals())
+	if Game.rv.has_method("has_mod"):
+		add.call("Fit all van upgrades", func() -> void:
+			for u in Game.rv.ADDONS:
+				Game.rv.modules[u] = true
+			for i in range(4):
+				Game.rv.wheel_kind["wheel%d" % i] = "offroad_tire"
+			Game.rv._apply_visuals())
 	add.call("Skip 3 hours", func() -> void:
 		Game.time_of_day = fmod(Game.time_of_day + 3.0, 24.0))
 	add.call("Set noon", func() -> void: Game.time_of_day = 12.0)
@@ -910,6 +913,11 @@ func show_death(cause: String) -> void:
 
 func show_intro() -> void:
 	var body := _open_modal("intro", "The road goes on", null, 900.0)
+	if Game.map_mode == "starter":
+		var name: String = Game.rv.display_name() if Game.rv.has_method("display_name") else "vehicle"
+		body.add_child(UI.label("STARTER MAP — You begin with one randomly selected %s: four fitted wheels, a working engine, some fuel and enough battery to drive, but only moderate remaining condition. There is no spare fleet, assembly lot, parked trailer or item depot. Just a few scattered supplies are nearby.\n\nPress E at the driver's door to enter, then USE to start the engine. Find fuel, food and repair materials along the road. Your vehicle and its condition will be saved." % name, 17))
+		body.add_child(UI.button("Begin survival", close_modal))
+		return
 	if Game.map_mode == "everything":
 		body.add_child(UI.label("EVERYTHING MAP — The largest motorhome starts fully fitted and fuelled. Compact and touring RVs, trucks, cars, trailers and the complete item depot are nearby. Use E at cargo doors to open them; use E at cargo access to load or unload physical items. Engine, batteries, wheels and body remain repairable and interchangeable. Everything is saved with your world.", 17))
 		body.add_child(UI.button("Explore Everything", close_modal))

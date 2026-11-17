@@ -1,3 +1,14 @@
+### November 17 true sparse Starter map (1.15.5)
+
+- ✅ New default Starter option with a single random four-wheel drivable vehicle: van, sedan, pickup, work truck, off-roader, compact/touring RV, box truck.
+- ✅ Engine, steering, seat, four tires and battery work on day one. Condition varies with world seed across medium-worn values, fuel is limited, and there are no luxury upgrades.
+- ✅ Only three to five physical randomly chosen supplies within walking distance; no nearby assembly lot, second vehicle, trailer or item-depot clearing.
+- ✅ Existing Regular and Everything choices remain playable as before, and existing saves keep their selected map type.
+- ✅ Save and restore the chosen starter vehicle, condition, cargo and world seed without rerolling. Treat any selected four-wheel Car as the primary game vehicle, including in ENet.
+- ✅ Default dedicated server map to Starter, retaining MAP=regular/MAP=everything flags.
+- ✅ Added quality checks for starter kind/condition/supply invariants; signed APK automated release v1.15.5.
+- ☐ Physical Android smoke test and multiplayer WAN testing still needed.
+
 - ✅ Keyboard I opens the new Equip/Character panel while the mouse is captured; Tab still opens the separate notebook.
 ### November 17 USA steering and Equip screen (1.15.4)
 

@@ -205,13 +205,21 @@ func _rv_state(xf: Transform3D, state: Dictionary) -> void:
 		Game.rv.remote_transform(xf)
 		Game.rv.fuel = float(state.get("fuel", Game.rv.fuel))
 		Game.rv.water = float(state.get("water", Game.rv.water))
-		# fitted modules and pulled parts follow the host's van
-		var mods: Dictionary = state.get("modules", {})
-		if mods != Game.rv.modules or state.get("missing", {}) != Game.rv.missing or state.get("module_xf", {}) != Game.rv.module_xf:
-			Game.rv.modules = mods.duplicate()
-			Game.rv.module_xf = state.get("module_xf", {}).duplicate(true)
-			Game.rv.missing = state.get("missing", {}).duplicate()
-			Game.rv.wheel_kind = state.get("wheel_kind", {}).duplicate()
+		Game.rv.battery = float(state.get("battery", Game.rv.battery))
+		if Game.rv.has_method("has_mod"):
+			# The original van has physically fitted modules.
+			var mods: Dictionary = state.get("modules", {})
+			if mods != Game.rv.modules or state.get("missing", {}) != Game.rv.missing or state.get("module_xf", {}) != Game.rv.module_xf:
+				Game.rv.modules = mods.duplicate()
+				Game.rv.module_xf = state.get("module_xf", {}).duplicate(true)
+				Game.rv.missing = state.get("missing", {}).duplicate()
+				Game.rv.wheel_kind = state.get("wheel_kind", {}).duplicate()
+				Game.rv._apply_visuals()
+		else:
+			# A random four-wheel Car can be the only primary Starter vehicle.
+			Game.rv.parts = state.get("parts", Game.rv.parts).duplicate()
+			Game.rv.missing = state.get("missing", Game.rv.missing).duplicate()
+			Game.rv.wheel_kind = state.get("wheel_kind", Game.rv.wheel_kind).duplicate()
 			Game.rv._apply_visuals()
 
 func claim_driver(on: bool) -> bool:

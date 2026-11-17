@@ -1694,6 +1694,26 @@ func _check_quality(condition: bool, message: String) -> void:
 		quality_failures += 1
 
 func _v110() -> void:
+	# Starter's deterministic single-vehicle plan is independent of the old
+	# assembly-lot quality tour, which still explicitly selects Regular.
+	var WorldClass = load("res://scripts/world.gd")
+	var CarClass = load("res://scripts/car.gd")
+	var kinds := {}
+	var valid := true
+	for seed in range(64):
+		var kind: String = WorldClass.starter_kind_for_seed(seed)
+		kinds[kind] = true
+		if kind != "van" and (not CarClass.SPECS.has(kind) or kind in ["semi", "long_rv"]):
+			valid = false
+		var state: Dictionary = WorldClass.starter_condition_for_seed(seed)
+		var plan: Array = WorldClass.starter_supply_plan(seed)
+		if state["fuel"] <= 10.0 or state["battery"] < 5.0 or not state["missing"].is_empty() or plan.size() < 3 or plan.size() > 5:
+			valid = false
+		for item in plan:
+			if not Data.ITEMS.has(item["id"]):
+				valid = false
+	_check_quality(valid and kinds.size() > 3, "Starter has one of several four-wheel types, road-ready medium condition and just 3-5 supplies")
+	_check_quality(WorldClass.starter_kind_for_seed(4242) == WorldClass.starter_kind_for_seed(4242) and WorldClass.starter_supply_plan(4242) == WorldClass.starter_supply_plan(4242), "Starter choices repeat for the same world seed")
 	var Journey = load("res://scripts/journey.gd")
 	var SaveStore = load("res://scripts/save_store.gd")
 	var route = Journey.new()
@@ -1866,6 +1886,7 @@ func _v111() -> void:
 func _run() -> void:
 	if "--v111" in OS.get_cmdline_user_args() or "--v110" in OS.get_cmdline_user_args():
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		get_tree().root.get_node("Main")._start_world({})
 		await _wait(1.5)
 		await _v110()
@@ -1877,6 +1898,7 @@ func _run() -> void:
 	if "--drive18" in OS.get_cmdline_user_args():
 		var md := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		md._start_world({})
 		await _wait(1.5)
 		await _drive18()
@@ -1885,6 +1907,7 @@ func _run() -> void:
 	if "--v18" in OS.get_cmdline_user_args():
 		var m18 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		m18._start_world({})
 		await _wait(1.5)
 		await _v18()
@@ -1896,6 +1919,7 @@ func _run() -> void:
 	if "--v171" in OS.get_cmdline_user_args():
 		var m171 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		m171._start_world({})
 		await _wait(1.5)
 		await _v171()
@@ -1907,6 +1931,7 @@ func _run() -> void:
 	if "--v17" in OS.get_cmdline_user_args():
 		var m17 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		m17._start_world({})
 		await _wait(1.5)
 		await _v17()
@@ -1918,6 +1943,7 @@ func _run() -> void:
 	if "--v16" in OS.get_cmdline_user_args():
 		var m16 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		m16._start_world({})
 		await _wait(1.5)
 		await _v16()
@@ -1929,6 +1955,7 @@ func _run() -> void:
 	if "--walkin" in OS.get_cmdline_user_args():
 		var mw := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		mw._start_world({})
 		await _wait(1.5)
 		await _walkin()
@@ -1940,6 +1967,7 @@ func _run() -> void:
 	if "--assembly" in OS.get_cmdline_user_args():
 		var ma := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		ma._start_world({})
 		await _wait(1.5)
 		await _assembly()
@@ -1951,6 +1979,7 @@ func _run() -> void:
 	if "--hands" in OS.get_cmdline_user_args():
 		var mh := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		mh._start_world({})
 		await _wait(1.5)
 		await _hands()
@@ -1962,6 +1991,7 @@ func _run() -> void:
 	if "--animals" in OS.get_cmdline_user_args():
 		var m2 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		m2._start_world({})
 		await _wait(1.5)
 		await _animals()
@@ -1970,6 +2000,7 @@ func _run() -> void:
 	if "--vehicles" in OS.get_cmdline_user_args():
 		var main1 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		main1._start_world({})
 		await _wait(1.5)
 		await _vehicles()
@@ -1978,6 +2009,7 @@ func _run() -> void:
 	if "--items" in OS.get_cmdline_user_args():
 		var main0 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
+		Game.map_mode = "regular"
 		main0._start_world({})
 		await _wait(1.0)
 		Game.world.hud.close_modal()
@@ -1988,6 +2020,7 @@ func _run() -> void:
 		return
 	var main := get_tree().root.get_node("Main")
 	Game.new_game(4242, "Normal")
+	Game.map_mode = "regular"
 	main._start_world({})
 	await _wait(1.0)
 	var w = Game.world

@@ -39,6 +39,38 @@ var animals: Array = []
 var remote_players := {}
 var vehicle_nodes := {} # id -> car / trailer node
 
+# One and only one primary vehicle on Starter. No six-wheel semi or
+# extra-long RV in this pool. Seeded choices reproduce on clients and saves.
+const STARTER_KINDS := ["van", "sedan", "pickup", "work_truck", "offroader", "mini_rv", "mid_rv", "box_truck"]
+
+static func starter_kind_for_seed(seed: int) -> String:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 641117
+	return STARTER_KINDS[rng.randi_range(0, STARTER_KINDS.size() - 1)]
+
+static func starter_condition_for_seed(seed: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 920123
+	return {"fuel": rng.randf_range(12.0, 27.0), "battery": rng.randf_range(38.0, 67.0),
+		"parts": {"engine": rng.randf_range(43.0, 70.0), "tires": rng.randf_range(43.0, 69.0),
+			"battery": rng.randf_range(40.0, 68.0), "body": rng.randf_range(38.0, 74.0)},
+		"missing": {}, "wheel_kind": {}, "upgrades": {}, "paint": rng.randi_range(0, 6)}
+
+static func starter_supply_plan(seed: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 415120
+	var options := ["water_clean", "canned_food", "bandage", "rope", "scrap",
+		"fuel_can", "toolkit", "wood", "bottle_empty", "seeds_potato"]
+	var result := []
+	var amount := rng.randi_range(3, 5)
+	for i in range(amount):
+		var id: String = options[rng.randi_range(0, options.size() - 1)]
+		options.erase(id)
+		result.append({"id": id, "n": rng.randi_range(1, 2) if id in ["water_clean", "scrap", "wood", "rope"] else 1,
+			"offset": Vector3(rng.randf_range(2.1, 5.4), 0.0, rng.randf_range(-4.8, 4.8)),
+			"yaw": rng.randf_range(-PI, PI)})
+	return result
+
 var _spawn_timer := 0.0
 var _autosave := 0.0
 var _hour := -1
@@ -79,17 +111,42 @@ func start(loaded: Dictionary) -> void:
 		for dx in range(-1, 2):
 			var k := Vector2i(c.x + dx, c.y + dz)
 			_instantiate(gen.build_chunk(k.x, k.y, Game.removed.duplicate(), true))
-	# RV
-	rv = VehicleBody3D.new()
-	rv.set_script(RV)
-	add_child(rv)
-	Game.rv = rv
+	# One saved primary vehicle, never a hidden second van. The Car path is
+	# also used for co-op and the normal Game.rv save field.
+	var starter_kind: String = ""
+	if Game.map_mode == "starter":
+		starter_kind = str(Game.rv_state.get("kind", starter_kind_for_seed(Game.seed_value)))
+		if starter_kind != "van" and not Car.SPECS.has(starter_kind):
+			starter_kind = "van"
+	if starter_kind != "" and starter_kind != "van":
+		rv = VehicleBody3D.new()
+		rv.set_script(Car)
+		var condition: Dictionary = Game.rv_state if Game.rv_state.has("xform") else starter_condition_for_seed(Game.seed_value)
+		rv.setup("starter_primary", starter_kind, condition)
+		Game.rv = rv
+		add_child(rv)
+		if Game.rv_state.has("xform"):
+			var saved_xform: Array = Game.rv_state["xform"]
+			rv.global_position = Game.v3(saved_xform[0])
+			rv.rotation = Game.v3(saved_xform[1])
+	else:
+		rv = VehicleBody3D.new()
+		rv.set_script(RV)
+		Game.rv = rv
+		add_child(rv)
 	if Game.rv_state.is_empty() or not Game.rv_state.has("xform"):
 		var z := 0.0
 		var dir := gen.road_dir(z)
 		rv.global_position = Vector3(gen.road_x(z) + 1.8, gen.road_h(z) + 0.6, z)
 		rv.rotation.y = atan2(dir.x, dir.z)
-		rv.apply_state(RV.complete_starter_state() if Game.map_mode == "everything" else {})
+		if starter_kind == "van":
+			var ready: Dictionary = starter_condition_for_seed(Game.seed_value)
+			ready["modules"] = {"engine": true, "steering": true, "seat_driver": true, "door": true}
+			ready["coolant"] = 85.0
+			ready["water"] = 0.0
+			rv.apply_state(ready)
+		elif starter_kind == "":
+			rv.apply_state(RV.complete_starter_state() if Game.map_mode == "everything" else {})
 	# Player
 	player = CharacterBody3D.new()
 	player.set_script(Player)
@@ -99,9 +156,10 @@ func start(loaded: Dictionary) -> void:
 		player.global_position = Game.v3(loaded["player"]) + Vector3(0, 0.3, 0)
 		player.rotation.y = float(loaded.get("player_yaw", 0.0))
 	else:
-		player.global_position = rv.to_global(Vector3(RV.W * 0.5 + 1.6, 0.0, 1.0))
+		var half_width: float = float(rv.spec["w"]) * 0.5 if starter_kind != "" and starter_kind != "van" else RV.W * 0.5
+		player.global_position = rv.to_global(Vector3(half_width + 1.6, 0.0, 1.0))
 		player.global_position.y = gen.height(player.global_position.x, player.global_position.z) + 0.2
-		player.rotation.y = rv.rotation.y - PI * 0.5
+		player.rotation.y = rv.rotation.y + PI * 0.5 if Game.map_mode == "starter" else rv.rotation.y - PI * 0.5
 	player.make_current()
 	for id in Game.structures:
 		spawn_structure(id, Game.structures[id])
@@ -109,7 +167,7 @@ func start(loaded: Dictionary) -> void:
 		var st: Dictionary = Game.vehicles[vid]
 		var xf: Array = st.get("xform", [[0, 0, 0], [0, 0, 0]])
 		spawn_vehicle(vid, str(st.get("kind", "pickup")), Game.v3(xf[0]), Game.v3(xf[1]), st)
-	if not Game.vehicles.has("trl_start"):
+	if Game.map_mode != "starter" and not Game.vehicles.has("trl_start"):
 		# parked just behind the van with its tongue next to the hitch: press E at the tongue
 		var tp: Vector3 = rv.to_global(Vector3(0, 0, RV.REAR_Z - 0.55 - 1.2 - 2.7))
 		tp.y = gen.height(tp.x, tp.z) + 0.6
@@ -133,8 +191,11 @@ func start(loaded: Dictionary) -> void:
 			Game.drop_pile(k, int(Game.legacy_inventory[k]), at)
 		Game.legacy_inventory = {}
 	if not loaded.has("player"):
-		_starter_lot()
-		_start_vehicles()
+		if Game.map_mode == "starter":
+			_scattered_starter_supplies()
+		else:
+			_starter_lot()
+			_start_vehicles()
 		if Game.map_mode == "everything":
 			_everything_trailers()
 			test_depot(rv.global_transform * Transform3D(Basis.IDENTITY, Vector3(-RV.W * 0.5 - 7.5, 0, 2.0)))
@@ -696,8 +757,10 @@ func _instantiate(d: Dictionary) -> void:
 	# roadside location
 	var poi := gen.poi_for_row(key.y)
 	if not poi.is_empty() and _chunk_of(poi["pos"]) == key:
-		Pois.build(root, poi)
-		_poi_vehicles(poi)
+		# Keep the actual Starter site sparse. Discover locations farther away.
+		if Game.map_mode != "starter" or absf((poi["pos"] as Vector3).z) >= 250.0:
+			Pois.build(root, poi)
+			_poi_vehicles(poi)
 
 # ------------------------------------------------------------------ resources
 func _find_res(key: String) -> Array:
@@ -841,7 +904,7 @@ func _cook_tick(dt: float) -> void:
 		if is_instance_valid(f) and f.get("type") in ["campfire", "portable_cookstove"] and f.has_meta("host"):
 			for hp in f.heat_spots():
 				spots.append([hp, 0.42])
-	if rv:
+	if rv and rv.has_method("heat_spots"):
 		for hp in rv.heat_spots():
 			spots.append([hp, 0.15])
 	if spots.is_empty():
@@ -903,6 +966,16 @@ func _cook_here(here: Array) -> void:
 		if player and player.global_position.distance_to(xf.origin) < 15.0:
 			Game.notify("%s is ready" % Data.item_name(r["out"]))
 		return
+
+## Only 3–5 physical items near the Starter vehicle; no assembly workbench.
+func _scattered_starter_supplies() -> void:
+	for item in starter_supply_plan(Game.seed_value):
+		var id: String = str(item["id"])
+		var pos: Vector3 = rv.to_global(item["offset"])
+		var bb: AABB = Items.display_bounds(id)
+		pos.y = gen.height(pos.x, pos.z) - bb.position.y + 0.03
+		Game.place_item(id, int(item["n"]),
+			Transform3D(Basis(Vector3.UP, rv.rotation.y + float(item["yaw"])), pos))
 
 ## A new game: the stripped van sits on a rough lot with the parts to get it running lying
 ## around it, a workbench, and a few supplies. Everything else has to be found on the road.
@@ -1290,6 +1363,8 @@ func _poi_vehicles(poi: Dictionary) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = gen.hash3(row, 4242, 9)
 	var base: Vector3 = poi["pos"]
+	if Game.map_mode == "starter" and absf(base.z) < 360.0:
+		return
 	var yaw: float = poi["yaw"]
 	var bs := Basis(Vector3.UP, yaw)
 	var plan := []

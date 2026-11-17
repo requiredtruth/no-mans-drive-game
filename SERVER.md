@@ -7,7 +7,8 @@ git clone https://github.com/requiredtruth/no-mans-drive-game.git
 cd no-mans-drive-game
 ./server.sh
 # optional:
-PORT=24680 SEED=4242 MAP=everything ./server.sh
+PORT=24680 SEED=4242 MAP=starter ./server.sh
+# other modes: MAP=regular or MAP=everything
 \`\`\`
 
 In the Android game choose **Online multiplayer / Join server**, then enter \`your-domain.example:24680\` or \`203.0.113.20:24680\`. The port is **UDP**, not TCP/HTTP. Allow and forward UDP 24680 on the hosting Linux firewall, VPS security group and router as applicable. Point an A/AAAA DNS record at the server's public address. A NAT-forwarded LAN host requires port forwarding (or an appropriate VPN). The script cannot configure your external firewall.

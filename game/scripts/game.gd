@@ -26,7 +26,7 @@ var settings := {
 # --- Runtime/saved state ---
 var seed_value := 1234
 var difficulty := "Normal"
-var map_mode := "regular" # regular journey or Everything demonstration garage
+var map_mode := "starter" # sparse one-car survival, old Regular, or Everything
 var time_of_day := 8.0 # hours 0..24
 var day := 1
 var weather := "clear"
@@ -445,7 +445,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	journey.reset()
 	seed_value = seed_in
 	difficulty = diff_in
-	map_mode = "regular"
+	map_mode = "starter"
 	time_of_day = 8.0
 	day = 1
 	weather = "clear"
