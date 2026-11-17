@@ -378,7 +378,7 @@ func _build() -> void:
 # ------------------------------------------------------------------ hitching
 func _nearest_tow() -> Node:
 	var best: Node = null
-	var bd := 3.2
+	var bd := 4.5
 	var my := tongue_global()
 	for v in get_tree().get_nodes_in_group("vehicle") + [Game.rv]:
 		if v == self or v == null or v.is_in_group("trailer") or not v.has_method("hitch_global"):

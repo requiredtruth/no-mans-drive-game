@@ -1,0 +1,77 @@
+================================================================================
+STRAIGHT-SURVIVAL & ROAD-TRIP ITEM LIST - PART 2 (EXPANSION & BASE BUILDING)
+================================================================================
+Target Platform: Android (Mobile Survival / Road-Trip Crafting)
+Description: Supplementary item registry covering modular base construction, 
+vehicle chassis frames, road salvage, and wilderness navigation gear.
+
+--------------------------------------------------------------------------------
+11. BASE BUILDING & STRUCTURAL COMPONENTS
+--------------------------------------------------------------------------------
+- wooden foundation frame (`base_wood_foundation`)
+- reinforced metal floor panel (`base_metal_floor`)
+- wooden wall panel (`base_wood_wall`)
+- corrugated sheet metal wall (`base_metal_wall`)
+- reinforced concrete wall block (`base_concrete_wall`)
+- wooden door frame (`base_wood_doorframe`)
+- reinforced metal door (`base_metal_door`)
+- combination code lock (`base_code_lock`)
+- wooden window barricade (`base_wood_window`)
+- iron barred window grate (`base_iron_grate`)
+- small wooden storage box (`base_small_storage_box`)
+- large industrial shipping crate (`base_industrial_crate`)
+- weapon mounting rack (`base_weapon_rack`)
+- armor display mannequin (`base_armor_mannequin`)
+- tanning rack for hides (`base_tanning_rack`)
+- blacksmith anvil bench (`base_anvil_bench`)
+- hydroponic crop growing tray (`base_hydroponic_tray`)
+
+--------------------------------------------------------------------------------
+12. ROADWAY SALVAGE & VEHICLE CHASSIS PARTS
+--------------------------------------------------------------------------------
+- sedan chassis frame (`vehicle_chassis_sedan`)
+- heavy utility truck frame (`vehicle_chassis_truck`)
+- compact camper trailer shell (`vehicle_chassis_camper`)
+- vehicle steering column assembly (`vehicle_steering_column`)
+- dashboard instrument cluster (`vehicle_dashboard_cluster`)
+- vehicle alternator unit (`vehicle_alternator`)
+- engine starter motor (`vehicle_starter_motor`)
+- ignition switch and keys (`vehicle_ignition_switch`)
+- vehicle windshield glass (`vehicle_windshield`)
+- side view mirror (`vehicle_side_mirror`)
+- headlight assembly (`vehicle_headlight`)
+- taillight assembly (`vehicle_taillight`)
+- exhaust muffler pipe (`vehicle_exhaust_pipe`)
+- catalytic converter (`vehicle_catalytic_converter`)
+- rusted hubcap (`vehicle_hubcap`)
+- tow hitch receiver (`vehicle_tow_hitch`)
+- heavy towing tow-rope (`vehicle_tow_rope`)
+
+--------------------------------------------------------------------------------
+13. NAVIGATION, MAPS & COMMUNICATIONS
+--------------------------------------------------------------------------------
+- paper regional roadmap (`nav_paper_roadmap`)
+- magnetic pocket compass (`nav_pocket_compass`)
+- analog wristwatch (`nav_wristwatch`)
+- digital survival watch with altimeter (`nav_survival_watch`)
+- shortwave radio transceiver (`nav_shortwave_radio`)
+- handheld walkie-talkie pair (`nav_walkie_talkie`)
+- emergency distress beacon transmitter (`nav_distress_beacon`)
+- signal flare gun (`nav_flare_gun`)
+- red emergency signal flare (`nav_signal_flare_red`)
+- green navigation flare (`nav_signal_flare_green`)
+- topographical survey map (`nav_topo_map`)
+
+--------------------------------------------------------------------------------
+14. WEATHER & EXTREME ENVIRONMENT GEAR
+--------------------------------------------------------------------------------
+- heavy wool poncho (`gear_wool_poncho`)
+- thermal emergency space blanket (`gear_space_blanket`)
+- winter snowshoes (`gear_snowshoes`)
+- mountain climbing crampons (`gear_crampons`)
+- sandstorm protective goggles (`gear_sandstorm_goggles`)
+- heavy-duty rain poncho (`gear_rain_poncho`)
+- hand warmer chemical packet (`gear_hand_warmer`)
+- collapsible emergency umbrella (`gear_umbrella`)
+- ice scraper tool (`gear_ice_scraper`)
+- snow shovel (`gear_snow_shovel`)

@@ -259,7 +259,7 @@ func _compute() -> void:
 		reason = "Need: " + Data.cost_text(Data.PIECES[t]["cost"])
 	if valid and not Game.has_cost(Data.PIECES[t]["cost"]) and kit != "":
 		valid = true
-	if valid and Game.rv and not placement.get("rv", false) and Game.rv.global_position.distance_to(placement["pos"]) < 4.5 and not (t in ["fence", "chair", "table", "lantern", "crate"]):
+	if valid and Game.rv and not placement.get("rv", false) and Game.rv.global_position.distance_to(placement["pos"]) < 4.5 and not (t in ["fence", "chair", "table", "lantern", "crate", "sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"]):
 		valid = false
 		reason = "Too close to the RV"
 

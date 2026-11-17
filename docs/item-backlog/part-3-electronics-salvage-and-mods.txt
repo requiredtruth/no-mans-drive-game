@@ -1,0 +1,77 @@
+================================================================================
+STRAIGHT-SURVIVAL & ROAD-TRIP ITEM LIST - PART 3 (ELECTRONICS, SALVAGE & MODS)
+================================================================================
+Target Platform: Android (Mobile Survival / Road-Trip Crafting)
+Description: Supplementary item registry covering electronics, salvage items, 
+vehicle armor upgrades, hunting byproducts, and camp cooking equipment.
+
+--------------------------------------------------------------------------------
+15. ELECTRONICS, WIRING & CIRCUITRY
+--------------------------------------------------------------------------------
+- copper wire coil (`elec_copper_wire`)
+- printed circuit board (`elec_circuit_board`)
+- microchip processor (`elec_microchip`)
+- electrical relay switch (`elec_relay_switch`)
+- motion detector sensor (`elec_motion_sensor`)
+- solar power inverter (`elec_solar_inverter`)
+- heavy electrical fuse (`elec_fuse`)
+- incandescent light bulb (`elec_light_bulb`)
+- copper spool (`elec_copper_spool`)
+- electronic sensor array (`elec_sensor_array`)
+- digital control interface panel (`elec_control_panel`)
+
+--------------------------------------------------------------------------------
+16. SALVAGE, TRASH & JUNK CURIOSITIES
+--------------------------------------------------------------------------------
+- rusted license plate (`salvage_license_plate`)
+- bent silverware (`salvage_bent_spoon`)
+- vintage tin can (`salvage_vintage_can`)
+- waterlogged magazine (`salvage_old_magazine`)
+- broken pocket watch (`salvage_broken_watch`)
+- shattered glass bottle (`salvage_shattered_glass`)
+- rusted spring (`salvage_rusted_spring`)
+- discarded wire hanger (`salvage_wire_hanger`)
+- empty aerosol can (`salvage_empty_aerosol`)
+- old battery core (`salvage_dead_battery`)
+
+--------------------------------------------------------------------------------
+17. SPECIALIZED VEHICLE ARMOR & MOD ADD-ONS
+--------------------------------------------------------------------------------
+- heavy front steel ram plow (`vehicle_mod_ram_plow`)
+- windshield protective wire mesh (`vehicle_mod_windshield_mesh`)
+- roof-mounted pop-up camping tent (`vehicle_mod_roof_tent`)
+- roof cargo storage box (`vehicle_mod_cargo_box`)
+- side-mounted jerry can holder (`vehicle_mod_jerry_holder`)
+- reinforced door armor plating (`vehicle_mod_door_armor`)
+- off-road snorkel air intake (`vehicle_mod_snorkel`)
+- heavy-duty winch system (`vehicle_mod_winch`)
+- spare tire roof carrier mount (`vehicle_mod_spare_mount`)
+- vehicle mud flaps (`vehicle_mod_mud_flaps`)
+
+--------------------------------------------------------------------------------
+18. WILDERNESS WILDLIFE & HUNTING BYPRODUCTS
+--------------------------------------------------------------------------------
+- deer antlers (`hunt_deer_antlers`)
+- raw wolf pelt (`hunt_wolf_pelt`)
+- cured wolf pelt (`hunt_cured_pelt`)
+- bird feathers (`hunt_bird_feathers`)
+- predator claws (`hunt_predator_claws`)
+- animal sinew cord (`hunt_sinew_cord`)
+- rendered animal grease (`hunt_animal_grease`)
+- bone sewing needle (`hunt_bone_needle`)
+- raw leather hide strip (`hunt_hide_strip`)
+- predator skull trophy (`hunt_predator_skull`)
+
+--------------------------------------------------------------------------------
+19. CAMPING, COOKING UTENSILS & COMFORT GEAR
+--------------------------------------------------------------------------------
+- cast iron skillet (`camp_cast_iron_skillet`)
+- camping cooking pot (`camp_cooking_pot`)
+- manual coffee percolator (`camp_coffee_percolator`)
+- titanium camping spork (`camp_spork`)
+- collapsible folding camp chair (`camp_folding_chair`)
+- insulated thermos flask (`camp_insulated_thermos`)
+- canvas bedroll (`camp_canvas_bedroll`)
+- portable hand-crank radio (`camp_handcrank_radio`)
+- portable folding camp lantern (`camp_folding_lantern`)
+- waterproof matchbox (`camp_waterproof_matches`)

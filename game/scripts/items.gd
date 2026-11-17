@@ -352,9 +352,149 @@ func _build(id: String) -> Mesh:
 		"fuel_tank_xl": return _fuel_tank_xl()
 		"tune_kit": return _tune_kit()
 		"offroad_tire": return _tire(false, true)
+		"chips": return _chips()
+		"tinned_hotdogs": return _can(Color("c84a2a"), Color("f0d040"), 0.06, 0.13)
+		"can_of_cashews": return _can(Color("d8b070"), Color("2a4a8a"), 0.05, 0.09)
+		"peaches_oreilly": return _can(Color("f0a050"), Color("3a8a3a"), 0.055, 0.11)
+		"berry_juice": return _bottle(Color(0.55, 0.12, 0.4, 0.8), Color("8a2a6a"))
+		"mocha_cola": return _can(Color("5a3220"), Color("e8d8c0"), 0.033, 0.12)
+		"emergency_ration_pack": return _wrapper(Color("6a7a40"), Color("e8e0c0"), Vector3(0.16, 0.035, 0.1))
+		"jason_s_choccy_block": return _wrapper(Color("6a2a18"), Color("e8c040"), Vector3(0.15, 0.018, 0.07))
+		"energy_bar": return _wrapper(Color("2a64b8"), Color("f0c020"), Vector3(0.13, 0.022, 0.045))
+		"jerky": return _pouch(Color("5a2a14"), Color("d8a040"))
+		"apple": return _apple()
+		"bread": return _bread()
+		"instant_noodles": return _noodle_cup(false)
+		"hot_noodles": return _noodle_cup(true)
+		"painkillers": return _pill_bottle()
+		"duct_tape": return _duct_tape()
+		"crowbar": return _crowbar()
+		"binoculars": return _binoculars()
 	var st := _st()
 	box(st, Vector3(0, 0.05, 0), Vector3(0.1, 0.1, 0.1))
 	return _mesh([[st, c(Color.GRAY)]])
+
+# ------------------------------------------------------------------ snacks, supplies, tools
+## A crinkled foil snack bag with crimped seams.
+func _chips() -> Mesh:
+	var bag := _st()
+	ellipsoid(bag, Vector3(0, 0.1, 0), Vector3(0.085, 0.095, 0.032), 10, 18, 0.05, 7)
+	var seams := _st()
+	for y in [0.008, 0.192]:
+		box(seams, Vector3(0, y, 0), Vector3(0.16, 0.016, 0.006))
+		for k in range(8):
+			box(seams, Vector3(-0.07 + k * 0.02, y, 0.0035), Vector3(0.004, 0.014, 0.001))
+	var label := _st()
+	ellipsoid(label, Vector3(0, 0.1, 0.0255), Vector3(0.05, 0.04, 0.008), 6, 14)
+	return _mesh([[bag, m("metal", Color(0.95, 0.75, 0.15), 3.0, 0.3, 0.7)], [seams, m("metal", Color(0.9, 0.7, 0.2), 6.0, 0.35, 0.6)], [label, paint(Color(0.85, 0.15, 0.1))]])
+
+## A wrapped bar: plastic wrapper, crimped ends, a printed band.
+func _wrapper(col: Color, band: Color, sz: Vector3) -> Mesh:
+	var w := _st()
+	box(w, Vector3(0, sz.y * 0.5, 0), Vector3(sz.x - 0.02, sz.y, sz.z))
+	ellipsoid(w, Vector3(0, sz.y * 0.55, 0), Vector3((sz.x - 0.02) * 0.5, sz.y * 0.5, sz.z * 0.48), 6, 14)
+	var ends := _st()
+	for s in [-1.0, 1.0]:
+		taper(ends, 0.0, Vector2(0.004, sz.z * 0.9), sz.y, Vector2(0.004, sz.z * 0.9), Vector2(s * (sz.x * 0.5 - 0.006), 0), Vector2(s * (sz.x * 0.5 - 0.006), 0))
+	var b := _st()
+	box(b, Vector3(0, sz.y + 0.0005, 0), Vector3(sz.x * 0.4, 0.001, sz.z * 0.7))
+	return _mesh([[w, m("paint", col, 3.0, 0.3, 0.4)], [ends, c(col.darkened(0.2), 0.4)], [b, paint(band)]])
+
+## A resealable pouch standing on its gusset.
+func _pouch(col: Color, window: Color) -> Mesh:
+	var p := _st()
+	taper(p, 0.0, Vector2(0.1, 0.04), 0.15, Vector2(0.1, 0.008))
+	var top := _st()
+	box(top, Vector3(0, 0.155, 0), Vector3(0.102, 0.012, 0.01))
+	var win := _st()
+	box(win, Vector3(0, 0.07, 0.0175), Vector3(0.06, 0.06, 0.002), Basis(Vector3.RIGHT, -0.2))
+	return _mesh([[p, paint(col)], [top, c(col.darkened(0.3), 0.5)], [win, Lib.color_mat(window, 0.4)]])
+
+func _apple() -> Mesh:
+	var a := _st()
+	lathe(a, [Vector2(0.0, 0.004), Vector2(0.018, 0.0), Vector2(0.036, 0.012), Vector2(0.044, 0.035), Vector2(0.042, 0.058), Vector2(0.03, 0.072), Vector2(0.012, 0.07), Vector2(0.0, 0.062)], 20)
+	var stem := _st()
+	Lib._tube(stem, Vector3(0, 0.06, 0), Vector3(0.004, 0.085, 0.002), 0.003, 0.0025, 6)
+	var leaf := _st()
+	ellipsoid(leaf, Vector3(0.016, 0.082, 0), Vector3(0.014, 0.002, 0.007), 4, 8)
+	return _mesh([[a, m("paint", Color(0.78, 0.12, 0.1), 2.0, 0.35, 0.05)], [stem, c(Color(0.35, 0.22, 0.12))], [leaf, c(Color(0.25, 0.5, 0.18), 0.6)]])
+
+func _bread() -> Mesh:
+	var loaf := _st()
+	ellipsoid(loaf, Vector3(0, 0.055, 0), Vector3(0.14, 0.06, 0.07), 10, 18, 0.03, 11)
+	box(loaf, Vector3(0, 0.02, 0), Vector3(0.26, 0.04, 0.13))
+	var cuts := _st()
+	for k in range(4):
+		box(cuts, Vector3(-0.075 + k * 0.05, 0.112, 0), Vector3(0.012, 0.006, 0.09), Basis(Vector3.UP, 0.5))
+	return _mesh([[loaf, m("leather", Color(1.25, 0.85, 0.5), 3.0, 0.8)], [cuts, c(Color(0.95, 0.85, 0.6), 0.9)]])
+
+func _noodle_cup(hot: bool) -> Mesh:
+	var cup := _st()
+	lathe(cup, [Vector2(0.0, 0.0), Vector2(0.038, 0.0), Vector2(0.05, 0.1), Vector2(0.052, 0.102)], 22, Vector3.ZERO, true, false)
+	var band := _st()
+	lathe(band, [Vector2(0.0425, 0.03), Vector2(0.0475, 0.075)], 22, Vector3.ZERO, false, false)
+	var top := _st()
+	if hot:
+		_disc(top, Vector3(0, 0.092, 0), 0.048, Vector3.UP, 22)
+		var noodles := _st()
+		for k in range(9):
+			var a := TAU * k / 9.0
+			torus(noodles, Vector3(cos(a) * 0.022, 0.094, sin(a) * 0.022), 0.012, 0.003, 10, 4)
+		return _mesh([[cup, white_plastic()], [band, paint(Color(0.85, 0.15, 0.1))], [top, Lib.color_mat(Color(0.8, 0.55, 0.25), 0.2)], [noodles, c(Color(0.95, 0.85, 0.55), 0.5)]])
+	_disc(top, Vector3(0, 0.103, 0), 0.053, Vector3.UP, 22)
+	return _mesh([[cup, white_plastic()], [band, paint(Color(0.85, 0.15, 0.1))], [top, m("metal", Color(0.9, 0.9, 0.92), 5.0, 0.3, 0.8)]])
+
+func _pill_bottle() -> Mesh:
+	var b := _st()
+	lathe(b, [Vector2(0.0, 0.0), Vector2(0.024, 0.0), Vector2(0.026, 0.004), Vector2(0.026, 0.07), Vector2(0.02, 0.074)], 18)
+	var cap := _st()
+	lathe(cap, [Vector2(0.027, 0.072), Vector2(0.027, 0.092), Vector2(0.024, 0.095)], 18)
+	var label := _st()
+	lathe(label, [Vector2(0.0265, 0.015), Vector2(0.0265, 0.058)], 18, Vector3.ZERO, false, false)
+	var amber := Lib.color_mat(Color(0.85, 0.42, 0.08, 0.8), 0.15)
+	return _mesh([[b, amber], [cap, white_plastic()], [label, paint(Color(0.95, 0.95, 0.92))]])
+
+func _duct_tape() -> Mesh:
+	var roll := _st()
+	lathe(roll, [Vector2(0.032, 0.0), Vector2(0.055, 0.0), Vector2(0.055, 0.048), Vector2(0.032, 0.048)], 26, Vector3.ZERO, false, false)
+	lathe(roll, [Vector2(0.032, 0.048), Vector2(0.032, 0.0)], 26, Vector3.ZERO, false, false)
+	var core := _st()
+	lathe(core, [Vector2(0.026, 0.0), Vector2(0.032, 0.0), Vector2(0.032, 0.049), Vector2(0.026, 0.049)], 22, Vector3.ZERO, false, false)
+	var tail := _st()
+	box(tail, Vector3(0.056, 0.024, 0.02), Vector3(0.002, 0.048, 0.04))
+	return _mesh([[roll, m("metal", Color(0.72, 0.74, 0.76), 4.0, 0.5, 0.4)], [core, m("cardboard", Color.WHITE, 4.0)], [tail, m("metal", Color(0.7, 0.72, 0.74), 4.0, 0.5, 0.4)]])
+
+func _crowbar() -> Mesh:
+	var bar := _st()
+	Lib._tube(bar, Vector3(0, 0.0, 0), Vector3(0, 0.62, 0), 0.011, 0.011, 8)
+	# hooked claw at the top, flat chisel at the bottom
+	var prev := Vector3(0, 0.62, 0)
+	for k in range(1, 7):
+		var a := PI * k / 6.0
+		var p := Vector3(0.045 - cos(a) * 0.045, 0.62 + sin(a) * 0.05, 0)
+		Lib._tube(bar, prev, p, 0.011, 0.011, 8)
+		prev = p
+	box(bar, Vector3(0.093, 0.6, 0), Vector3(0.012, 0.03, 0.024), Basis(Vector3.FORWARD, 0.4))
+	box(bar, Vector3(0.012, -0.01, 0), Vector3(0.03, 0.02, 0.022), Basis(Vector3.FORWARD, 0.6))
+	var grip := _st()
+	Lib._tube(grip, Vector3(0, 0.05, 0), Vector3(0, 0.2, 0), 0.015, 0.015, 10)
+	return _mesh([[bar, paint(Color(0.7, 0.12, 0.08))], [grip, rubber()]])
+
+func _binoculars() -> Mesh:
+	var body := _st()
+	for x in [-0.035, 0.035]:
+		Lib._tube(body, Vector3(x, 0.03, -0.04), Vector3(x, 0.03, 0.05), 0.026, 0.026, 16)
+		Lib._tube(body, Vector3(x, 0.03, 0.05), Vector3(x, 0.03, 0.07), 0.026, 0.021, 16)
+	box(body, Vector3(0, 0.03, 0.0), Vector3(0.05, 0.016, 0.05))
+	var trim := _st()
+	for x in [-0.035, 0.035]:
+		Lib._tube(trim, Vector3(x, 0.03, -0.05), Vector3(x, 0.03, -0.04), 0.028, 0.028, 16)
+	Lib._tube(trim, Vector3(0, 0.048, -0.02), Vector3(0, 0.048, 0.03), 0.008, 0.008, 10)
+	var lens := _st()
+	for x in [-0.035, 0.035]:
+		_disc(lens, Vector3(x, 0.03, -0.0505), 0.022, Vector3.FORWARD, 16)
+		_disc(lens, Vector3(x, 0.03, 0.0705), 0.017, Vector3.BACK, 16)
+	return _mesh([[body, rubber()], [trim, dark_steel()], [lens, glass_m()]])
 
 # ------------------------------------------------------------------ tools & weapons
 func _handle(st: SurfaceTool, length: float, r0: float, r1: float) -> void:
@@ -1285,7 +1425,7 @@ func _process(_d: float) -> void:
 	_render_next()
 
 func _aabb_of(n: Node, xf: Transform3D, acc: Array) -> void:
-	if n is VisualInstance3D:
+	if n is GeometryInstance3D:
 		var vi := n as VisualInstance3D
 		var a := (xf * vi.transform) * vi.get_aabb()
 		acc[0] = a if acc[0] == null else (acc[0] as AABB).merge(a)

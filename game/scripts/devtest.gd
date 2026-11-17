@@ -260,7 +260,7 @@ func _hands() -> void:
 	_log("battery prompt: %s" % pl.prompt)
 	await _shot("h07_battery_tray")
 	Game.select_slot(1)
-	rv.do_action("battery", pl)
+	rv.Mounts.pull(rv, "battery")
 	_log("pulled battery: missing %s, slots %s" % [str(rv.missing), str(Game.slots)])
 	await _wait(0.3)
 	await _shot("h08_battery_removed")
@@ -274,7 +274,7 @@ func _hands() -> void:
 	Game.slots[1] = {"id": "", "n": 0}
 	Game._changed()
 	rv.parts["tires"] = 40.0
-	rv.do_action("wheel0", pl)
+	rv.Mounts.pull(rv, "wheel0")
 	_log("pulled tire: missing %s tires %.1f slots %s" % [str(rv.missing), rv.parts["tires"], str(Game.slots)])
 	var wpos: Vector3 = rv.wheels[0].global_position
 	var cam: Vector3 = wpos + rv.global_transform.basis.x * -2.2 + rv.global_transform.basis.z * 1.0
@@ -896,7 +896,249 @@ func _assembly() -> void:
 	rv.apply_state(legacy)
 	_log("old save without modules -> %d modules, can drive: %s" % [rv.modules.size(), str(rv.missing_for_drive())])
 
+## 1.6: five hand slots, free furniture placement in the van, spare tire, start trailer,
+## a house up the road, predators kept in the woods, and the new items.
+func _v16() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	w.hud.close_modal()
+	Game.time_of_day = 10.0
+	Game.god_mode = true
+	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
+	await _settle(pl.global_position)
+	await _wait(1.0)
+	_log("hand slots: %d (expect 5) -> %s" % [Game.slots.size(), str(Game.slots)])
+	var tires := 0
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if it.id == "tire" and it.global_position.distance_to(rv.global_position) < 14.0:
+			tires += 1
+	_log("tires on the lot: %d for %d bare hubs" % [tires, rv.Mounts.missing_count(rv)])
+	await _shot("v01_start_view")
+	# --- the starting trailer hitches to the van
+	var trl = w.vehicle_nodes.get("trl_start")
+	_log("start trailer: %s, tongue-to-hitch %.2f m" % [trl.kind, trl.tongue_global().distance_to(rv.hitch_global())])
+	_log("hitch prompt: '%s'" % trl.prompt_for("hitch"))
+	trl.do_action("hitch", pl)
+	await _wait(0.5)
+	_log("hitched to the van: %s" % str(trl.tow == rv))
+	var tv: Vector3 = rv.to_global(Vector3(5.0, 0, -6.0))
+	_player_at(_ground(tv.x, tv.z), 0.0)
+	_look_at_point(rv.hitch_global())
+	await _wait(0.5)
+	await _shot("v02_trailer_hitched")
+	# --- predators: spawn many times, none near the player or the start
+	Game.time_of_day = 23.0
+	var near := 0
+	var preds := 0
+	var min_d := 9999.0
+	for i in range(400):
+		w._spawn_timer = 0.0
+		w._spawn_animals(0.1)
+	for a in w.animals:
+		if is_instance_valid(a) and float(a.spec["aggro"]) > 0.0:
+			preds += 1
+			var d: float = a.global_position.distance_to(pl.global_position)
+			min_d = minf(min_d, d)
+			if d < 90.0:
+				near += 1
+	_log("predators spawned on day 1 at the start: %d (closer than 90 m: %d, nearest %.0f m), animals %d" % [preds, near, min_d, w.animals.size()])
+	for a in w.animals:
+		if is_instance_valid(a):
+			a.queue_free()
+	w.animals = []
+	Game.time_of_day = 10.0
+	# --- the house up the road
+	var poi: Dictionary = w.gen.poi_for_row(1)
+	_log("start house: %s at %.0f m from the van" % [poi.get("type", "none"), (poi["pos"] as Vector3).distance_to(rv.global_position)])
+	var hp: Vector3 = poi["pos"]
+	var bs := Basis(Vector3.UP, float(poi["yaw"]))
+	var view: Vector3 = hp + bs * Vector3(2.0, 0, 16.0)
+	_player_at(_ground(view.x, view.z), 0.0)
+	await _settle(view)
+	_look_at_point(hp + Vector3(0, 2.0, 0))
+	await _wait(1.0)
+	await _shot("v03_start_house")
+	var found := []
+	for lt in _all_loot():
+		if str(lt.key).begins_with("poi1_") and lt.mode in ["loot", "box"]:
+			_player_at(lt.global_position + bs * Vector3(0, 0.2, 1.5), 0.0)
+			await _wait(0.1)
+			lt.interact(pl)
+			found.append(lt.key)
+	await _wait(0.5)
+	var loot_ids := {}
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if it.global_position.distance_to(hp) < 12.0:
+			loot_ids[it.id] = int(loot_ids.get(it.id, 0)) + it.amount
+	_log("searched %s -> found %s" % [str(found), str(loot_ids)])
+	var inside: Vector3 = hp + bs * Vector3(0, 0.7, 1.0)
+	_player_at(inside, 0.0)
+	_look_at_point(hp + bs * Vector3(3.0, 0.8, 3.0))
+	await _wait(0.5)
+	await _shot("v04_house_loot")
+	# --- free furniture placement in the van
+	_van_door(pl)
+	await _wait(0.2)
+	pl.teleport(rv.to_global(Vector3(-0.2, rv.FLOOR_Y + 0.05, 1.6)))
+	var toolkit = Game.place_item("toolkit", 1, rv.global_transform * Transform3D(Basis.IDENTITY, Vector3(-0.2, rv.FLOOR_Y + 0.05, 2.2)), rv)
+	Game.slots[0] = {"id": "fridge_unit", "n": 1}
+	Game.select_slot(0)
+	Game._changed()
+	_look_at_point(rv.to_global(Vector3(0.6, rv.FLOOR_Y, -1.2)))
+	await _wait(0.3)
+	pl._update_prompt()
+	_log("fridge plan %s, prompt '%s'" % [str(pl._module_plan), pl.prompt])
+	await _shot("v05_fridge_ghost_right_wall")
+	pl.place_or_grab()
+	await _wait(0.2)
+	_log("fridge fitted: %s at %s" % [rv.modules.has("fridge"), str(rv.module_xf.get("fridge"))])
+	var piv: Vector3 = rv.to_local(rv._doors["fridge"]["pivot"].global_position)
+	_log("fridge door now at local %s (default was x -0.86)" % str(piv))
+	# cupboard on top of the fridge spot should be refused
+	Game.slots[0] = {"id": "cupboard_unit", "n": 1}
+	Game._changed()
+	_look_at_point(rv.to_global(Vector3(0.55, rv.FLOOR_Y, -0.45)))
+	await _wait(0.3)
+	_log("cupboard against the fridge: ok=%s reason '%s'" % [pl._module_plan.get("ok"), pl._module_plan.get("reason")])
+	_look_at_point(rv.to_global(Vector3(-0.8, rv.FLOOR_Y, -0.4)))
+	await _wait(0.3)
+	pl.place_or_grab()
+	_log("cupboard fitted on the left: %s at %s" % [rv.modules.has("cupboard"), str(rv.module_xf.get("cupboard"))])
+	# bed across the back, turned 90 degrees
+	Game.slots[0] = {"id": "bed_frame", "n": 1}
+	Game._changed()
+	pl._place_rot = 0.0
+	pl.teleport(rv.to_global(Vector3(-0.2, rv.FLOOR_Y + 0.05, -0.9)))
+	_look_at_point(rv.to_global(Vector3(0.0, rv.FLOOR_Y, -2.8)))
+	await _wait(0.3)
+	_log("bed plan %s" % str(pl._module_plan))
+	pl.place_or_grab()
+	_log("bed fitted: %s at %s" % [rv.modules.has("bed"), str(rv.module_xf.get("bed"))])
+	Game.slots[0] = {"id": "mattress", "n": 1}
+	Game._changed()
+	await _wait(0.2)
+	var mm = _mount_node("mattress")
+	_log("mattress mount follows the bed: local %s" % str(rv.to_local(mm.global_position)))
+	rv.install_module("mattress")
+	_log("mattress fitted: %s" % rv.modules.has("mattress"))
+	# kitchen against the right wall at the front, then the stove on it
+	Game.slots[0] = {"id": "kitchen_unit", "n": 1}
+	Game._changed()
+	pl.teleport(rv.to_global(Vector3(-0.2, rv.FLOOR_Y + 0.05, -0.3)))
+	_look_at_point(rv.to_global(Vector3(0.8, rv.FLOOR_Y, 1.1)))
+	await _wait(0.3)
+	_log("kitchen near the door: ok=%s reason '%s'" % [pl._module_plan.get("ok"), pl._module_plan.get("reason")])
+	_look_at_point(rv.to_global(Vector3(-0.8, rv.FLOOR_Y, 1.4)))
+	await _wait(0.3)
+	_log("kitchen plan %s" % str(pl._module_plan))
+	pl.place_or_grab()
+	_log("kitchen fitted: %s at %s" % [rv.modules.has("kitchen"), str(rv.module_xf.get("kitchen"))])
+	Game.slots[0] = {"id": "stove_unit", "n": 1}
+	Game._changed()
+	rv.install_module("stove")
+	_log("stove on the moved counter: %s, burner 0 at local %s" % [rv.modules.has("stove"), str(rv.to_local(rv.heat_spots()[0]) if rv.stove_on else rv._slot_offset("stove") * Vector3(-0.9, rv.FLOOR_Y + 0.98, 0.95))])
+	Game.slots[0] = {"id": "", "n": 0}
+	Game._changed()
+	rv.interior_lights = true
+	rv.modules["light"] = true
+	rv._apply_modules()
+	rv.interior_lights = true
+	rv._update_lights()
+	pl.teleport(rv.to_global(Vector3(0.0, rv.FLOOR_Y + 0.05, 1.7)))
+	pl.rotation.y = rv.rotation.y
+	pl.pitch = -0.35
+	pl.head.rotation.x = -0.35
+	await _wait(0.5)
+	await _shot("v06_custom_layout_rear")
+	pl.teleport(rv.to_global(Vector3(0.0, rv.FLOOR_Y + 0.05, -1.9)))
+	pl.rotation.y = rv.rotation.y + PI
+	await _wait(0.5)
+	await _shot("v07_custom_layout_front")
+	# saved and restored where they were put
+	var st: Dictionary = JSON.parse_string(JSON.stringify(rv.save_state()))
+	rv.module_xf = {}
+	rv._apply_modules()
+	rv.apply_state(st)
+	_log("after save/load: bed %s fridge %s kitchen %s" % [str(rv.module_xf.get("bed")), str(rv.module_xf.get("fridge")), str(rv.module_xf.get("kitchen"))])
+	# take the fridge back out with G
+	pl.teleport(rv.to_global(Vector3(-0.2, rv.FLOOR_Y + 0.05, -0.4)))
+	var fr_hot = rv._doors["fridge"]["pivot"].get_child(rv._doors["fridge"]["pivot"].get_child_count() - 1)
+	_log("fridge slot from its door: '%s'" % rv.slot_for(fr_hot))
+	rv.remove_module("fridge")
+	_log("fridge removed: %s, holding %s, xf kept: %s" % [not rv.modules.has("fridge"), Game.equipped(), str(rv.module_xf.has("fridge"))])
+	# --- tires: E never pulls a fitted tire; G does; a worn tire can go back on
+	_van_door(pl)
+	Game.slots[0] = {"id": "tire", "n": 1}
+	Game._changed()
+	rv.do_action("wheel0", pl)
+	_log("fitted wheel0: missing %s" % str(rv.missing.has("wheel0")))
+	Game.slots[0] = {"id": "", "n": 0}
+	Game._changed()
+	rv.do_action("wheel0", pl)
+	_log("E on a fitted tire leaves it on: %s" % str(not rv.missing.has("wheel0")))
+	rv.Mounts.pull(rv, "wheel0")
+	_log("G pulled it: missing %s, holding %s" % [str(rv.missing.has("wheel0")), Game.equipped()])
+	Game.slots[0] = {"id": "worn_tire", "n": 1}
+	Game._changed()
+	rv.do_action("wheel0", pl)
+	_log("worn tire refitted: %s" % str(not rv.missing.has("wheel0")))
+	# --- new items
+	var Data = load("res://scripts/data.gd")
+	for id in ["chips", "energy_bar", "jerky", "apple", "bread", "instant_noodles", "hot_noodles", "painkillers", "duct_tape", "crowbar", "binoculars", "sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"]:
+		var bb: AABB = Items.bounds(id)
+		_log("item %s '%s' size %s" % [id, Data.item_name(id), str(bb.size)])
+	var row := 0
+	for id in ["sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit", "chair", "table"]:
+		var gp: Vector3 = rv.to_global(Vector3(6.0, 0, -6.0 - row * 1.9))
+		gp.y = w.gen.height(gp.x, gp.z)
+		Net.place_structure(Game.new_struct_id(), {"type": id, "pos": Game.arr(gp), "rot": rv.rotation.y - PI * 0.5, "data": {}})
+		row += 1
+	var k := 0
+	for id in ["chips", "energy_bar", "jerky", "apple", "bread", "instant_noodles", "hot_noodles", "painkillers", "duct_tape", "crowbar", "binoculars"]:
+		var gp2: Vector3 = rv.to_global(Vector3(4.2, 0, -6.0 - k * 0.5))
+		var bb2: AABB = Items.display_bounds(id)
+		gp2.y = w.gen.height(gp2.x, gp2.z) - bb2.position.y + 0.01
+		Game.place_item(id, 1, Transform3D(Basis(Vector3.UP, rv.rotation.y), gp2))
+		k += 1
+	var vp: Vector3 = rv.to_global(Vector3(1.6, 0, -9.0))
+	_player_at(_ground(vp.x, vp.z), 0.0, -0.3)
+	_look_at_point(rv.to_global(Vector3(5.0, 0.4, -10.0)))
+	await _wait(1.0)
+	await _shot("v08_new_items")
+	Game.slots[0] = {"id": "binoculars", "n": 1}
+	Game._changed()
+	await _wait(0.1)
+	pl.use_primary()
+	await _wait(0.6)
+	_log("binoculars zoom fov %.1f" % pl.camera.fov)
+
+func _all_loot() -> Array:
+	var out := []
+	var Loot = load("res://scripts/loot.gd")
+	for n in _walk_tree(get_tree().root):
+		if n.get_script() == Loot:
+			out.append(n)
+	return out
+
+func _walk_tree(n: Node) -> Array:
+	var out := [n]
+	for c in n.get_children():
+		out.append_array(_walk_tree(c))
+	return out
+
 func _run() -> void:
+	if "--v16" in OS.get_cmdline_user_args():
+		var m16 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		m16._start_world({})
+		await _wait(1.5)
+		await _v16()
+		var f16 := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		f16.store_string("\n".join(log_lines))
+		f16.close()
+		get_tree().quit()
+		return
 	if "--walkin" in OS.get_cmdline_user_args():
 		var mw := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")

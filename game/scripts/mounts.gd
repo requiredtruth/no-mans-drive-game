@@ -13,64 +13,68 @@ static func _toolkit() -> bool:
 static func _tk_hint() -> String:
 	return "" if _toolkit() else "  (needs a Toolkit in hand or within reach)"
 
+const TIRES := ["tire", "offroad_tire", "worn_tire"]
+
 static func prompt(v: Node, action: String) -> String:
 	var held := Game.equipped()
 	var parts: Dictionary = v.parts
 	if action == "battery":
 		if v.missing.has("battery"):
-			if held == "car_battery":
-				return "[E] Fit the Car Battery"
+			if held in ["car_battery", "worn_battery"]:
+				return "[E] Fit the %s" % Data.item_name(held)
 			return "Battery tray — empty. Carry a Car Battery here"
-		if held == "car_battery":
-			return "Battery (%d%%) — pull the old one out first with an empty hand" % int(parts["battery"])
-		return "[E] Pull out the battery (%d%%)" % int(parts["battery"])
+		if held == "":
+			return "Battery %d%%   [G] Pull it out" % int(parts["battery"])
+		return "Battery %d%%" % int(parts["battery"])
 	if action == "hood":
 		if held == "engine_parts":
 			return "[E] Rebuild the engine with Engine Parts (engine %d%%)%s" % [int(parts["engine"]), _tk_hint()]
 		if held == "scrap":
 			return "[E] Weld Scrap Metal onto the body (body %d%%)%s" % [int(parts["body"]), _tk_hint()]
+		if held == "duct_tape":
+			return "[E] Patch the body with Duct Tape (body %d%%)" % int(parts["body"])
 		return ""
 	if action.begins_with("wheel"):
 		if v.missing.has(action):
-			if held in ["tire", "offroad_tire"]:
+			if held in TIRES:
 				return "[E] Fit the %s%s" % [Data.item_name(held), _tk_hint()]
-			return "Bare wheel hub — carry a Spare Tire or Off-Road Tire here"
-		if held in ["tire", "offroad_tire"]:
-			return "Tires %d%% — pull this one off first with an empty hand" % int(parts["tires"])
-		return "[E] Pull off this tire (tires %d%%)%s" % [int(parts["tires"]), _tk_hint()]
+			return "Bare wheel hub — carry a Spare Tire, Worn Tire or Off-Road Tire here"
+		if held == "":
+			return "Tire fitted (tires %d%%)   [G] Pull it off%s" % [int(parts["tires"]), _tk_hint()]
+		return "Tire fitted (tires %d%%)" % int(parts["tires"])
 	return ""
 
-## Returns true when the action was handled here.
+## Returns true when the action was handled here. [E] only ever fits parts; pulling a fitted
+## battery or tire back off is [G] with empty hands (see pull), so it can't happen by accident.
 static func act(v: Node, action: String) -> bool:
 	var held := Game.equipped()
 	var parts: Dictionary = v.parts
 	if action == "battery":
 		if v.missing.has("battery"):
-			if held != "car_battery":
+			if held not in ["car_battery", "worn_battery"]:
 				Game.notify("Carry a Car Battery in your hands to fit it here")
 				return true
-			Game.remove_item("car_battery", 1)
+			Game.remove_item(held, 1)
 			v.missing.erase("battery")
-			parts["battery"] = 100.0
-			v.battery = 100.0
+			parts["battery"] = 100.0 if held == "car_battery" else 25.0
+			v.battery = parts["battery"]
 			Audio.play_at("hammer", v.global_position, -4.0, 1.3)
-			Game.notify("Battery fitted")
+			Game.notify("Battery fitted" if held == "car_battery" else "Dead battery fitted — it holds a little charge")
+			v._apply_visuals()
 		else:
-			if held != "":
-				Game.notify("You need an empty hand to pull the battery out")
-				return true
-			var item := "car_battery" if parts["battery"] >= 70.0 else "worn_battery"
-			Game.add_item(item, 1, true)
-			v.missing["battery"] = true
-			parts["battery"] = 0.0
-			v.battery = 0.0
-			if v.engine_on:
-				v.stop_engine()
-			Audio.play_at("click", v.global_position, 0.0, 0.6)
-			Game.notify("You pulled out the %s" % Data.item_name(item))
-		v._apply_visuals()
+			Game.notify("Battery %d%% — [G] with empty hands pulls it out" % int(parts["battery"]))
 		return true
 	if action == "hood":
+		if held == "duct_tape":
+			if parts["body"] >= 99.9:
+				Game.notify("The body is in perfect shape")
+				return true
+			Game.remove_item("duct_tape", 1)
+			parts["body"] = minf(parts["body"] + 8.0, 100.0)
+			Audio.play_at("click", v.global_position, -2.0, 0.6)
+			Game.notify("Taped up — body now %d%%" % int(parts["body"]))
+			v._apply_visuals()
+			return true
 		if held == "engine_parts" or held == "scrap":
 			if not _toolkit():
 				Game.notify("You need a Toolkit in hand or lying within reach")
@@ -87,36 +91,66 @@ static func act(v: Node, action: String) -> bool:
 			return true
 		return false
 	if action.begins_with("wheel"):
+		if not v.missing.has(action):
+			Game.notify("Tire fitted (tires %d%%) — [G] with empty hands pulls it off" % int(parts["tires"]))
+			return true
+		if held not in TIRES:
+			Game.notify("Carry a Spare Tire in your hands to fit it here")
+			return true
 		if not _toolkit():
 			Game.notify("You need a Toolkit in hand or lying within reach to work on wheels")
 			return true
 		var kinds = v.get("wheel_kind")
+		Game.remove_item(held, 1)
+		v.missing.erase(action)
+		if kinds != null:
+			if held == "offroad_tire":
+				kinds[action] = "offroad_tire"
+			else:
+				kinds.erase(action)
+		parts["tires"] = minf(parts["tires"] + (5.0 if held == "worn_tire" else 15.0), 100.0)
+		Audio.play_at("hammer", v.global_position, -2.0, 0.9)
+		Game.notify("%s fitted — tires now %d%%" % [Data.item_name(held), int(parts["tires"])])
+		v._apply_visuals()
+		return true
+	return false
+
+## [G] with empty hands at a fitted battery or tire: take it off into your hands.
+static func pull(v: Node, action: String) -> bool:
+	var parts: Dictionary = v.parts
+	if Game.equipped() != "":
+		Game.notify("You need an empty hand to take that off")
+		return true
+	if action == "battery":
+		if v.missing.has("battery"):
+			return false
+		var item := "car_battery" if parts["battery"] >= 70.0 else "worn_battery"
+		Game.add_item(item, 1, true)
+		v.missing["battery"] = true
+		parts["battery"] = 0.0
+		v.battery = 0.0
+		if v.engine_on:
+			v.stop_engine()
+		Audio.play_at("click", v.global_position, 0.0, 0.6)
+		Game.notify("You pulled out the %s" % Data.item_name(item))
+		v._apply_visuals()
+		return true
+	if action.begins_with("wheel"):
 		if v.missing.has(action):
-			if held not in ["tire", "offroad_tire"]:
-				Game.notify("Carry a Spare Tire in your hands to fit it here")
-				return true
-			Game.remove_item(held, 1)
-			v.missing.erase(action)
-			if kinds != null:
-				if held == "offroad_tire":
-					kinds[action] = "offroad_tire"
-				else:
-					kinds.erase(action)
-			parts["tires"] = minf(parts["tires"] + 15.0, 100.0)
-			Audio.play_at("hammer", v.global_position, -2.0, 0.9)
-			Game.notify("%s fitted — tires now %d%%" % [Data.item_name(held), int(parts["tires"])])
-		else:
-			if held != "":
-				Game.notify("You need an empty hand to pull the tire off")
-				return true
-			var item := "tire" if parts["tires"] >= 90.0 else "worn_tire"
-			if kinds != null and kinds.get(action, "") == "offroad_tire" and parts["tires"] >= 50.0:
-				item = "offroad_tire"
-			Game.add_item(item, 1, true)
-			parts["tires"] = maxf(parts["tires"] - parts["tires"] * 0.25, 0.0)
-			v.missing[action] = true
-			Audio.play_at("hammer", v.global_position, -2.0, 0.7)
-			Game.notify("You pulled off a %s" % Data.item_name(item))
+			return false
+		if not _toolkit():
+			Game.notify("You need a Toolkit in hand or lying within reach to work on wheels")
+			return true
+		var kinds = v.get("wheel_kind")
+		# a tire comes off as good as the set it belongs to; a worn one can still be refitted
+		var item := "tire" if parts["tires"] >= 60.0 else "worn_tire"
+		if kinds != null and kinds.get(action, "") == "offroad_tire" and parts["tires"] >= 50.0:
+			item = "offroad_tire"
+		Game.add_item(item, 1, true)
+		parts["tires"] = maxf(parts["tires"] - 15.0, 0.0)
+		v.missing[action] = true
+		Audio.play_at("hammer", v.global_position, -2.0, 0.7)
+		Game.notify("You pulled off a %s" % Data.item_name(item))
 		v._apply_visuals()
 		return true
 	return false

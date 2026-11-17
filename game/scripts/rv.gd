@@ -21,6 +21,21 @@ const DOOR_Z0 := 0.5
 const DOOR_Z1 := 1.55
 ## Slots that become part of the van for good once fitted.
 const FIXED := ["floor", "walls"]
+## Furniture that goes anywhere you like on the van floor: hold it inside, aim at the floor,
+## [R] turns it, [G] fits it. Each entry: the footprint centre on the floor in the default layout
+## (the pivot everything is moved around), its footprint (x, z), and the wall its back sits
+## against by default (-1 left, 1 right, 0 none) so it turns its back to the nearest wall.
+const FREE := {
+	"kitchen": [Vector3(-W * 0.5 + 0.42, FLOOR_Y, 0.65), Vector2(0.66, 1.74), -1],
+	"fridge": [Vector3(-W * 0.5 + 0.44, FLOOR_Y, -0.67), Vector2(0.66, 0.7), -1],
+	"cupboard": [Vector3(-W * 0.5 + 0.38, FLOOR_Y, -1.45), Vector2(0.6, 0.82), -1],
+	"dinette": [Vector3(W * 0.5 - 0.47, FLOOR_Y, -0.5), Vector2(0.78, 1.96), 1],
+	"toilet": [Vector3(0.68, FLOOR_Y, -2.21), Vector2(1.04, 0.94), 1],
+	"bed": [Vector3(-0.27, FLOOR_Y, -2.75), Vector2(1.86, 1.22), 0],
+	"heater": [Vector3(W * 0.5 - 0.25, FLOOR_Y, 1.85), Vector2(0.28, 0.42), 1],
+}
+## Modules that sit on another one and move with it.
+const FOLLOW := {"stove": "kitchen", "sink": "kitchen", "coffee": "kitchen", "mattress": "bed"}
 
 var fuel := 18.0
 var water := 6.0
@@ -28,6 +43,7 @@ var battery := 45.0
 var parts := {"engine": 38.0, "tires": 52.0, "battery": 48.0, "body": 55.0}
 var upgrades := {}
 var modules := {} # fitted module slots (see Data.VAN_SLOTS)
+var module_xf := {} # free furniture slot -> [x, z, yaw] where it stands on the van floor
 var wheel_kind := {} # "wheel0".."wheel3" -> "offroad_tire" when an off-road tire is fitted
 var paint := 0
 var fridge := {}
@@ -82,6 +98,8 @@ var _mod_extra := {} # slot -> Array of other nodes to show/hide (pots)
 var _mounts := {} # slot -> mount hotspot
 var _ghosts := {} # slot -> translucent preview
 var _ghost_mat: StandardMaterial3D
+var _ghost_bad_mat: StandardMaterial3D
+var _base_xf := {} # node -> its transform in the default layout
 
 func _ready() -> void:
 	mass = 3200.0
@@ -948,8 +966,133 @@ func _needs_met(slot: String) -> String:
 			return n
 	return ""
 
+# ------------------------------------------------------------------ free furniture placement
+## Where a free slot's furniture stands: maps the default layout onto the chosen spot.
+func _slot_offset(slot: String) -> Transform3D:
+	var root: String = FOLLOW.get(slot, slot)
+	if not FREE.has(root) or not module_xf.has(root):
+		return Transform3D.IDENTITY
+	var a: Vector3 = FREE[root][0]
+	var m: Array = module_xf[root]
+	return Transform3D(Basis(Vector3.UP, float(m[2])), Vector3(float(m[0]), FLOOR_Y, float(m[1]))) * Transform3D(Basis.IDENTITY, -a)
+
+func _move_node(n: Node3D, off: Transform3D) -> void:
+	if not _base_xf.has(n):
+		_base_xf[n] = n.transform
+	n.transform = off * (_base_xf[n] as Transform3D)
+
+## Move every free module (visuals, collision, hotspots) to where it was placed.
+func _apply_offsets() -> void:
+	for slot in _mod_vis:
+		var root: String = FOLLOW.get(slot, slot)
+		if not FREE.has(root):
+			continue
+		var off := _slot_offset(slot)
+		_move_node(_mod_vis[slot], off)
+		for cs in _mod_shapes[slot]:
+			_move_node(cs, off)
+		for p in _mod_parts[slot]:
+			if p.get_parent() == self:
+				_move_node(p, off)
+		for n in _mod_extra[slot]:
+			_move_node(n, off)
+		if _mounts.has(slot):
+			_move_node(_mounts[slot], off)
+
+## The free furniture slot this item can go into (empty string if none / already fitted).
+func free_slot_for(item: String) -> String:
+	for slot in FREE:
+		if Data.VAN_SLOTS[slot]["item"] == item and not modules.has(slot):
+			return slot
+	return ""
+
+static func _rect_of(slot: String, x: float, z: float, yaw: float) -> Rect2:
+	var sz: Vector2 = FREE[slot][1]
+	if absi(int(round(yaw / (PI * 0.5)))) % 2 == 1:
+		sz = Vector2(sz.y, sz.x)
+	return Rect2(Vector2(x, z) - sz * 0.5, sz)
+
+## Work out where a piece of furniture would stand if placed at lp (van space) with the
+## player's extra rotation. It slides flush against the walls rather than poking through.
+func plan_free(slot: String, lp: Vector3, user_yaw: float, player_lp: Vector3) -> Dictionary:
+	var side := int(FREE[slot][2])
+	var yaw := snappedf(user_yaw, PI * 0.5)
+	if side != 0 and signf(lp.x) != float(side) and absf(lp.x) > 0.15:
+		yaw += PI
+	yaw = wrapf(yaw, -PI * 0.25, TAU - PI * 0.25)
+	var r := _rect_of(slot, 0.0, 0.0, yaw)
+	var x0 := -W * 0.5 + 0.12 + r.size.x * 0.5
+	var x1 := W * 0.5 - 0.12 - r.size.x * 0.5
+	var z0 := REAR_Z + 0.1 + r.size.y * 0.5
+	var z1 := FRONT_Z - 1.3 - r.size.y * 0.5
+	var x := snappedf(clampf(lp.x, minf(x0, x1), maxf(x0, x1)), 0.05)
+	var z := snappedf(clampf(lp.z, z0, z1), 0.05)
+	var plan := {"x": x, "z": z, "yaw": yaw, "ok": true, "reason": ""}
+	r = _rect_of(slot, x, z, yaw)
+	var shrink := r.grow(-0.04)
+	for other in FREE:
+		if other == slot or not modules.has(other):
+			continue
+		var o: Array = module_xf.get(other, [FREE[other][0].x, FREE[other][0].z, 0.0])
+		if shrink.intersects(_rect_of(other, float(o[0]), float(o[1]), float(o[2]))):
+			plan["ok"] = false
+			plan["reason"] = "In the way of the %s" % Data.VAN_SLOTS[other]["name"].to_lower()
+			return plan
+	if shrink.intersects(Rect2(W * 0.5 - 0.75, DOOR_Z0 - 0.05, 0.75, DOOR_Z1 - DOOR_Z0 + 0.1)):
+		plan["ok"] = false
+		plan["reason"] = "Keep the doorway clear"
+		return plan
+	if r.grow(0.3).has_point(Vector2(player_lp.x, player_lp.z)):
+		plan["ok"] = false
+		plan["reason"] = "Step back, you're standing there"
+	return plan
+
+func _free_ghost(slot: String) -> Node3D:
+	if not _ghosts.has(slot):
+		_ghosts[slot] = _make_ghost(slot)
+	return _ghosts[slot]
+
+## Show the translucent furniture where it would go (green if it fits there, red if not).
+func preview_free(slot: String, plan: Dictionary) -> void:
+	var g := _free_ghost(slot)
+	var a: Vector3 = FREE[slot][0]
+	g.transform = Transform3D(Basis(Vector3.UP, float(plan["yaw"])), Vector3(plan["x"], FLOOR_Y, plan["z"])) * Transform3D(Basis.IDENTITY, -a)
+	g.visible = true
+	_paint_ghost(g, _ghost_mat if plan["ok"] else _ghost_bad_mat)
+	for other in FREE:
+		if other != slot and _ghosts.has(other):
+			(_ghosts[other] as Node3D).visible = false
+
+func hide_free_preview() -> void:
+	for slot in FREE:
+		if _ghosts.has(slot):
+			(_ghosts[slot] as Node3D).visible = false
+
+func _paint_ghost(n: Node, m: Material) -> void:
+	for ch in n.get_children():
+		if ch is GeometryInstance3D:
+			(ch as GeometryInstance3D).material_override = m
+		_paint_ghost(ch, m)
+
+## Fit held furniture at the planned spot.
+func install_free(slot: String, plan: Dictionary) -> bool:
+	if not plan.get("ok", false):
+		Game.notify(str(plan.get("reason", "It doesn't fit there")))
+		return false
+	var prev = module_xf.get(slot)
+	module_xf[slot] = [float(plan["x"]), float(plan["z"]), float(plan["yaw"])]
+	if not install_module(slot):
+		if prev == null:
+			module_xf.erase(slot)
+		else:
+			module_xf[slot] = prev
+		return false
+	hide_free_preview()
+	return true
+
 ## Show fitted modules, hide the rest, and switch their collisions and hotspots.
 func _apply_modules() -> void:
+	_apply_offsets()
 	for slot in _mod_vis:
 		var on := modules.has(slot)
 		(_mod_vis[slot] as Node3D).visible = on
@@ -964,6 +1107,8 @@ func _apply_modules() -> void:
 		var on := modules.has(slot)
 		var own: bool = _mod_parts.has(slot) and not _mod_parts[slot].is_empty()
 		var active: bool = (not on and _needs_met(slot) == "") or (on and not own and slot not in FIXED)
+		if FREE.has(slot) and not on:
+			active = false # free furniture is placed by aiming at the floor, not at a fixed spot
 		if slot == "door":
 			active = not on and Game.equipped() == "van_door"
 		_mounts[slot].collision_layer = 2 if active else 0
@@ -998,6 +1143,8 @@ func _update_ghosts() -> void:
 	if _mounts.has("door"):
 		_mounts["door"].collision_layer = 2 if held == "van_door" and not modules.has("door") else 0
 	for slot in _mod_vis:
+		if FREE.has(slot):
+			continue # previewed where you aim (see preview_free)
 		var want: bool = Data.VAN_SLOTS.has(slot) and Data.VAN_SLOTS[slot]["item"] == held and not modules.has(slot) and _needs_met(slot) == ""
 		if want and not _ghosts.has(slot):
 			_ghosts[slot] = _make_ghost(slot)
@@ -1011,6 +1158,8 @@ func _make_ghost(slot: String) -> Node3D:
 		_ghost_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_ghost_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_ghost_mat.no_depth_test = false
+		_ghost_bad_mat = _ghost_mat.duplicate()
+		_ghost_bad_mat.albedo_color = Color(1.0, 0.35, 0.3, 0.3)
 	var src: Node3D = _mod_vis[slot]
 	var g: Node3D = src.duplicate(0)
 	g.name = "Ghost_" + slot
@@ -1090,6 +1239,7 @@ func remove_module(slot: String) -> bool:
 		Game.notify("Not while someone is driving")
 		return false
 	modules.erase(slot)
+	module_xf.erase(slot)
 	if slot == "engine" and engine_on:
 		stop_engine()
 	Game.add_item(item, 1, true)
@@ -1143,8 +1293,9 @@ func heat_spots() -> Array:
 	var out := []
 	if stove_on and modules.has("stove"):
 		var kx := -W * 0.5 + 0.42
+		var off := _slot_offset("stove")
 		for p in [Vector2(-0.12, 0.95), Vector2(0.12, 0.95), Vector2(-0.12, 1.25), Vector2(0.12, 1.25)]:
-			out.append(to_global(Vector3(kx + p.x, FLOOR_Y + 0.97, p.y)))
+			out.append(to_global(off * Vector3(kx + p.x, FLOOR_Y + 0.97, p.y)))
 	return out
 
 func shelter_bonus() -> float:
@@ -1153,6 +1304,7 @@ func shelter_bonus() -> float:
 ## The stripped van a new game starts with.
 func _starter_state() -> void:
 	modules = {}
+	module_xf = {}
 	wheel_kind = {}
 	missing = {"battery": true, "wheel0": true, "wheel1": true, "wheel2": true, "wheel3": true}
 	parts = {"engine": 0.0, "tires": 40.0, "battery": 0.0, "body": 45.0}
@@ -1207,7 +1359,7 @@ func save_state() -> Dictionary:
 	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
 		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records(),
-		"modules": modules, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open}
+		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
@@ -1226,6 +1378,7 @@ func apply_state(s: Dictionary) -> void:
 		parts[k] = float(p[k])
 	if s.has("modules"):
 		modules = s["modules"].duplicate()
+		module_xf = s.get("module_xf", {}).duplicate(true)
 		wheel_kind = s.get("wheel_kind", {}).duplicate()
 	else:
 		modules = _all_modules()
@@ -1513,7 +1666,7 @@ func set_door(open: bool, animate := true) -> void:
 	Audio.play_at("door", to_global(Vector3(W * 0.5, FLOOR_Y + 1.0, (DOOR_Z0 + DOOR_Z1) * 0.5)), -2.0, 0.8 if door_open else 1.0)
 
 # ------------------------------------------------------------------ interaction
-const COOKABLE := ["raw_meat", "raw_fish", "mushroom", "potato", "water_dirty", "coffee_beans", "water_clean", "tomato"]
+const COOKABLE := ["raw_meat", "raw_fish", "mushroom", "potato", "water_dirty", "coffee_beans", "water_clean", "tomato", "instant_noodles"]
 
 func prompt_for(action: String) -> String:
 	var held := Game.equipped()
@@ -1585,7 +1738,7 @@ func do_action(action: String, player: Node) -> void:
 	if action.begins_with("mount:"):
 		install_module(action.substr(6))
 		return
-	if action == "battery" or action.begins_with("wheel") or (action == "hood" and modules.has("engine") and held in ["engine_parts", "scrap"]):
+	if action == "battery" or action.begins_with("wheel") or (action == "hood" and modules.has("engine") and held in ["engine_parts", "scrap", "duct_tape"]):
 		if Mounts.act(self, action):
 			return
 	match action:
@@ -1682,8 +1835,9 @@ func do_action(action: String, player: Node) -> void:
 func _set_on_burner(_player: Node) -> void:
 	var spots := []
 	var kx := -W * 0.5 + 0.42
+	var off := _slot_offset("stove")
 	for p in [Vector2(-0.12, 0.95), Vector2(0.12, 0.95), Vector2(-0.12, 1.25), Vector2(0.12, 1.25)]:
-		spots.append(Vector3(kx + p.x, FLOOR_Y + 0.98, p.y))
+		spots.append(off * Vector3(kx + p.x, FLOOR_Y + 0.98, p.y))
 	var cargo := get_node("Cargo")
 	for lp in spots:
 		var busy := false
@@ -1744,7 +1898,7 @@ func _report() -> void:
 	for slot in Data.VAN_SLOTS:
 		if modules.has(slot):
 			interior += 1
-	lines.append("%d of %d modules fitted. Hold a module to see where it goes." % [interior, Data.VAN_SLOTS.size()])
+	lines.append("%d of %d modules fitted. Hold a part to see where it goes; furniture goes anywhere on the floor." % [interior, Data.VAN_SLOTS.size()])
 	for l in lines:
 		Game.notify(l)
 

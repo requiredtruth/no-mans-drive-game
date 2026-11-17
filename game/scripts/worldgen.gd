@@ -127,6 +127,8 @@ func hash3(a: int, b: int, c: int) -> int:
 	return absi(h ^ (h >> 16))
 
 func poi_for_row(ci: int) -> Dictionary:
+	if ci == 1:
+		return _start_house()
 	if absi(ci) < 2:
 		return {}
 	var h := hash3(ci, 999, 17)
@@ -144,6 +146,18 @@ func poi_for_row(ci: int) -> Dictionary:
 	pos.y = road_h(z) + 0.05
 	return {"type": t, "pos": pos, "radius": {"wrecks": 6.0, "hamlet": 30.0, "truck_stop": 20.0}.get(t, 16.0), "side": side,
 		"yaw": atan2(dir.x, dir.z) + (PI * 0.5 if side > 0.0 else -PI * 0.5), "row": ci}
+
+## A house just up the road from the starting lot, across the road from it, stocked with the
+## first pieces of furniture for the van (see Loot.GUARANTEED).
+func _start_house() -> Dictionary:
+	var z := CHUNK + 14.0
+	var side := 1.0
+	var dir := road_dir(z)
+	var perp := Vector3(-dir.z, 0, dir.x)
+	var pos := Vector3(road_x(z), 0, z) + perp * side * 18.0
+	pos.y = road_h(z) + 0.05
+	return {"type": "house", "pos": pos, "radius": 16.0, "side": side,
+		"yaw": atan2(dir.x, dir.z) + PI * 0.5, "row": 1, "start": true}
 
 # ------------------------------------------------------------------ chunk data (thread-safe)
 func build_chunk(cx: int, cz: int, removed: Dictionary, detail: bool) -> Dictionary:

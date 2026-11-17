@@ -22,6 +22,7 @@ const ITEMS := {
 	"pipe": {"name": "Metal Pipe", "color": Color("8a9096"), "kind": "material"},
 	"foam": {"name": "Foam Padding", "color": Color("d8c890"), "kind": "material"},
 	"glass": {"name": "Glass Pane", "color": Color("a8d0d8"), "kind": "material"},
+	"duct_tape": {"name": "Duct Tape", "color": Color("a0a4a8"), "kind": "material"},
 	# Empty containers: drink a bottle and you keep the bottle; fill it at a sink, lake, well or rain collector
 	"bottle_empty": {"name": "Empty Bottle", "color": Color("c8e0f0"), "kind": "container"},
 	"fuel_can_empty": {"name": "Empty Fuel Can", "color": Color("903028"), "kind": "container"},
@@ -72,9 +73,24 @@ const ITEMS := {
 	"coffee_beans": {"name": "Coffee Beans", "color": Color("4a2c1a"), "kind": "material"},
 	"coffee": {"name": "Hot Coffee", "color": Color("3a2416"), "kind": "food", "food": 2, "water": 18, "energy": 35, "warmth": 15},
 	"soda": {"name": "Flat Soda", "color": Color("d84a4a"), "kind": "food", "food": 4, "water": 20, "energy": 10},
+	"chips": {"name": "Bag of Chips", "color": Color("e0b030"), "kind": "food", "food": 12, "water": -3, "energy": 4},
+	"energy_bar": {"name": "Energy Bar", "color": Color("3070c0"), "kind": "food", "food": 14, "water": -1, "energy": 22},
+	"jerky": {"name": "Beef Jerky", "color": Color("7a3a1a"), "kind": "food", "food": 24, "water": -5, "health": 2},
+	"apple": {"name": "Apple", "color": Color("c02a24"), "kind": "food", "food": 9, "water": 7},
+	"bread": {"name": "Loaf of Bread", "color": Color("c8904a"), "kind": "food", "food": 26, "water": -2},
+	"instant_noodles": {"name": "Instant Noodles", "color": Color("e8e0d0"), "kind": "food", "food": 6, "water": -4},
+	"tinned_hotdogs": {"name": "Tinned Hotdogs", "color": Color("c86a3a"), "kind": "food", "food": 28, "water": 2},
+	"can_of_cashews": {"name": "Can of Cashews", "color": Color("d8b070"), "kind": "food", "food": 20, "water": -4, "energy": 6},
+	"peaches_oreilly": {"name": "Peaches O'Reilly", "color": Color("f0a050"), "kind": "food", "food": 16, "water": 14},
+	"berry_juice": {"name": "Berry Juice", "color": Color("8a2a6a"), "kind": "food", "food": 4, "water": 30, "energy": 4},
+	"mocha_cola": {"name": "Mocha Cola", "color": Color("5a3220"), "kind": "food", "food": 3, "water": 22, "energy": 18},
+	"emergency_ration_pack": {"name": "Emergency Ration Pack", "color": Color("6a7a40"), "kind": "food", "food": 45, "water": 5, "health": 5},
+	"jason_s_choccy_block": {"name": "Jason's Choccy Block", "color": Color("4a2a18"), "kind": "food", "food": 16, "energy": 14},
+	"hot_noodles": {"name": "Hot Noodles", "color": Color("e8c070"), "kind": "food", "food": 32, "water": 12, "warmth": 12},
 	# Medical
 	"bandage": {"name": "Bandage", "color": Color("efefef"), "kind": "medical", "health": 25},
 	"medkit": {"name": "First Aid Kit", "color": Color("d03030"), "kind": "medical", "health": 70},
+	"painkillers": {"name": "Painkillers", "color": Color("e07a20"), "kind": "medical", "health": 15, "energy": 5},
 	# Seeds
 	"seeds_tomato": {"name": "Tomato Seeds", "color": Color("e07050"), "kind": "seed", "grows": "tomato"},
 	"seeds_potato": {"name": "Seed Potato", "color": Color("c0a070"), "kind": "seed", "grows": "potato"},
@@ -92,6 +108,8 @@ const ITEMS := {
 	"rifle": {"name": "Bolt Rifle", "color": Color("3a3a3a"), "kind": "tool", "damage": 120},
 	"fishing_rod": {"name": "Fishing Rod", "color": Color("4f7f5f"), "kind": "tool"},
 	"flashlight": {"name": "Flashlight", "color": Color("e8d36a"), "kind": "tool"},
+	"crowbar": {"name": "Crowbar", "color": Color("b02a20"), "kind": "tool", "damage": 20, "reach": 2.4},
+	"binoculars": {"name": "Binoculars", "color": Color("2a2c30"), "kind": "tool"},
 	"jacket": {"name": "Hide Jacket", "color": Color("6f4a2f"), "kind": "wear", "insulation": 12},
 	"backpack": {"name": "Backpack (+2 carry slots)", "color": Color("5a6a4a"), "kind": "wear"},
 	# Carried objects you can place, pick up and move (also built from the build menu)
@@ -105,6 +123,11 @@ const ITEMS := {
 	"lantern": {"name": "Lantern Post", "color": Color("c8a040"), "kind": "placeable"},
 	"chair": {"name": "Camp Chair", "color": Color("4f7f5f"), "kind": "placeable"},
 	"table": {"name": "Wooden Table", "color": Color("8a6440"), "kind": "placeable"},
+	"sofa": {"name": "Sofa", "color": Color("6a7a9a"), "kind": "placeable"},
+	"floor_lamp": {"name": "Floor Lamp", "color": Color("e8d8a0"), "kind": "placeable"},
+	"rug": {"name": "Rug", "color": Color("a04a3a"), "kind": "placeable"},
+	"potted_plant": {"name": "Potted Plant", "color": Color("4a8a3a"), "kind": "placeable"},
+	"shelf_unit": {"name": "Shelf Unit", "color": Color("9a7a50"), "kind": "placeable"},
 }
 
 ## How many of an item fit in one hand/backpack slot. Anything not listed is carried one at a time.
@@ -114,6 +137,8 @@ const STACK := {
 	"bandage": 4, "seeds_tomato": 6, "seeds_potato": 6, "seeds_coffee": 3, "ammo": 30, "arrow": 12, "soda": 2,
 	"roast_mushroom": 4, "baked_potato": 3, "wire": 4, "bolts": 8, "pipe": 2, "foam": 3, "glass": 2,
 	"bottle_empty": 3, "water_clean": 2, "water_dirty": 2,
+	"tinned_hotdogs": 2, "can_of_cashews": 3, "peaches_oreilly": 2, "berry_juice": 2, "mocha_cola": 2, "emergency_ration_pack": 2, "jason_s_choccy_block": 4,
+	"chips": 3, "energy_bar": 4, "jerky": 3, "apple": 4, "bread": 2, "instant_noodles": 3, "painkillers": 2, "duct_tape": 2,
 }
 
 static func stack(id: String) -> int:
@@ -136,6 +161,9 @@ const RECIPES := [
 	{"out": "jacket", "n": 1, "cost": {"hide": 4, "rope": 2}},
 	{"out": "backpack", "n": 1, "cost": {"hide": 2, "cloth": 2, "rope": 2}},
 	{"out": "medkit", "n": 1, "cost": {"bandage": 2, "water_clean": 1, "fiber": 2}},
+	{"out": "duct_tape", "n": 1, "cost": {"cloth": 1, "fiber": 2}},
+	{"out": "crowbar", "n": 1, "cost": {"pipe": 1, "scrap": 1}},
+	{"out": "binoculars", "n": 1, "cost": {"glass": 2, "pipe": 1, "scrap": 1}},
 	# metalwork
 	{"out": "bolts", "n": 6, "cost": {"scrap": 2}},
 	{"out": "pipe", "n": 2, "cost": {"scrap": 2, "bolts": 1}},
@@ -186,6 +214,7 @@ const COOK_TIME := 14.0
 const COOKING := [
 	{"out": "stew", "n": 1, "cost": {"raw_meat": 1, "potato": 1, "tomato": 1, "water_clean": 1}},
 	{"out": "coffee", "n": 1, "cost": {"coffee_beans": 1, "water_clean": 1}},
+	{"out": "hot_noodles", "n": 1, "cost": {"instant_noodles": 1, "water_clean": 1}},
 	{"out": "cooked_meat", "n": 1, "cost": {"raw_meat": 1}},
 	{"out": "cooked_fish", "n": 1, "cost": {"raw_fish": 1}},
 	{"out": "roast_mushroom", "n": 1, "cost": {"mushroom": 1}},
@@ -253,10 +282,16 @@ const PIECES := {
 	"fence": {"name": "Fence", "cost": {"wood": 2}, "snap": "edge"},
 	"chair": {"name": "Camp Chair", "cost": {"wood": 2, "cloth": 1}, "snap": "free"},
 	"table": {"name": "Wooden Table", "cost": {"wood": 4}, "snap": "free"},
+	"sofa": {"name": "Sofa", "cost": {"wood": 3, "cloth": 3, "foam": 2}, "snap": "free"},
+	"floor_lamp": {"name": "Floor Lamp", "cost": {"scrap": 1, "wire": 1, "glass": 1}, "snap": "free"},
+	"rug": {"name": "Rug", "cost": {"cloth": 3}, "snap": "free"},
+	"potted_plant": {"name": "Potted Plant", "cost": {"stone": 1, "fiber": 2}, "snap": "free"},
+	"shelf_unit": {"name": "Shelf Unit", "cost": {"wood": 4, "bolts": 1}, "snap": "free"},
 }
 
 const PIECE_ORDER := ["foundation", "floor", "wall", "doorway", "window", "roof", "roof_slope", "stairs",
-	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table"]
+	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table",
+	"sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"]
 
 ## RV parts (condition 0..100).
 ## Vehicle parts (condition 0..100). Parts are replaced physically: carry the part in your hands

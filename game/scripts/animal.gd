@@ -8,6 +8,7 @@ var spec := {}
 var hp := 50.0
 var state := "idle" # idle, wander, flee, chase, dead
 var target := Vector3.ZERO
+var home := Vector3.ZERO # predators keep to the woods they were found in
 var threat := Vector3.ZERO
 var _timer := 0.0
 var _attack_cd := 0.0
@@ -25,6 +26,7 @@ func setup(p_species: String, pos: Vector3) -> void:
 	spec = Data.ANIMALS[species]
 	hp = float(spec["hp"])
 	position = pos
+	home = pos
 	collision_layer = 8
 	collision_mask = 1
 	floor_snap_length = 0.6
@@ -270,6 +272,8 @@ func _physics_process(delta: float) -> void:
 				state = "wander"
 				var a := randf() * TAU
 				target = global_position + Vector3(cos(a), 0, sin(a)) * randf_range(6.0, 18.0)
+				if float(spec["aggro"]) > 0.0 and global_position.distance_to(home) > 25.0:
+					target = home + Vector3(cos(a), 0, sin(a)) * randf_range(2.0, 12.0)
 				_timer = randf_range(5.0, 12.0)
 		"wander":
 			_speed = float(spec["walk"])

@@ -5,6 +5,7 @@ const Data = preload("res://scripts/data.gd")
 const Builder = preload("res://scripts/builder.gd")
 const Arrow = preload("res://scripts/arrow.gd")
 const RvPart = preload("res://scripts/rv_part.gd")
+const Mounts = preload("res://scripts/mounts.gd")
 
 const WALK := 4.3
 const SPRINT := 7.2
@@ -41,6 +42,7 @@ var _fish_point := Vector3.ZERO
 var _survival_acc := 0.0
 var _howl_timer := 30.0
 var _hurt_cd := 0.0
+var _binocs := false # looking through the binoculars
 
 func _ready() -> void:
 	collision_layer = 4
@@ -108,7 +110,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.select_slot(Game.selected_slot + 1)
 	elif event.is_action_pressed("hotbar_prev"):
 		Game.select_slot(Game.selected_slot - 1)
-	for i in range(mini(6, Game.slots.size())):
+	for i in range(mini(7, Game.slots.size())):
 		if event.is_action_pressed("slot_%d" % (i + 1)):
 			Game.select_slot(i)
 	if event.is_action_pressed("interact"):
@@ -121,7 +123,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if look_target and look_target.has_method("cycle_recipe") and look_target.get("type") == "workbench":
 			look_target.cycle_recipe()
 		elif Game.equipped() != "":
-			_place_rot = wrapf(_place_rot + PI * 0.25, 0.0, TAU)
+			_place_rot = wrapf(_place_rot + (PI * 0.5 if _place_module != "" else PI * 0.25), 0.0, TAU)
 	if event.is_action_pressed("flashlight"):
 		toggle_flashlight()
 	if driving:
@@ -304,7 +306,10 @@ func _update_prompt() -> void:
 				prompt = _resource_prompt(t)
 	_set_highlight(look_target)
 	var held := Game.equipped()
-	if held != "" and not builder.active and _place_valid and (look_target == null or not look_target.is_in_group("world_item")):
+	if _place_module != "" and not builder.active:
+		var nm: String = Data.VAN_SLOTS[_place_module]["name"]
+		prompt = ("[G] Fit the %s here   [R] Turn it" % nm.to_lower()) if _module_plan.get("ok", false) else "%s — %s   [R] Turn it" % [nm, _module_plan.get("reason", "")]
+	elif held != "" and not builder.active and _place_valid and (look_target == null or not look_target.is_in_group("world_item")):
 		var hint := "[G] Place %s   [R] Rotate   [Q] Throw" % Data.item_name(held)
 		prompt = hint if prompt == "" else prompt + "\n" + hint
 	if _fish_state == "bite":
@@ -327,6 +332,10 @@ func _interact() -> void:
 	if driving:
 		if absf(vehicle.speed_kmh()) < 12.0:
 			exit_vehicle()
+		return
+	# fitting van furniture where you aim beats the hotspot under the crosshair
+	if _place_module != "" and (look_target == null or (look_target.get_script() == RvPart and str(look_target.action).begins_with("mount:"))):
+		place_held()
 		return
 	if look_target == null:
 		return
@@ -371,6 +380,10 @@ func place_or_grab() -> void:
 	var t := look_target as Node
 	if t.is_in_group("world_item"):
 		t.interact(self)
+		return
+	# pull a fitted battery or tire off a vehicle
+	if t.get_script() == RvPart and (t.action == "battery" or t.action.begins_with("wheel")):
+		Mounts.pull(t.rv, t.action)
 		return
 	# take a fitted module back out of the van
 	if t.get_script() == RvPart and t.rv.has_method("slot_for"):
@@ -446,6 +459,8 @@ var _place_xf := Transform3D()
 var _place_host: Node = null
 var _ghost_ok: StandardMaterial3D
 var _ghost_bad: StandardMaterial3D
+var _place_module := "" # free van furniture being aimed at the van floor
+var _module_plan := {}
 
 func _host_of(n: Node) -> Node:
 	for i in range(7):
@@ -460,9 +475,16 @@ func _update_placement() -> void:
 	var id := Game.equipped()
 	var kind: String = Data.ITEMS.get(id, {}).get("kind", "")
 	_place_valid = false
+	var was_module := _place_module
+	_place_module = ""
+	if was_module != "":
+		viewmodel.visible = true
+	_module_plan = {}
 	if id == "" or kind == "placeable" or builder.active or Game.ui_open or _fish_state != "":
 		if _place_ghost:
 			_place_ghost.visible = false
+		if was_module != "" and Game.rv:
+			Game.rv.hide_free_preview()
 		return
 	if _place_ghost_id != id:
 		if _place_ghost:
@@ -498,6 +520,21 @@ func _update_placement() -> void:
 			q.exclude = ex
 			continue
 		break
+	# van furniture: aim at the van floor and it goes exactly there
+	var free_slot: String = Game.rv.free_slot_for(id) if Game.rv and kind == "module" else ""
+	if free_slot != "" and not hit.is_empty() and _host_of(hit["collider"] as Node) == Game.rv and Game.rv.is_inside(hit["position"]) and (hit["normal"] as Vector3).y > 0.6:
+		var rv = Game.rv
+		var lp: Vector3 = rv.to_local(hit["position"])
+		if lp.y < rv.FLOOR_Y + 0.4:
+			_place_module = free_slot
+			_module_plan = rv.plan_free(free_slot, lp, _place_rot, rv.to_local(global_position))
+			_place_valid = _module_plan["ok"]
+			_place_ghost.visible = false
+			rv.preview_free(free_slot, _module_plan)
+			viewmodel.visible = false # the big piece in your arms would hide the preview
+			return
+	if was_module != "" and Game.rv:
+		Game.rv.hide_free_preview()
 	if hit.is_empty():
 		_place_ghost.visible = false
 		return
@@ -524,6 +561,10 @@ func _paint_ghost(n: Node, m: Material) -> void:
 		_paint_ghost(c, m)
 
 func place_held() -> void:
+	if _place_module != "":
+		if Game.rv.install_free(_place_module, _module_plan):
+			_place_module = ""
+		return
 	if not _place_valid:
 		Game.notify("Aim at a flat surface within reach to place it")
 		return
@@ -578,13 +619,14 @@ func _refresh_viewmodel() -> void:
 	if id == _vm_kind:
 		return
 	_vm_kind = id
+	_binocs = false
 	for c in viewmodel.get_children():
 		c.queue_free()
 	_aiming = false
 	# grip pose per item: [position, rotation, scale]
 	var pose := [Vector3(0.0, 0.0, 0.0), Vector3(-0.35, 0.15, 0.08), 1.0]
 	match id:
-		"axe", "pickaxe", "hammer":
+		"axe", "pickaxe", "hammer", "crowbar":
 			pose = [Vector3(0, 0, 0), Vector3(-0.45, 0.2, 0.15), 1.0]
 		"knife":
 			pose = [Vector3(0, 0, 0), Vector3(-0.75, 0.25, 0.1), 1.2]
@@ -643,10 +685,12 @@ func _handle_tools(delta: float) -> void:
 	viewmodel.rotation.x = -sin(_swing * PI) * 1.1
 	viewmodel.position.z = -0.55 + sin(_swing * PI) * -0.15
 	var id := Game.equipped()
-	var aiming := Input.is_action_pressed("secondary") and id in ["bow", "rifle"] and not Game.ui_open
-	if Game.world.touch and Game.world.touch.aim_on and id in ["bow", "rifle"]:
+	var aiming := Input.is_action_pressed("secondary") and id in ["bow", "rifle", "binoculars"] and not Game.ui_open
+	if Game.world.touch and Game.world.touch.aim_on and id in ["bow", "rifle", "binoculars"]:
 		aiming = true
-	var target_fov: float = Game.settings["fov"] * (0.45 if aiming and id == "rifle" else (0.8 if aiming else 1.0))
+	if id == "binoculars" and _binocs:
+		aiming = true
+	var target_fov: float = Game.settings["fov"] * (0.45 if aiming and id == "rifle" else (0.25 if aiming and id == "binoculars" else (0.8 if aiming else 1.0)))
 	camera.fov = lerpf(camera.fov, target_fov, delta * 10.0)
 	viewmodel.position.x = lerpf(viewmodel.position.x, 0.05 if aiming else 0.32, delta * 10.0)
 	if Game.ui_open or Game.paused:
@@ -667,7 +711,7 @@ func use_primary() -> void:
 		return
 	var it: Dictionary = Data.ITEMS.get(id, {})
 	match id:
-		"axe", "pickaxe", "knife", "hammer":
+		"axe", "pickaxe", "knife", "hammer", "crowbar":
 			_melee(float(it["damage"]), float(it.get("reach", 2.4)), id)
 			_cooldown = 0.6 if id != "knife" else 0.45
 		"bow":
@@ -693,6 +737,9 @@ func use_primary() -> void:
 			_cooldown = 0.6
 		"flashlight":
 			toggle_flashlight()
+			_cooldown = 0.3
+		"binoculars":
+			_binocs = not _binocs
 			_cooldown = 0.3
 		_:
 			if it.get("kind", "") in ["food", "medical"]:

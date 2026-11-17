@@ -34,6 +34,7 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ **Random houses along the road**: procedurally generated cottages, brick and log houses, cabins, hamlets and truck stops, with furnished interiors.
 - ✅ **Varied ambience**: no looping birdsong. Dozens of randomized bird, owl, crow, woodpecker, frog, coyote, wind and thunder one-shots, chosen by biome and time, with dawn/dusk choruses and call-and-answer.
 - Quality and detail bar: Nomad Drive, plus all of our extra additions.
+- 🔄 Build every item in the **item backlog** (`docs/item-backlog/`, three lists supplied by the user) over future versions. 1.6 adds the first of them.
 
 ### Requests after 1.2 (addressed in 1.3)
 
@@ -76,6 +77,17 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ Save any time, autosave, continue from the main menu.
 - ✅ Difficulty levels (Relaxed, Normal, Hard), settings for audio buses (master, effects, ambience, vehicle, UI), sensitivity, FOV, invert Y, head bob, view distance, shadows, grass, render scale.
 - ✅ Keyboard and mouse, game controller, and Android touch controls (joystick, drag-look, action buttons, tappable hotbar).
+
+### Requests after 1.5 (addressed in 1.6)
+
+- ✅ Post to `main` is approved; release a new APK.
+- ✅ Place van furniture (tables, beds, fridges, etc.) **anywhere you want** in the vehicle, not in fixed spots.
+- ✅ There must be enough wheels to finish setting up the van (a spare tire on the lot; tires can't be pulled off by accident, and worn ones can be refitted).
+- ✅ No wolf attacks at the start: predators live deep in the woods, never spawn close to the player, and stay away from the starting lot on day 1.
+- ✅ **Hold 5 items at once**, like Nomad Drive (a backpack adds 2 more).
+- ✅ The closer to Nomad Drive the better. Cover all the probable items: snacks, bread, fruit, instant noodles, painkillers, duct tape, crowbar, binoculars, sofa, floor lamp, rug, potted plant and shelves added.
+- ✅ The trailer can be hitched to the van right at the start.
+- ✅ A house near the start with furniture and supplies to find.
 
 ## Added gameplay
 

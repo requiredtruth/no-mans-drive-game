@@ -162,15 +162,16 @@ func _refresh_hotbar() -> void:
 	for c in hotbar_box.get_children():
 		c.queue_free()
 	var n := Game.slots.size()
-	hotbar_box.offset_left = -n * 46.0
-	hotbar_box.offset_right = n * 46.0
-	hotbar_box.offset_top = -116.0
+	var tile := 78.0 if n <= 5 else 70.0
+	hotbar_box.offset_left = -n * (tile + 6.0) * 0.5
+	hotbar_box.offset_right = n * (tile + 6.0) * 0.5
+	hotbar_box.offset_top = -30.0 - tile
 	hotbar_box.offset_bottom = -30.0
 	for i in range(n):
 		var sl: Dictionary = Game.slots[i]
 		var id: String = sl["id"]
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(86, 86)
+		b.custom_minimum_size = Vector2(tile, tile)
 		b.focus_mode = Control.FOCUS_NONE
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0, 0, 0, 0.5)
@@ -181,11 +182,11 @@ func _refresh_hotbar() -> void:
 		b.add_theme_stylebox_override("hover", sb)
 		b.add_theme_stylebox_override("pressed", sb)
 		if id != "":
-			var t := UI.item_tile(id, int(sl["n"]), 74)
+			var t := UI.item_tile(id, int(sl["n"]), int(tile) - 12)
 			t.position = Vector2(6, 6)
 			b.add_child(t)
 			b.tooltip_text = Data.item_name(id)
-		var tag := UI.label(("BAG %d" % (i - 1)) if i >= Game.BASE_SLOTS else ("LEFT" if i == 1 else "RIGHT"), 11, Color(1, 1, 1, 0.55))
+		var tag := UI.label(("BAG %d" % (i - Game.BASE_SLOTS + 1)) if i >= Game.BASE_SLOTS else str(i + 1), 11, Color(1, 1, 1, 0.55))
 		tag.position = Vector2(6, 2)
 		b.add_child(tag)
 		var idx := i
@@ -463,7 +464,7 @@ func open_book() -> void:
 		var ml := UI.label("Fitted (%d): %s\nEmpty (%d): %s" % [fitted.size(), ", ".join(fitted) if not fitted.is_empty() else "nothing yet", empty.size(), ", ".join(empty)], 13, Color(0.78, 0.78, 0.72))
 		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		left.add_child(ml)
-	var help := UI.label("Carry a module to the van and press E to fit it; while you hold one, the spot it goes in glows green. G with empty hands takes a module back out. You carry only what fits in your hands%s." % (" and backpack" if Game.worn.has("backpack") else " (a Backpack adds 2 slots)"), 14, Color(0.75, 0.75, 0.7))
+	var help := UI.label("Carry a part to the van and press E to fit it; while you hold one, the spot it goes in glows green. Furniture (counter, fridge, cupboard, dinette, toilet, bed, heater) goes anywhere on the floor: aim where you want it, R turns it, G fits it. G with empty hands takes a module back out. You carry only what fits in your hands%s." % (" and backpack" if Game.worn.has("backpack") else " (5 slots; a Backpack adds 2 more)"), 14, Color(0.75, 0.75, 0.7))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	left.add_child(help)
 	var right := VBoxContainer.new()
@@ -654,14 +655,17 @@ func show_intro() -> void:
 a pocket knife and an endless highway.
 
 • The van has no engine, battery, wheels, seats, steering wheel or door. The parts are lying
-  around the lot. Pick one up (E), carry it to the van and press E where it goes; while you
-  hold a part, its spot glows green. G with empty hands takes a part back out.
+  around the lot (with a spare tire). Pick one up (E), carry it to the van and press E where it
+  goes; while you hold a part, its spot glows green. G with empty hands takes a part back out.
 • Look at the hood with empty hands to see what the van still needs before it will drive.
-• Everything else (bed, kitchen, sink, fridge, stove, lights, radio, solar panel...) is found
-  on the road or built at a workbench: lay the ingredients on the bench and press E.
+• A flatbed trailer waits behind the van: walk to its tongue and press E to hitch it.
+• There's a house just up the road. Search it for supplies and furniture.
+• Furniture (bed, kitchen counter, fridge, cupboard, dinette, toilet, heater) goes anywhere on
+  the van floor: hold it inside, aim where you want it, R to turn it, G to fit it. Everything else is
+  found on the road or built at a workbench: lay the ingredients on the bench and press E.
 • Food cooks when you set it on a burning campfire or a lit stove. Drink a bottle and you
   keep the empty bottle: refill it at a sink, well, lake or rain collector.
-• You carry only what fits in your two hands (a backpack adds two). G places things exactly
+• You carry up to five things (a backpack adds two more); 1-7 or the wheel picks one. G places things exactly
   where the preview shows; Q throws. Things set down in the van stay put while you drive.
 • Keep your health, food, water, energy and warmth up. Hunt, build camps and houses, grow food.
 

@@ -145,8 +145,9 @@ func _rv_state(xf: Transform3D, state: Dictionary) -> void:
 		Game.rv.water = float(state.get("water", Game.rv.water))
 		# fitted modules and pulled parts follow the host's van
 		var mods: Dictionary = state.get("modules", {})
-		if mods != Game.rv.modules or state.get("missing", {}) != Game.rv.missing:
+		if mods != Game.rv.modules or state.get("missing", {}) != Game.rv.missing or state.get("module_xf", {}) != Game.rv.module_xf:
 			Game.rv.modules = mods.duplicate()
+			Game.rv.module_xf = state.get("module_xf", {}).duplicate(true)
 			Game.rv.missing = state.get("missing", {}).duplicate()
 			Game.rv.wheel_kind = state.get("wheel_kind", {}).duplicate()
 			Game.rv._apply_visuals()

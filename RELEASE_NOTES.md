@@ -1,29 +1,32 @@
-## No Man's Drive 1.5.0: a real van you walk into
+## No Man's Drive 1.6.0: furnish the van your way
 
-**No more "press E to climb in".** The van and the camper trailer are now real spaces. You walk in and out through the doorway like any other room. Nothing teleports you.
+**Put furniture anywhere in the van**
+- The kitchen counter, fridge, cupboard, dinette, toilet cubicle, bed frame and cabin heater no longer have fixed spots. Carry one inside, aim at the van floor and a see-through preview shows exactly where it will stand: green if it fits, red if something is in the way. **R** turns it, **G** (or E) fits it.
+- Furniture slides flush against the walls and turns its back to the nearest wall on its own. It won't go in the doorway, on top of other furniture, or where you're standing.
+- Whatever sits on top moves with it: the stove, sink and coffee maker stay on the counter, and the mattress stays on the bed frame. Burners still cook wherever the stove ends up.
+- **G** with empty hands takes a piece out again so you can move it. Your layout is saved.
+- Loose furniture (beds, tables, chairs, crates, and the new sofa, rug, lamp, plant and shelves) can still go anywhere inside the van or on its roof.
 
-**Walk in through the side doorway**
-- With no side door fitted, the doorway is simply open. Walk up the two-tread entry step and you are inside, then walk back out the same way.
-- Once the sliding door is hung, E opens it: it pops out and slides back along its rail like a real van door. E again closes it. From inside, use the grab handle on the pillar next to the doorway.
-- A closed door blocks the way and keeps the van warmer; an open door doesn't.
-- You can now walk up steps, sills and kerbs up to about 40 cm high without jumping.
+**Carry five things at once**
+- You now have five hand slots (a backpack adds two more). Use 1–7 or the mouse wheel to pick one.
 
-**A van that looks like a van**
-- Every window is real glass you can see through, from outside in and from inside out. The windshield, cab windows and side windows are cut through the body, with rubber seals and an inner lining.
-- New body details: cab-door shut lines and handles, a sliding-door rail, black plastic bumpers, sill cladding and wheel-arch flares, a grille with a badge, fog lights, indicators, side and roof marker lights, wipers, door mirrors with glass, a roof fan vent and antenna, mud flaps, number plates, and tall rear light clusters with brake, indicator and reverse lights.
-- Barn doors at the back with hinges, a handle, a high brake light and a bumper step.
-- Underneath: chassis rails, crossmembers, the rear axle and differential, a driveshaft, an exhaust with a silencer, and a spare wheel.
-- The paint has a clear-coat shine.
-- The fuel filler moved forward, just ahead of the rear wheel on the driver's side.
+**A better start**
+- **A spare tire:** the starting lot now has five tires for four wheels.
+- **No more losing tires by accident:** E only ever fits a tire or battery. Pulling one off is now **G** with empty hands. A worn tire or dead battery can be fitted again too, at lower condition.
+- **Hitch the trailer straight away:** the flatbed trailer is parked right behind the van with its tongue at the hitch. Walk to the tongue and press E. Hitching now works from a bit further away.
+- **A house just up the road:** about 70 m up the road from the start, across from the lot, a furnished house always has a kitchen counter, fridge, bed frame, mattress, cupboard, ceiling light and a chair to find, plus food and first aid.
+- **No wolves at the start:** wolves and bears now live deep in the woods, well away from the road and buildings. They never appear right next to you, and none come near the starting lot on the first day. A pack that loses you goes back to its own patch of forest.
 
-**Camper trailer**
-- The camper has a real door that swings open with E. Walk in up its step. Its windows are real glass.
-- The camper is taller, so you can stand up inside, and its tongue jack keeps it level when it's unhitched.
+**New items**
+- Food: bag of chips, energy bar, beef jerky, apple, loaf of bread, instant noodles (cook them on the fire or stove with clean water to make hot noodles).
+- Painkillers. Duct tape: patch the van's body at the hood, no toolkit needed.
+- Crowbar (melee tool). Binoculars: use them to look far down the road.
+- From the new item backlog: tinned hotdogs, can of cashews, Peaches O'Reilly, berry juice, Mocha Cola, emergency ration pack and Jason's Choccy Block. The full three-part list is saved in the repository (`docs/item-backlog/`) for future versions.
+- New furniture: sofa, floor lamp (switch it on and off), rug, potted plant, shelf unit. Find them in houses or build them.
+- Workbench recipes for duct tape, crowbar and binoculars. All new items turn up in loot.
 
-**Glass everywhere is clearer**, in houses and vehicles too.
+**Saves:** older saves load as before. Furniture already fitted stays where it was.
 
-**Saves:** older saves load as before. The side door starts closed.
-
-Controls: E pick up / fit / use / open and close doors · G place, or take a part out with empty hands · R rotate, or pick a recipe at the bench · Q throw · Tab notebook. On touch: PLACE, THROW and BOOK buttons.
+Controls: E pick up / fit / use / open and close doors · G place or fit, or take a part out with empty hands · R rotate · Q throw · 1–7 pick a hand slot · Tab notebook. On touch: PLACE, THROW and BOOK buttons.
 
 If the install fails over an older version, uninstall the older version first.

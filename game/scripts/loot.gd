@@ -4,28 +4,46 @@ extends StaticBody3D
 const Data = preload("res://scripts/data.gd")
 
 const TABLES := {
-	"medical": [["bandage", 1, 3], ["medkit", 1, 1], ["water_clean", 1, 1], ["soda", 1, 1], ["bottle_empty", 1, 2]],
+	"medical": [["bandage", 1, 3], ["medkit", 1, 1], ["water_clean", 1, 1], ["soda", 1, 1], ["bottle_empty", 1, 2], ["painkillers", 1, 2]],
 	"living": [["canned_food", 1, 2], ["cloth", 1, 3], ["rope", 1, 1], ["ammo", 2, 6], ["coffee_beans", 1, 2], ["flashlight", 1, 1],
-		["radio", 1, 1], ["ceiling_light", 1, 1], ["foam", 1, 2], ["glass", 1, 1], ["dinette_kit", 1, 1], ["mattress", 1, 1]],
+		["radio", 1, 1], ["ceiling_light", 1, 1], ["foam", 1, 2], ["glass", 1, 1], ["dinette_kit", 1, 1], ["mattress", 1, 1],
+		["chips", 1, 2], ["binoculars", 1, 1], ["floor_lamp", 1, 1], ["rug", 1, 1], ["potted_plant", 1, 1], ["sofa", 1, 1], ["shelf_unit", 1, 1], ["chair", 1, 1]],
 	"shelf": [["canned_food", 1, 3], ["soda", 1, 2], ["water_clean", 1, 3], ["coffee_beans", 1, 2], ["bandage", 1, 2], ["seeds_tomato", 1, 2],
-		["bottle_empty", 1, 2], ["paint_can", 1, 1]],
+		["bottle_empty", 1, 2], ["paint_can", 1, 1], ["chips", 1, 3], ["energy_bar", 1, 3], ["jerky", 1, 2], ["instant_noodles", 1, 3],
+		["bread", 1, 1], ["apple", 1, 3], ["painkillers", 1, 1], ["duct_tape", 1, 1],
+		["tinned_hotdogs", 1, 2], ["can_of_cashews", 1, 2], ["peaches_oreilly", 1, 2], ["berry_juice", 1, 2], ["mocha_cola", 1, 2],
+		["emergency_ration_pack", 1, 1], ["jason_s_choccy_block", 1, 2]],
 	"backroom": [["toolkit", 1, 1], ["engine_parts", 1, 2], ["car_battery", 1, 1], ["scrap", 2, 5], ["rope", 1, 3], ["fuel_can", 1, 1],
-		["wire", 1, 3], ["bolts", 3, 8], ["pipe", 1, 2], ["fuel_can_empty", 1, 1], ["headlight", 1, 1], ["water_tank", 1, 1], ["tune_kit", 1, 1]],
+		["wire", 1, 3], ["bolts", 3, 8], ["pipe", 1, 2], ["fuel_can_empty", 1, 1], ["headlight", 1, 1], ["water_tank", 1, 1], ["tune_kit", 1, 1],
+		["duct_tape", 1, 2], ["crowbar", 1, 1], ["tire", 1, 1]],
 	"kitchen": [["canned_food", 1, 3], ["water_clean", 1, 2], ["coffee_beans", 1, 3], ["seeds_potato", 1, 2], ["seeds_tomato", 1, 2], ["soda", 1, 2],
-		["stove_unit", 1, 1], ["sink_unit", 1, 1], ["coffee_maker", 1, 1], ["fridge_unit", 1, 1], ["kitchen_unit", 1, 1], ["bottle_empty", 1, 2], ["glass", 1, 1]],
+		["stove_unit", 1, 1], ["sink_unit", 1, 1], ["coffee_maker", 1, 1], ["fridge_unit", 1, 1], ["kitchen_unit", 1, 1], ["bottle_empty", 1, 2], ["glass", 1, 1],
+		["bread", 1, 1], ["apple", 1, 3], ["instant_noodles", 1, 2], ["chips", 1, 1], ["table", 1, 1], ["tinned_hotdogs", 1, 1], ["peaches_oreilly", 1, 1], ["berry_juice", 1, 1]],
 	"wardrobe": [["cloth", 2, 5], ["rope", 1, 2], ["bandage", 1, 2], ["jacket", 1, 1], ["medkit", 1, 1], ["foam", 1, 3], ["mattress", 1, 1],
-		["cupboard_unit", 1, 1], ["overhead_unit", 1, 1]],
+		["cupboard_unit", 1, 1], ["overhead_unit", 1, 1], ["bed_frame", 1, 1], ["rug", 1, 1]],
 	"garage": [["scrap", 2, 6], ["toolkit", 1, 1], ["ammo", 3, 8], ["engine_parts", 1, 1], ["fuel_can", 1, 1], ["rifle", 1, 1], ["arrow", 4, 8],
 		["bolts", 4, 8], ["wire", 1, 3], ["pipe", 1, 2], ["engine_block", 1, 1], ["car_seat", 1, 1], ["heater_unit", 1, 1], ["solar_panel", 1, 1],
-		["bull_bar", 1, 1], ["fuel_tank_xl", 1, 1], ["paint_can", 1, 1], ["offroad_tire", 1, 1], ["wall_panels", 1, 1], ["floor_kit", 1, 1]],
+		["bull_bar", 1, 1], ["fuel_tank_xl", 1, 1], ["paint_can", 1, 1], ["offroad_tire", 1, 1], ["wall_panels", 1, 1], ["floor_kit", 1, 1],
+		["duct_tape", 1, 2], ["crowbar", 1, 1], ["tire", 1, 1], ["car_battery", 1, 1]],
 	"trunk": [["scrap", 2, 5], ["tire", 1, 1], ["fuel_can", 1, 1], ["car_battery", 1, 1], ["engine_parts", 1, 1], ["cloth", 1, 2],
-		["car_seat", 1, 1], ["steering_wheel", 1, 1], ["headlight", 1, 1], ["radio", 1, 1], ["wire", 1, 2], ["glass", 1, 1], ["fuel_can_empty", 1, 1]],
+		["car_seat", 1, 1], ["steering_wheel", 1, 1], ["headlight", 1, 1], ["radio", 1, 1], ["wire", 1, 2], ["glass", 1, 1], ["fuel_can_empty", 1, 1],
+		["duct_tape", 1, 1], ["energy_bar", 1, 2], ["chips", 1, 1]],
 	"camp": [["rope", 1, 3], ["cloth", 1, 3], ["arrow", 3, 8], ["bow", 1, 1], ["canned_food", 1, 2], ["fishing_rod", 1, 1], ["feather", 2, 4],
-		["bottle_empty", 1, 2], ["foam", 1, 2], ["toilet_unit", 1, 1]],
+		["bottle_empty", 1, 2], ["foam", 1, 2], ["toilet_unit", 1, 1], ["jerky", 1, 2], ["binoculars", 1, 1], ["chair", 1, 1]],
 	"farm": [["seeds_potato", 1, 3], ["seeds_tomato", 1, 3], ["seeds_coffee", 1, 1], ["potato", 1, 4], ["fiber", 2, 6], ["rope", 1, 2], ["hide", 1, 2],
-		["pipe", 1, 2], ["water_tank", 1, 1], ["bed_frame", 1, 1], ["wood", 2, 3], ["bolts", 2, 6]],
+		["pipe", 1, 2], ["water_tank", 1, 1], ["bed_frame", 1, 1], ["wood", 2, 3], ["bolts", 2, 6], ["apple", 2, 5], ["bread", 1, 1]],
 	"scrap_pile": [["scrap", 3, 7], ["engine_parts", 1, 1], ["tire", 1, 1], ["cloth", 1, 2], ["wire", 1, 2], ["bolts", 2, 6], ["pipe", 1, 1], ["glass", 1, 1],
 		["worn_battery", 1, 1]],
+}
+
+## The house up the road from the start always has these (plus a random find or two).
+const GUARANTEED := {
+	"poi1_kitchen": [["kitchen_unit", 1], ["canned_food", 2], ["water_clean", 1]],
+	"poi1_fridge": [["fridge_unit", 1], ["soda", 1]],
+	"poi1_wardrobe": [["bed_frame", 1], ["mattress", 1], ["cloth", 2]],
+	"poi1_shelf": [["cupboard_unit", 1], ["ceiling_light", 1]],
+	"poi1_mbox": [["chair", 1], ["bottle_empty", 2]],
+	"poi1_med": [["bandage", 2], ["medkit", 1]],
 }
 
 var key := ""
@@ -85,6 +103,9 @@ func interact(_player: Node) -> void:
 	rng.randomize()
 	var rolls := int(round(rng.randi_range(2, 3) * Game.diff("loot")))
 	var found: Array = []
+	if GUARANTEED.has(key):
+		found = GUARANTEED[key].duplicate(true)
+		rolls = 1
 	var entries: Array = TABLES.get(table, TABLES["shelf"])
 	for i in range(maxi(rolls, 1)):
 		var e: Array = entries[rng.randi() % entries.size()]

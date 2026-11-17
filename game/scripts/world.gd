@@ -110,7 +110,8 @@ func start(loaded: Dictionary) -> void:
 		var xf: Array = st.get("xform", [[0, 0, 0], [0, 0, 0]])
 		spawn_vehicle(vid, str(st.get("kind", "pickup")), Game.v3(xf[0]), Game.v3(xf[1]), st)
 	if not Game.vehicles.has("trl_start"):
-		var tp: Vector3 = rv.to_global(Vector3(0, 0, -9.5))
+		# parked just behind the van with its tongue next to the hitch: press E at the tongue
+		var tp: Vector3 = rv.to_global(Vector3(0, 0, RV.REAR_Z - 0.55 - 1.2 - 2.7))
 		tp.y = gen.height(tp.x, tp.z) + 0.6
 		spawn_vehicle("trl_start", "flatbed", tp, Vector3(0, rv.rotation.y, 0), {})
 	for r in Game.pending_items:
@@ -868,6 +869,7 @@ func _starter_lot() -> void:
 		["tire", 1, Vector3(6.4, 0, 0.9), 0.7],
 		["tire", 1, Vector3(5.5, 0, 0.2), 1.9],
 		["tire", 1, Vector3(6.3, 0, -0.5), 2.6],
+		["tire", 1, Vector3(7.2, 0, 0.5), 1.2], # a spare, in case one gets damaged
 		["steering_wheel", 1, Vector3(3.0, 0, 0.6), 0.3],
 		["car_seat", 1, Vector3(4.3, 0, 1.0), -1.4],
 		["van_door", 1, Vector3(2.8, 0, -1.2), PI * 0.5],
@@ -985,10 +987,38 @@ func _spawn_animals(delta: float) -> void:
 		if r <= 0.0:
 			species = k
 			break
+	# Wolves and bears live deep in the woods: never right next to you, never on open ground or
+	# by the road, and not around the starting lot on the first day.
+	if float(Data.ANIMALS[species]["aggro"]) > 0.0:
+		if dist < 90.0 or not _is_woods(sp):
+			return
+		var home := Vector3(gen.road_x(0.0), 0.0, 0.0)
+		if Game.day <= 1 and Vector2(sp.x - home.x, sp.z - home.z).length() < 350.0:
+			return
 	var n := randi_range(2, 3) if species == "wolf" else (randi_range(1, 3) if species in ["deer", "turkey"] else 1)
 	for i in range(n):
 		var off := Vector3(randf_range(-3, 3), 0, randf_range(-3, 3))
 		spawn_animal(species, sp + off)
+
+## Forest well away from the road and any roadside buildings.
+func _is_woods(p: Vector3) -> bool:
+	var w := gen.biome_weights(p.x, p.z)
+	if w.z + w.w < 0.45:
+		return false
+	if absf(p.x - gen.road_x(p.z)) < 35.0 or gen._near_poi(p.x, p.z, 25.0):
+		return false
+	var trees := 0
+	var q := PhysicsShapeQueryParameters3D.new()
+	var sh := SphereShape3D.new()
+	sh.radius = 14.0
+	q.shape = sh
+	q.transform = Transform3D(Basis.IDENTITY, p + Vector3(0, 2, 0))
+	q.collision_mask = 1
+	for r in get_world_3d().direct_space_state.intersect_shape(q, 16):
+		var c: Object = r["collider"]
+		if c and (c as Node).has_meta("res_kind") and (c as Node).get_meta("res_kind") == "tree":
+			trees += 1
+	return trees >= 3
 
 func spawn_animal(species: String, pos: Vector3) -> Node:
 	var a := CharacterBody3D.new()

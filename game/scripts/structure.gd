@@ -223,7 +223,59 @@ func _build() -> void:
 				for z in [-0.32, 0.32]:
 					Lib.box(self, Vector3(x, 0.37, z), Vector3(0.07, 0.74, 0.07), dark)
 			_col(Vector3(0, 0.4, 0), Vector3(1.4, 0.8, 0.8))
-	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table"]:
+		"sofa":
+			var fab := Lib.mat("upholstery", Color(0.55, 0.62, 0.8), 1.2, false, 0.95)
+			var frame := Lib.mat("planks", Color(0.45, 0.33, 0.24), 1.0)
+			Lib.box(self, Vector3(0, 0.2, 0), Vector3(1.7, 0.26, 0.8), fab, false, Vector3.ZERO, 0.05)
+			for k in range(2):
+				Lib.box(self, Vector3(-0.41 + k * 0.82, 0.39, 0.04), Vector3(0.8, 0.14, 0.68), fab, false, Vector3.ZERO, 0.06)
+				Lib.box(self, Vector3(-0.41 + k * 0.82, 0.66, -0.3), Vector3(0.78, 0.44, 0.16), fab, false, Vector3(-0.12, 0, 0), 0.07)
+			for x in [-0.8, 0.8]:
+				Lib.box(self, Vector3(x, 0.4, 0), Vector3(0.14, 0.42, 0.8), fab, false, Vector3.ZERO, 0.06)
+			for x in [-0.75, 0.75]:
+				for z in [-0.32, 0.32]:
+					Lib.cyl(self, Vector3(x, 0.04, z), 0.025, 0.02, 0.08, frame)
+			_col(Vector3(0, 0.3, 0), Vector3(1.75, 0.6, 0.8))
+			_col(Vector3(0, 0.66, -0.3), Vector3(1.7, 0.5, 0.18))
+		"floor_lamp":
+			var brass := Lib.mat("metal", Color(0.9, 0.7, 0.4), 2.0, false, 0.3, 0.9)
+			Lib.cyl(self, Vector3(0, 0.015, 0), 0.16, 0.18, 0.03, brass)
+			Lib.cyl(self, Vector3(0, 0.8, 0), 0.012, 0.012, 1.55, brass)
+			var shade := Lib.cyl(self, Vector3(0, 1.58, 0), 0.13, 0.22, 0.26, Lib.mat("canvas", Color(0.98, 0.92, 0.78), 1.0, false))
+			shade.material_override = shade.material_override.duplicate()
+			shade.material_override.cull_mode = BaseMaterial3D.CULL_DISABLED
+			var bulb := Lib.sphere(self, Vector3(0, 1.52, 0), 0.04, Lib.color_mat(Color(1, 0.95, 0.8), 0.2, 0.0, Color(1.0, 0.85, 0.6), 2.0))
+			bulb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_lamp = Lib.light(self, Vector3(0, 1.45, 0), Color(1.0, 0.82, 0.6), 1.3, 7.0)
+			_lamp.visible = data.get("on", true)
+			_col(Vector3(0, 0.85, 0), Vector3(0.36, 1.7, 0.36))
+		"rug":
+			Lib.box(self, Vector3(0, 0.008, 0), Vector3(1.6, 0.012, 1.1), Lib.mat("carpet", Color(0.75, 0.35, 0.28), 1.2, false, 0.95), false, Vector3.ZERO, 0.004)
+			Lib.box(self, Vector3(0, 0.0145, 0), Vector3(1.3, 0.002, 0.8), Lib.mat("plaid", Color(0.9, 0.75, 0.55), 2.0, false, 0.95))
+			_col(Vector3(0, 0.01, 0), Vector3(1.6, 0.02, 1.1))
+		"potted_plant":
+			var pot := Lib.cyl(self, Vector3(0, 0.15, 0), 0.17, 0.13, 0.3, Lib.mat("brick", Color(0.85, 0.5, 0.35), 2.0, false, 0.8))
+			pot.name = "Pot"
+			Lib.cyl(self, Vector3(0, 0.29, 0), 0.155, 0.155, 0.02, Lib.color_mat(Color(0.2, 0.14, 0.09), 0.95))
+			var leafm := Lib.color_mat(Color(0.22, 0.5, 0.2), 0.55)
+			for k in range(9):
+				var a := TAU * k / 9.0 + 0.3
+				var lean := 0.35 + (k % 3) * 0.15
+				var leaf := Lib.sphere(self, Vector3(cos(a) * 0.12, 0.5 + (k % 3) * 0.12, sin(a) * 0.12), 0.1, leafm, Vector3(0.5, 1.6, 0.18))
+				leaf.rotation = Vector3(0, -a, lean)
+			_col(Vector3(0, 0.35, 0), Vector3(0.36, 0.7, 0.36))
+		"shelf_unit":
+			var wd := Lib.mat("planks", Color(0.85, 0.7, 0.5), 1.5)
+			for x in [-0.48, 0.48]:
+				Lib.box(self, Vector3(x, 0.8, 0), Vector3(0.03, 1.6, 0.36), wd)
+			Lib.box(self, Vector3(0, 0.8, -0.17), Vector3(0.96, 1.6, 0.015), wd)
+			for y in [0.05, 0.45, 0.85, 1.25, 1.585]:
+				_solid(Vector3(0, y, 0), Vector3(0.96, 0.03, 0.36), wd)
+			_col(Vector3(-0.48, 0.8, 0), Vector3(0.03, 1.6, 0.36))
+			_col(Vector3(0.48, 0.8, 0), Vector3(0.03, 1.6, 0.36))
+			_col(Vector3(0, 0.8, -0.17), Vector3(0.96, 1.6, 0.015))
+	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table",
+			"sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"]:
 		add_to_group("placeable")
 
 func _build_campfire() -> void:
@@ -332,6 +384,9 @@ func _refresh() -> void:
 		"doorway":
 			var open: bool = data.get("open", false)
 			_door_pivot.rotation.y = -1.6 if open else 0.0
+		"floor_lamp":
+			if _lamp:
+				_lamp.visible = data.get("on", true)
 		"planter":
 			for c in _plant.get_children():
 				c.queue_free()
@@ -400,7 +455,7 @@ func is_sheltered() -> bool:
 # ------------------------------------------------------------------ interaction
 func get_prompt() -> String:
 	var p := _prompt()
-	if is_in_group("placeable") and type not in ["chair", "table"] and p != "":
+	if is_in_group("placeable") and type not in ["chair", "table", "sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"] and p != "":
 		p += "   [G] Pick up"
 	return p
 
@@ -439,6 +494,16 @@ func _prompt() -> String:
 			return "[E] Sit and rest   [G] Pick up"
 		"table":
 			return "Wooden table   [G] Pick up"
+		"sofa":
+			return "[E] Sit down and rest   [G] Pick up"
+		"floor_lamp":
+			return "[E] Turn the lamp %s   [G] Pick up" % ("off" if data.get("on", true) else "on")
+		"rug":
+			return "Rug   [G] Pick up"
+		"potted_plant":
+			return "Potted plant   [G] Pick up"
+		"shelf_unit":
+			return "Shelf unit: set things on the shelves   [G] Pick up"
 	return ""
 
 func interact(player: Node) -> void:
@@ -472,9 +537,14 @@ func interact(player: Node) -> void:
 			_planter_interact()
 		"workbench":
 			assemble()
-		"chair":
-			Game.stats["energy"] = minf(Game.stats["energy"] + 5.0, 100.0)
+		"chair", "sofa":
+			Game.stats["energy"] = minf(Game.stats["energy"] + (5.0 if type == "chair" else 8.0), 100.0)
 			Game.notify("You rest for a moment")
+		"floor_lamp":
+			data["on"] = not data.get("on", true)
+			Audio.play_at("click", global_position, -6.0)
+			_refresh()
+			_save_data()
 		"rain_collector":
 			var w := int(data.get("water", 0))
 			if Game.equipped() != "bottle_empty":

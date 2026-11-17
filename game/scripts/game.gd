@@ -97,7 +97,7 @@ func _setup_input() -> void:
 	_key("crouch", [KEY_CTRL], [JOY_BUTTON_RIGHT_STICK])
 	_key("pickup", [KEY_G], [JOY_BUTTON_B]) # place the held item / grab placed furniture
 	_key("drop", [KEY_Q], [JOY_BUTTON_MISC1]) # throw the held item
-	for i in range(6):
+	for i in range(7):
 		_key("slot_%d" % (i + 1), [KEY_1 + i])
 
 func _setup_buses() -> void:
@@ -146,7 +146,7 @@ func use_touch() -> bool:
 ## Everything else is a physical object in the world. Crafting, cooking and repairs use what
 ## you carry plus anything lying within reach (NEAR) — e.g. a pile of logs next to the workbench.
 const NEAR := 3.2
-const BASE_SLOTS := 2
+const BASE_SLOTS := 5
 
 func slot_count() -> int:
 	return BASE_SLOTS + (2 if worn.has("backpack") else 0)
@@ -380,7 +380,7 @@ func consume(id: String) -> bool:
 	stats["energy"] = clamp(stats["energy"] + it.get("energy", 0), 0, 100)
 	stats["warmth"] = clamp(stats["warmth"] + it.get("warmth", 0), 0, 100)
 	Audio.play("eat")
-	notify("%s %s" % ["Drank" if id in ["water_clean", "water_dirty", "coffee", "soda"] else "Ate", Data.item_name(id)] if it["kind"] == "food" else "Used %s" % Data.item_name(id))
+	notify("%s %s" % ["Drank" if id in ["water_clean", "water_dirty", "coffee", "soda", "berry_juice", "mocha_cola"] else "Ate", Data.item_name(id)] if it["kind"] == "food" else "Used %s" % Data.item_name(id))
 	return true
 
 # ---------------------------------------------------------------- new / save / load
@@ -393,8 +393,9 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	# A rough start: a pocket knife in hand and a flashlight clipped on. The stripped van and the
 	# parts to get it going lie around the starting lot (see world.gd); the rest is scavenged.
 	worn = {"flashlight": true}
-	slots = [{"id": "knife", "n": 1}, {"id": "", "n": 0}]
+	slots = [{"id": "knife", "n": 1}]
 	selected_slot = 0
+	_fit_slots()
 	stats = {"health": 100.0, "food": 80.0, "water": 80.0, "energy": 90.0, "warmth": 100.0}
 	structures = {}
 	removed = {}
