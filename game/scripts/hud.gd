@@ -819,7 +819,7 @@ a pocket knife and an endless highway.
 Tab opens your notebook with the van checklist and the recipe book.""", 16))
 	body.add_child(UI.button("Hit the road", close_modal))
 
-func fade_sleep(hours: float) -> void:
+func fade_sleep(hours: float, woke_at_dawn := false) -> void:
 	if fade_rect == null:
 		fade_rect = ColorRect.new()
 		fade_rect.color = Color(0, 0, 0, 0)
@@ -830,4 +830,4 @@ func fade_sleep(hours: float) -> void:
 	fade_rect.color.a = 1.0
 	tw.tween_interval(0.6)
 	tw.tween_property(fade_rect, "color:a", 0.0, 1.2)
-	Game.notify("You slept for %d hours" % int(round(hours)))
+	Game.notify("You wake at 05:00" if woke_at_dawn else "You slept for %d hours" % int(round(hours)))

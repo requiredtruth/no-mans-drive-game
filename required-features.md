@@ -14,6 +14,12 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - **All items need real 3D models and textures ("models and textures galore").** The nature already looks good, and everything else (items, tools, weapons, RV, buildings, furniture, animals, props) must match that quality. 🔄
 - Save all user requirements to this file.
 
+### Requests after 1.10.0 (addressed in 1.11.0)
+
+- ✅ Remove the annoying cricket sound at night while retaining the other outdoor ambience.
+- ✅ Sleeping in a bed at night immediately wakes the player at **05:00** in the morning (also applies to tents, bedrolls and the van bed).
+- ✅ Actually sit in chairs, sofas and folding chairs in a first-person seated viewpoint, recover energy while sitting, and stand up on command.
+
 ### Feedback on 1.0 (all addressed in 1.1)
 
 - ✅ No rain inside buildings or the RV.

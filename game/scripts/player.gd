@@ -49,6 +49,15 @@ var _crank_radio: AudioStreamPlayer
 var nav_text := "" # what a held compass, roadmap or GPS tells you (shown by the HUD)
 var _nav_acc := 0.0
 
+# Sit in first person at a lowered camera. Furniture may travel on vehicles:
+# preserve the exit position in chair-local coordinates, not world coordinates.
+const SEATED_EYE := 1.12
+const REST_ENERGY_PER_SECOND := 1.5
+var seated_at: Node3D
+var _seat_entry_local := Vector3.ZERO
+var _seat_exit_world := Vector3.ZERO
+var _seat_last_yaw := 0.0
+
 func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 1 | 16
@@ -111,6 +120,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var s: float = Game.settings["sensitivity"] * 0.01
 		look(event.relative * s)
+	# E/Jump leaves the chair; mouse, stick and touch look still work while seated.
+	if seated_at != null:
+		if event.is_action_pressed("interact") or event.is_action_pressed("jump"):
+			stand_up()
+		return
 	if event.is_action_pressed("hotbar_next"):
 		Game.select_slot(Game.selected_slot + 1)
 	elif event.is_action_pressed("hotbar_prev"):
@@ -173,6 +187,10 @@ func _physics_process(delta: float) -> void:
 		if td != Vector2.ZERO and not Game.ui_open:
 			look(td * Game.settings["sensitivity"] * 0.012)
 	_survival(delta)
+	if seated_at != null:
+		_sit_tick(delta)
+		_update_prompt()
+		return
 	if driving:
 		if is_driver and Input.is_action_just_pressed("primary") and not vehicle.engine_on and not Game.ui_open:
 			vehicle.try_start_engine()
@@ -339,7 +357,54 @@ func _footstep() -> void:
 		s = "step_snow"
 	Audio.play(s, -10.0 if not crouching else -18.0, randf_range(0.9, 1.1))
 
+func sit_in(seat: Node3D) -> void:
+	if dead or driving or _climbing or not is_instance_valid(seat):
+		return
+	if seated_at != null:
+		stand_up()
+	seated_at = seat
+	_seat_entry_local = seat.to_local(global_position)
+	_seat_exit_world = global_position
+	_seat_last_yaw = seat.global_rotation.y
+	crouching = false
+	velocity = Vector3.ZERO
+	$CollisionShape3D.disabled = true
+	rotation.y = _seat_last_yaw
+	global_position = seat.to_global(Vector3(0.0, 0.0, -0.06))
+	head.position = Vector3(0.0, SEATED_EYE, 0.0)
+	viewmodel.visible = false
+	_set_highlight(null)
+	Game.notify("Sitting — energy recovering. E or Jump to stand up.")
+
+func _sit_tick(delta: float) -> void:
+	if not is_instance_valid(seated_at) or seated_at.is_queued_for_deletion():
+		stand_up()
+		return
+	var yaw := seated_at.global_rotation.y
+	rotate_y(wrapf(yaw - _seat_last_yaw, -PI, PI))
+	_seat_last_yaw = yaw
+	global_position = seated_at.to_global(Vector3(0.0, 0.0, -0.06))
+	_seat_exit_world = seated_at.to_global(_seat_entry_local)
+	velocity = Vector3.ZERO
+	if not Game.paused and not Game.ui_open:
+		var multiplier := 1.4 if seated_at.get("type") == "sofa" else 1.0
+		Game.stats["energy"] = minf(Game.stats["energy"] + delta * REST_ENERGY_PER_SECOND * multiplier, 100.0)
+
+func stand_up() -> void:
+	if seated_at == null:
+		return
+	if is_instance_valid(seated_at) and not seated_at.is_queued_for_deletion():
+		_seat_exit_world = seated_at.to_global(_seat_entry_local)
+	seated_at = null
+	global_position = _seat_exit_world
+	velocity = Vector3.ZERO
+	$CollisionShape3D.disabled = false
+	head.position = Vector3(0.0, EYE, 0.0)
+	viewmodel.visible = true
+
 func teleport(p: Vector3) -> void:
+	if seated_at != null:
+		stand_up()
 	global_position = p
 	velocity = Vector3.ZERO
 
@@ -359,6 +424,10 @@ func _find_interactable(n: Object) -> Object:
 func _update_prompt() -> void:
 	look_target = null
 	prompt = ""
+	if seated_at != null:
+		_set_highlight(null)
+		prompt = "Seated — energy recovering   [E] / [Jump] Stand up"
+		return
 	if driving:
 		_set_highlight(null)
 		var spd: float = absf(vehicle.speed_kmh())
@@ -653,6 +722,8 @@ func place_held() -> void:
 	Audio.play_at("pickup", _place_xf.origin, -6.0, 0.8)
 
 func enter_vehicle(rv: Node, as_driver: bool) -> void:
+	if seated_at != null:
+		stand_up()
 	if as_driver and rv == Game.rv and not Net.claim_driver(true):
 		Game.notify("Someone else is driving")
 		return
@@ -1206,6 +1277,8 @@ func hurt(amount: float, cause: String, flash := true) -> void:
 func die(cause: String) -> void:
 	if dead:
 		return
+	if seated_at != null:
+		stand_up()
 	if driving:
 		exit_vehicle()
 	dead = true

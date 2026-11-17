@@ -541,11 +541,11 @@ func _prompt() -> String:
 				return "[E] Fill the bottle (%d L collected)" % int(data.get("water", 0))
 			return "Rain collector (%d L) — hold an Empty Bottle to fill it" % int(data.get("water", 0))
 		"chair":
-			return "[E] Sit and rest   [G] Pick up"
+			return "[E] Sit (recover energy)   [G] Pick up"
 		"table":
 			return "Wooden table   [G] Pick up"
 		"sofa":
-			return "[E] Sit down and rest   [G] Pick up"
+			return "[E] Sit (recover energy)   [G] Pick up"
 		"floor_lamp":
 			return "[E] Turn the lamp %s   [G] Pick up" % ("off" if data.get("on", true) else "on")
 		"rug":
@@ -557,7 +557,7 @@ func _prompt() -> String:
 		"mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven":
 			return "%s   [G] Pick up" % Data.item_name(type)
 		"camp_folding_chair":
-			return "[E] Sit down and rest   [G] Pick up"
+			return "[E] Sit (recover energy)   [G] Pick up"
 		"camp_canvas_bedroll":
 			return "[E] Sleep on the bedroll   [G] Roll it up"
 		"deployable_tarp":
@@ -605,8 +605,7 @@ func interact(player: Node) -> void:
 		"workbench":
 			assemble()
 		"chair", "sofa", "camp_folding_chair":
-			Game.stats["energy"] = minf(Game.stats["energy"] + (8.0 if type == "sofa" else 5.0), 100.0)
-			Game.notify("You rest for a moment")
+			player.sit_in(self)
 		"camp_canvas_bedroll":
 			Game.world.sleep(global_position + Vector3(0, 0.4, 0))
 		"mod_retro_tv":

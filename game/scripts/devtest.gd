@@ -1808,10 +1808,62 @@ func _v110() -> void:
 	await _wait(0.4)
 	await _shot("quality_route_notebook")
 	Game.world.hud.close_modal()
+	await _v111()
 	_log("Quality checks: %d failure(s)" % quality_failures)
 
+func _v111() -> void:
+	var w = Game.world
+	var pl = Game.player
+	var prev_animals: Array = w.animals.duplicate()
+	var prev_time := Game.time_of_day
+	var prev_day := Game.day
+	var prev_stats: Dictionary = Game.stats.duplicate(true)
+	var prev_spawn = Game.spawn_point
+	w.animals = [] # keep gameplay predator safety; isolate the clock assertions
+	_check_quality(not Audio._ambient.has("crickets_loop"), "night cricket loop is not instantiated")
+	Game.time_of_day = 23.5
+	Game.day = 6
+	w.sleep(pl.global_position)
+	_check_quality(is_equal_approx(Game.time_of_day, 5.0) and Game.day == 7, "sleep at night advances instantly to 05:00 tomorrow")
+	Game.time_of_day = 3.0
+	Game.day = 7
+	w.sleep(pl.global_position)
+	_check_quality(is_equal_approx(Game.time_of_day, 5.0) and Game.day == 7, "sleep before dawn wakes at 05:00 the same day")
+	Game.time_of_day = 11.0
+	w.sleep(pl.global_position)
+	_check_quality(is_equal_approx(Game.time_of_day, 14.0), "daytime nap still advances three hours")
+	for seat_type in ["chair", "sofa", "camp_folding_chair"]:
+		var chair := StaticBody3D.new()
+		chair.set_script(load("res://scripts/structure.gd"))
+		w.add_child(chair)
+		chair.persistent = false
+		var origin: Vector3 = pl.global_position
+		chair.setup("", {"type": seat_type, "pos": Game.arr(origin + Vector3(2.0, 0.0, 0.0)), "rot": 0.3, "data": {}})
+		Game.stats["energy"] = 20.0
+		chair.interact(pl)
+		_check_quality(pl.seated_at == chair and pl.get_node("CollisionShape3D").disabled, seat_type + " enters first-person sitting")
+		_check_quality(absf(pl.camera.global_position.y - (chair.global_position.y + pl.SEATED_EYE)) < 0.05, seat_type + " has true seated eye height")
+		pl._update_prompt()
+		_check_quality(pl.prompt.contains("Stand up"), seat_type + " exposes the exit action")
+		await _wait(1.0)
+		_check_quality(Game.stats["energy"] > 20.5, seat_type + " restores energy continuously")
+		chair.global_position += Vector3(1.0, 0.0, 0.0)
+		await _wait(0.12)
+		_check_quality(pl.global_position.distance_to(chair.to_global(Vector3(0.0, 0.0, -0.06))) < 0.05, seat_type + " carries the viewpoint as furniture moves")
+		if seat_type == "chair":
+			await _shot("quality_first_person_seated")
+		pl.stand_up()
+		_check_quality(pl.seated_at == null and not pl.get_node("CollisionShape3D").disabled and is_equal_approx(pl.head.position.y, pl.EYE), seat_type + " stands with collision restored")
+		chair.queue_free()
+		await get_tree().process_frame
+	Game.time_of_day = prev_time
+	Game.day = prev_day
+	Game.stats = prev_stats
+	Game.spawn_point = prev_spawn
+	w.animals = prev_animals
+
 func _run() -> void:
-	if "--v110" in OS.get_cmdline_user_args():
+	if "--v111" in OS.get_cmdline_user_args() or "--v110" in OS.get_cmdline_user_args():
 		Game.new_game(4242, "Normal")
 		get_tree().root.get_node("Main")._start_world({})
 		await _wait(1.5)

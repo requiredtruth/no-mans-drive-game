@@ -2,6 +2,13 @@
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.
 
+## Version 1.11.0: silent nights, sleep at 05:00 and first-person sitting
+
+- [x] No nighttime cricket loop; wind, weather and non-cricket animal ambience remain.
+- [x] Night sleep on beds, tents, bedrolls and van bunks immediately advances to 05:00 with correct day rollover; daytime naps still advance three hours.
+- [x] Chairs, sofas and folding camp chairs physically seat the first-person player with seated eye height, free camera look, continuous energy recovery, standing via E/Jump, and return to the original entry point even if furniture moves.
+- [x] Automated quality assertions and a seated-view screenshot gate the new APK.
+
 ## Version 1.10.0: roadside details and saved journey
 
 - [x] Nine deterministic roadside destinations, visited in order, with saved progress, distance/bearing, a top-right card and a notebook route list. Existing saves begin with an unstarted journey.

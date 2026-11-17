@@ -1,10 +1,10 @@
-## No Man's Drive 1.10.0 — Roadside details
+## No Man's Drive 1.11.0 — Quiet nights and real rest
 
-- Optional nine-stop road trip: actual destinations generated from your world seed, distance and compass bearing, a compact progress card, and the full route in your notebook. Progress is saved; old saves start at the first destination.
-- Aim outlines and names on individual van cupboard/fridge doors, cargo lids, and placed furniture. Looking away clears the outline.
-- Sixteen original printed packaging labels on food cans, drinks, water bottles and spray paint, with paper surface detail, rolled can lids and pull rings.
-- Wooden storage crates have individual slats, visible gaps, corner posts and fasteners. Collision walls retain small stored items.
-- Saves now use a checked temporary file and retain the previous valid save as a recovery copy. A damaged main save falls back to the backup.
-- Automated route, save-recovery and interaction checks, rendered screenshots, and the existing vehicle regression tour gate APK publication.
+- Removed the nighttime cricket ambience loop. Other weather, wind, and wildlife sounds remain.
+- Beds, tents, the van bed/roof tent, and canvas bedrolls now advance nighttime sleep directly to **05:00**. Overnight sleep moves to the following day; pre-dawn sleep finishes at 05:00 the same day. Daytime naps still advance three in-game hours.
+- Chairs, sofas, and folding camp chairs now seat the player in first person at the furniture's real position and facing, with a properly lowered camera.
+- Energy restores continuously as you remain seated (faster on sofas). Look around while seated; press **E / Interact** or **Jump** to stand. Works with touch controls' existing Interact/Jump buttons.
+- Sitting follows furniture on moving vehicle platforms, returns you to your original entry position when you stand, and restores collision.
+- Automated quality checks cover sleep clock rollover, removed cricket playback, three seat types, viewpoint height, recovery, seat movement and standing. The release workflow requires a rendered first-person seated screenshot and the legacy vehicle regression suite.
 
-This is a quality update to the existing game. Litre-based fluid transfers, physical house cupboards, the remaining item/machine backlog, and the full visual overhaul remain unfinished. Android device and multi-client co-op playtesting remain manual acceptance checks.
+This is a focused quality-of-life release. Android device and multiplayer playtests are still needed; other items in `todo.md` remain outstanding.

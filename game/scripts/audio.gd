@@ -6,7 +6,7 @@ var _ambient := {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	for loop_name in ["insects_day_loop", "forest_bed_loop", "crickets_loop", "wind_loop", "rain_loop", "water_loop"]:
+	for loop_name in ["insects_day_loop", "forest_bed_loop", "wind_loop", "rain_loop", "water_loop"]:
 		var p := AudioStreamPlayer.new()
 		p.stream = stream(loop_name, true)
 		p.bus = "Ambience"

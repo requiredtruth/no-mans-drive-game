@@ -406,7 +406,6 @@ func _ambience(delta: float) -> void:
 	Audio.set_ambience({
 		"forest_bed_loop": 0.22 * (b.z + b.y * 0.5) * muffle,
 		"insects_day_loop": (0.16 * (b.x + b.y) if day and midday and not raining else 0.0) * muffle,
-		"crickets_loop": (0.28 * (1.0 - b.w) if not day and not raining else 0.0) * muffle,
 		"wind_loop": (0.12 + 0.45 * b.w + 0.25 * b.x + _overcast * 0.2) * muffle,
 		"rain_loop": (0.8 * _overcast if raining and b.w < 0.5 else 0.0) * (0.7 if inside else 1.0),
 		"water_loop": 0.35 * _near_water * muffle,
@@ -1016,17 +1015,16 @@ func sleep(at: Vector3) -> void:
 			Game.notify("You can't sleep with predators nearby!")
 			return
 	var t := Game.time_of_day
-	var hours := 0.0
+	var night_sleep := t >= 19.0 or t < 5.0
+	var hours := 3.0
 	if t >= 19.0:
-		hours = 24.0 - t + 7.0
-	elif t < 7.0:
-		hours = 7.0 - t
-	else:
-		hours = 3.0
-	hud.fade_sleep(hours)
-	Game.time_of_day += hours
-	while Game.time_of_day >= 24.0:
-		Game.time_of_day -= 24.0
+		hours = 24.0 - t + 5.0
+	elif t < 5.0:
+		hours = 5.0 - t
+	hud.fade_sleep(hours, night_sleep)
+	# Sleep is an immediate clock jump; night sleep always reaches exactly 05:00.
+	Game.time_of_day = 5.0 if night_sleep else fmod(t + hours, 24.0)
+	if t >= 19.0:
 		Game.day += 1
 	var st := Game.stats
 	st["energy"] = minf(st["energy"] + hours * 12.0, 100.0)
