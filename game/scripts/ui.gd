@@ -206,7 +206,7 @@ E pick up / interact / fit the part you hold / use a workbench · G place held i
 empty hands take a fitted van part back out (or pick up furniture) · Q throw
 Left click use / eat / drink / wear / fill a bottle at water · Right click aim / demolish (build)
 R rotate what you place, or pick a different recipe at a workbench
-1-4 or wheel switch hands · Tab notebook (van checklist, recipe book) · B build menu
+1-4 or wheel switch hands · Tab notebook (van checklist, recipe book) · I Equip & Character · B build menu
 F flashlight · L headlights · C driving camera · Esc pause
 
 CONTROLLER

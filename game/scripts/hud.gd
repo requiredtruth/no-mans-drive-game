@@ -91,7 +91,7 @@ func _build_stats() -> void:
 		bars[spec[0]] = b
 	fps_label = UI.label("", 14)
 	box.add_child(fps_label)
-	equip_button = UI.button("EQUIP · CHARACTER", open_equip, 190)
+	equip_button = UI.button("EQUIP · CHARACTER [I]", open_equip, 190)
 	equip_button.custom_minimum_size.y = 38
 	box.add_child(equip_button)
 
@@ -470,6 +470,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			close_modal()
 		elif not modal and Game.player and not Game.player.dead:
 			open_inventory()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("equip_menu"):
+		if modal and _modal_kind == "equip":
+			close_modal()
+		elif not modal and Game.player and not Game.player.dead:
+			open_equip()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("build_menu") and Game.player and not Game.player.dead and not Game.player.driving:
 		if modal and _modal_kind == "build":

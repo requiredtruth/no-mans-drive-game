@@ -6,3 +6,5 @@
 - Equip displays a front-facing full 3D character and working controls for equipping/removing real scavenged wearables. The portrait overlays worn backpacks, headgear and tops without changing saved cosmetic preferences.
 - Carry capacity, armor, insulation, save state and physical hand inventory continue using their existing gameplay systems.
 - A separate Edit appearance button opens the familiar character creator. Multiplayer world, survival, and all previous vehicle systems retained.
+
+- Desktop: press **I** to open/close Equip and Character immediately during captured-mouse gameplay. **Tab** still opens the notebook; Android still has a dedicated Equip touch button.

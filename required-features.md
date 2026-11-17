@@ -1,3 +1,4 @@
+- ✅ Keyboard I opens the new Equip/Character panel while the mouse is captured; Tab still opens the separate notebook.
 ### November 17 USA steering and Equip screen (1.15.4)
 
 - ✅ Steering wheel visually on **left** when looking forward, with driver seat, dash, drive interaction, and first-person camera all aligned.
