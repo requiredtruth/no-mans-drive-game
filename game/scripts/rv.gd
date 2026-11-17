@@ -953,9 +953,9 @@ func _build_interior() -> void:
 	Lib.box(vis, dash_c, Vector3(W - 0.15, 0.5, 0.64), M["plastic"], false, Vector3.ZERO, 0.06)
 	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.03), Vector3(W - 0.2, 0.03, 0.58), M["plastic"], false, Vector3.ZERO, 0.01)
 	_shape(dash_c, Vector3(W - 0.15, 0.5, 0.64))
-	var cluster := Lib.box(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.31), Vector3(0.5, 0.18, 0.04), Lib.color_mat(Color(0.05, 0.05, 0.06), 0.3))
+	var cluster := Lib.box(vis, Vector3(0.55, FLOOR_Y + 0.92, FRONT_Z - 0.31), Vector3(0.5, 0.18, 0.04), Lib.color_mat(Color(0.05, 0.05, 0.06), 0.3))
 	cluster.rotation.x = -0.3
-	for gx in [-0.68, -0.42]:
+	for gx in [0.42, 0.68]:
 		var gg := Lib.cyl(vis, Vector3(gx, FLOOR_Y + 0.92, FRONT_Z - 0.335), 0.06, 0.06, 0.01, Lib.color_mat(Color(0.9, 0.9, 0.85), 0.3, 0.0, Color(0.5, 0.9, 1.0), 0.5), Vector3(PI * 0.5 - 0.3, 0, 0))
 		gg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for vx in [-0.95, 0.35, 0.95]:
@@ -2622,7 +2622,7 @@ func seat_global(as_driver: bool) -> Vector3:
 	return to_global(Vector3(0.55 if as_driver else -0.55, 1.0, 2.3))
 
 func exit_global() -> Vector3:
-	return to_global(Vector3(0.05, FLOOR_Y + 0.1, FRONT_Z - 1.9))
+	return to_global(Vector3(W * 0.5 + 0.45, FLOOR_Y + 0.1, FRONT_Z - 1.2))
 
 func set_seat(as_driver: bool) -> void:
 	cam_fp.position.x = 0.55 if as_driver else -0.55
