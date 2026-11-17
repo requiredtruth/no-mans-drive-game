@@ -1,3 +1,11 @@
+### November 17 face visibility fix (1.15.3)
+
+- ✅ Wardrobe preview must show the **front** of the selected character, not the back of her hair. Turn the avatar toward the camera and frame it closely.
+- ✅ Give Female and Male characters visibly readable facial features: eyes, brows, irises, pupils, nose and mouth.
+- ✅ Keep hairline above the eyes and stop long hair from obscuring the face.
+- ✅ Retain the natural chest silhouette, long hair, pink dress and all multiplayer customization.
+- ✅ Push to main and create the new signed APK release after CI.
+
 ### November 17 character silhouette update (1.15.2)
 
 - ✅ Give Female characters a natural and proportionate chest silhouette under every outfit, including the long-hair pink-dress default.

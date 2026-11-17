@@ -63,11 +63,12 @@ func rebuild(a: Dictionary) -> void:
 		Lib.sphere(self, Vector3(x * (shoulders + 0.10), 0.81, 0), 0.105, skin_mat)
 	Lib.cyl(self, Vector3(0, 1.62, 0), 0.09, 0.09, 0.16, skin_mat)
 	Lib.sphere(self, Vector3(0, 1.87, 0), 0.225, skin_mat, Vector3(0.93, 1.14, 0.93))
-	for x in [-0.085, 0.085]:
-		Lib.sphere(self, Vector3(x, 1.895, -0.201), 0.028, black)
-	Lib.box(self, Vector3(0, 1.757, -0.205), Vector3(0.10, 0.012, 0.013), Lib.color_mat(Color("9e5b5d")))
+	# Sculpt readable front-facing eyes, brows, nose and mouth. The original
+	# eyes were tiny dark dots that disappeared behind the hair at game scale.
+	_add_face(skin, hair, gender, int(a.get("makeup", 0)))
 	var hairstyle: String = Profile.OPTIONS["hair"][clampi(int(a.get("hair", 0)), 0, Profile.OPTIONS["hair"].size() - 1)]
-	Lib.sphere(self, Vector3(0, 2.027, 0.015), 0.222, hair_mat, Vector3(1.0, 0.59, 1.0))
+	# Keep the forehead/hairline above the eyes so the face stays uncovered.
+	Lib.sphere(self, Vector3(0, 2.065, 0.047), 0.220, hair_mat, Vector3(1.0, 0.50, 1.0))
 	if hairstyle in ["Long straight", "Long wavy", "Loose curls", "Locs", "Curly", "Afro"]:
 		# Shoulder-to-midback length, with visible strands and a clean face.
 		Lib.sphere(self, Vector3(0, 1.74, 0.145), 0.235, hair_mat, Vector3(1.1, 1.9, 0.8))
@@ -106,6 +107,38 @@ func rebuild(a: Dictionary) -> void:
 			Lib.sphere(self, Vector3(x, 1.82, -0.165), 0.04, Lib.color_mat(Color("df8996")), Vector3(1.0, 0.6, 0.3))
 	if display_name != "":
 		Lib.label3d(self, Vector3(0, 2.36, 0), display_name, 36)
+
+
+## Eyes and expression, positioned on the front (-Z) of the actual head.
+## Works for both genders, all skin tones, and wardrobe/makeup choices.
+func _add_face(skin: Color, hair: Color, gender: int, makeup: int) -> void:
+	var white := Lib.color_mat(Color("f9f4eb"))
+	var iris := Lib.color_mat(Color("597f80") if gender == 0 else Color("6b5140"))
+	var pupil := Lib.color_mat(Color("171b25"))
+	var brow := Lib.color_mat(hair.darkened(0.27))
+	var lip_color := Color("b85d76") if gender == 0 else Color("9b6260")
+	if makeup == 2:
+		lip_color = Color("e979a1")
+	elif makeup == 3:
+		lip_color = Color("c73753")
+	elif makeup == 4:
+		lip_color = Color("853858")
+	var lips := Lib.color_mat(lip_color)
+	var nose := Lib.color_mat(skin.lightened(0.045))
+	for sign in [-1.0, 1.0]:
+		var x: float = sign * 0.085
+		# Head surface at eye height is just behind -0.18. Layer the
+		# white/iris/pupil slightly forward to be legible from a few metres.
+		Lib.sphere(self, Vector3(x, 1.921, -0.192), 0.043, brow, Vector3(1.22, 0.80, 0.38))
+		Lib.sphere(self, Vector3(x, 1.922, -0.206), 0.038, white, Vector3(1.0, 0.77, 0.48))
+		Lib.sphere(self, Vector3(x, 1.922, -0.225), 0.021, iris, Vector3(0.94, 1.0, 0.52))
+		Lib.sphere(self, Vector3(x, 1.922, -0.237), 0.011, pupil)
+		Lib.sphere(self, Vector3(x - 0.008, 1.932, -0.246), 0.006, white)
+		Lib.box(self, Vector3(x, 1.996, -0.183), Vector3(0.095, 0.018, 0.023), brow,
+			false, Vector3(0, 0, sign * 0.10))
+	Lib.sphere(self, Vector3(0, 1.827, -0.215), 0.037, nose, Vector3(0.65, 1.05, 0.85))
+	Lib.sphere(self, Vector3(0, 1.767, -0.206), 0.056, lips, Vector3(1.0, 0.19, 0.22))
+	Lib.sphere(self, Vector3(0, 1.752, -0.207), 0.047, lips, Vector3(1.0, 0.18, 0.22))
 
 
 ## Female clothing torso is one continuous smooth-shaded mesh, not two glued-on spheres.

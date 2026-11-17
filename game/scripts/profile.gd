@@ -141,11 +141,15 @@ func build_editor(parent: Container, done: Callable) -> void:
 	light.rotation = Vector3(-0.65, -0.45, 0)
 	vp.add_child(light)
 	var cam := Camera3D.new()
-	cam.position = Vector3(0, 1.25, 4.1)
+	# Procedural avatars face -Z, so rotate the preview 180 degrees to face
+	# the +Z camera. Previously the editor only showed the back of the hair!
+	cam.position = Vector3(0, 1.40, 3.0)
+	cam.fov = 52.0
 	vp.add_child(cam)
-	cam.look_at(Vector3(0, 1.1, 0), Vector3.UP)
+	cam.look_at(Vector3(0, 1.18, 0), Vector3.UP)
 	cam.current = true
 	var avatar = load("res://scripts/avatar.gd").new()
+	avatar.rotation.y = PI
 	vp.add_child(avatar)
 	avatar.rebuild(draft)
 	var grid := GridContainer.new()

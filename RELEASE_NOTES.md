@@ -1,6 +1,7 @@
-# No Man's Drive 1.15.2 — Natural female character silhouette
+# No Man's Drive 1.15.3 — Face visibility fix
 
-- Female characters now have a modest, proportionate chest silhouette under the clothing.
-- The upper body uses one continuous smooth-shaded procedural mesh with subtle paired contour, tapered waist and rounded shoulder transition—not separate spheres or exposed skin.
-- All selectable shirts, dresses and outfits use the updated shape, including the default bright pink sundress and long straight hair.
-- Male body shape and customization remain unchanged. The original Female/Male-only editor, saved profiles, multiplayer sharing, vehicle survival and gardens remain intact.
+- Fixed the wardrobe preview camera facing the *back* of the characters. The preview now turns the avatar toward the camera, with a closer, clearer front-facing view.
+- Added detailed, correctly positioned eyes, eyebrows, irises, pupils, nose, mouth and subtle facial expression to both character models.
+- Adjusted the front hairline so long hairstyles do not cover the character's face.
+- Female character keeps her natural clothed chest silhouette, long hair and bright pink dress; both Male and Female and their customizable outfits still work.
+- Shared multiplayer avatar appearance, vehicle gameplay, gardening and saved profiles remain supported.
