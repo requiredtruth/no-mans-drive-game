@@ -1,7 +1,8 @@
-# No Man's Drive 1.15.3 — Face visibility fix
+# No Man's Drive 1.15.4 — USA left-hand drive and Equip Character screen
 
-- Fixed the wardrobe preview camera facing the *back* of the characters. The preview now turns the avatar toward the camera, with a closer, clearer front-facing view.
-- Added detailed, correctly positioned eyes, eyebrows, irises, pupils, nose, mouth and subtle facial expression to both character models.
-- Adjusted the front hairline so long hairstyles do not cover the character's face.
-- Female character keeps her natural clothed chest silhouette, long hair and bright pink dress; both Male and Female and their customizable outfits still work.
-- Shared multiplayer avatar appearance, vehicle gameplay, gardening and saved profiles remain supported.
+- Moved steering wheels and driver seats to the US left side **as viewed facing forward**. This is vehicle-local +X, with +Z forward. The driver's first-person camera, seat, door interaction and exit are aligned on the same side.
+- Updated the main van plus all nine drivable vehicle types (including trucks, semis and RVs); passenger positions are opposite the driver.
+- New EQUIP · CHARACTER HUD button and Android EQUIP touch button available on foot or in a vehicle.
+- Equip displays a front-facing full 3D character and working controls for equipping/removing real scavenged wearables. The portrait overlays worn backpacks, headgear and tops without changing saved cosmetic preferences.
+- Carry capacity, armor, insulation, save state and physical hand inventory continue using their existing gameplay systems.
+- A separate Edit appearance button opens the familiar character creator. Multiplayer world, survival, and all previous vehicle systems retained.

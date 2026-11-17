@@ -36,6 +36,7 @@ var _modal_ctx = null
 var _note_items: Array = []
 var _icon_dirty := false
 var _icon_timer := 0.0
+var equip_button: Button
 
 func _ready() -> void:
 	layer = 5
@@ -90,6 +91,9 @@ func _build_stats() -> void:
 		bars[spec[0]] = b
 	fps_label = UI.label("", 14)
 	box.add_child(fps_label)
+	equip_button = UI.button("EQUIP · CHARACTER", open_equip, 190)
+	equip_button.custom_minimum_size.y = 38
+	box.add_child(equip_button)
 
 func _build_top_right() -> void:
 	var v := VBoxContainer.new()
@@ -258,7 +262,7 @@ func _on_inventory() -> void:
 
 func _build_notes() -> void:
 	notes = VBoxContainer.new()
-	notes.position = Vector2(18, 200)
+	notes.position = Vector2(18, 252)
 	notes.add_theme_constant_override("separation", 2)
 	notes.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(notes)
@@ -418,6 +422,7 @@ func _process(delta: float) -> void:
 			build_info.text = "PLACING: %s  (%s) — %s\n[USE] place · [R/ROT] rotate · [RMB] demolish · [B/BUILD] stop" % [Data.PIECES[pc]["name"], cost_txt, b.reason if not b.valid else "ready"]
 		else:
 			build_info.text = p.nav_text
+		equip_button.visible = gameplay_visible and not Game.use_touch()
 		dash.visible = p.driving
 		hotbar_box.visible = not p.driving
 		held_label.visible = not p.driving
@@ -540,6 +545,99 @@ func close_modal() -> void:
 func _reopen() -> void:
 	match _modal_kind:
 		"inventory": open_book()
+		"equip": open_equip()
+
+
+# ------------------------------------------------------------------ Equip / Character
+## Wear and take off physical scavenged gear with the normal gameplay APIs.
+## The portrait uses a separate 3D viewport; no world-camera changes or saved
+## wardrobe edits are made by previewing scavenged equipment.
+func open_equip() -> void:
+	if Game.player == null or Game.player.dead:
+		return
+	var body := _open_modal("equip", "Equip · Character", null, 920.0)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 16)
+	body.add_child(cols)
+	var portrait := VBoxContainer.new()
+	portrait.custom_minimum_size.x = 320
+	portrait.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(portrait)
+	portrait.add_child(UI.label(str(Profile.appearance.get("username", "Survivor")), 20, Color("f0c6da")))
+	Profile.add_avatar_preview(portrait, _equipped_character_look(), Vector2(320, 300))
+	portrait.add_child(UI.label("Insulation: %d   Armor: %d%%   Carry slots: %d" % [
+		int(Game.worn_stat("insulation")), int(Game.worn_stat("armor") * 100.0), Game.slot_count()], 15))
+	portrait.add_child(UI.button("Edit appearance / wardrobe", open_wardrobe, 310))
+	var gear := VBoxContainer.new()
+	gear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(gear)
+	gear.add_child(UI.label("Currently equipped", 19, Color("f5d59c")))
+	if Game.worn.is_empty():
+		gear.add_child(UI.label("Nothing equipped", 14))
+	else:
+		var keys: Array = Game.worn.keys()
+		keys.sort()
+		for id in keys:
+			var item_id: String = str(id)
+			var row := HBoxContainer.new()
+			gear.add_child(row)
+			var slot: String = str(Data.ITEMS.get(item_id, {}).get("slot", "utility")).capitalize()
+			var label := UI.label("%s · %s" % [slot, Data.item_name(item_id)], 14)
+			label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			row.add_child(label)
+			row.add_child(UI.button("Remove", func() -> void:
+				Game.take_off(item_id)
+				open_equip(), 88))
+	gear.add_child(UI.label("Available in your hands", 19, Color("f5d59c")))
+	var available := 0
+	for i in range(Game.slots.size()):
+		var item_id: String = str(Game.slots[i].get("id", ""))
+		var item: Dictionary = Data.ITEMS.get(item_id, {})
+		if item_id == "" or (str(item.get("kind", "")) != "wear" and item_id != "flashlight"):
+			continue
+		available += 1
+		var row := HBoxContainer.new()
+		gear.add_child(row)
+		var label := UI.label(Data.item_name(item_id), 14)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(label)
+		var btn := UI.button("Equip", func() -> void:
+			if Game.wear(item_id):
+				open_equip()
+			else:
+				Game.notify("Cannot equip " + Data.item_name(item_id)), 88)
+		btn.disabled = Game.worn.has(item_id)
+		row.add_child(btn)
+	if available == 0:
+		gear.add_child(UI.label("Carry a jacket, helmet or backpack to equip it here.", 14))
+	gear.add_child(UI.label("Equipment is saved with the world; cosmetic wardrobe stays separate.", 13))
+
+func _equipped_character_look() -> Dictionary:
+	var look: Dictionary = Profile.public_data()
+	for id in Game.worn:
+		var slot: String = str(Data.ITEMS.get(id, {}).get("slot", ""))
+		var id_text: String = str(id)
+		match slot:
+			"back":
+				look["bag"] = Profile.OPTIONS["bag"].find("Backpack")
+			"head":
+				look["hat"] = Profile.OPTIONS["hat"].find("Helmet") if "helmet" in id_text else Profile.OPTIONS["hat"].find("Headband")
+			"body":
+				if "poncho" in id_text or "rain" in id_text:
+					look["top"] = Profile.OPTIONS["top"].find("Raincoat")
+				elif "vest" in id_text:
+					look["top"] = Profile.OPTIONS["top"].find("Vest")
+				elif "jacket" in id_text:
+					look["top"] = Profile.OPTIONS["top"].find("Leather jacket")
+				else:
+					look["top"] = Profile.OPTIONS["top"].find("Classic T-shirt")
+				if "red" in id_text:
+					look["outfit_color"] = Profile.OPTIONS["outfit_color"].find("Red")
+				elif "blue" in id_text:
+					look["outfit_color"] = Profile.OPTIONS["outfit_color"].find("Sky")
+	return look
 
 # ------------------------------------------------------------------ notebook (no crafting menu)
 func open_inventory() -> void:

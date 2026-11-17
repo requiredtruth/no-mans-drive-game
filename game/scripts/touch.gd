@@ -58,6 +58,11 @@ func _ready() -> void:
 	_drive_buttons.append(pause)
 	_foot_buttons.append(pause)
 	_foot_buttons.append(_btn("THROW", "drop", Color(0.6, 0.45, 0.35), 0.75))
+	var equip := _btn("EQUIP", "", Color(0.64, 0.42, 0.68), 0.78, func() -> void:
+		if Game.world and Game.world.hud:
+			Game.world.hud.open_equip())
+	_foot_buttons.append(equip)
+	_drive_buttons.append(equip)
 	_layout()
 
 func _make_circle(s: int) -> Texture2D:
@@ -136,6 +141,7 @@ func _layout() -> void:
 	_place(f[10], Vector2(24, vp.y * 0.42))
 	_place(f[11], Vector2(vp.x * 0.5 + 250, 14))
 	_place(f[12], Vector2(r - px.call(f[9]) - px.call(f[12]) - 10, vp.y * 0.3 + px.call(f[6]) + 10))
+	_place(f[13], Vector2(24 + px.call(f[10]) + 12, vp.y * 0.42))
 	var d := _drive_buttons
 	_place(d[5], Vector2(r - px.call(d[5]), b - px.call(d[5])))
 	_place(d[6], Vector2(r - px.call(d[5]) - px.call(d[6]) - 16, b - px.call(d[6])))
@@ -146,6 +152,7 @@ func _layout() -> void:
 	_place(d[4], Vector2(r - px.call(d[3]) - px.call(d[4]) - 10, vp.y * 0.3))
 	_place(d[7], Vector2(r - px.call(d[3]) - px.call(d[4]) - px.call(d[7]) - 20, vp.y * 0.3))
 	_place(d[8], Vector2(vp.x * 0.5 + 250, 14))
+	_place(d[9], Vector2(24 + px.call(f[10]) + 12, vp.y * 0.42))
 	_stick_center = Vector2(40 + STICK_R * _scale + 30, vp.y - STICK_R * _scale - 60)
 	_update_stick_visual()
 

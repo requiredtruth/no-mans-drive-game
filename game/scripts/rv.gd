@@ -967,7 +967,7 @@ func _build_interior() -> void:
 		Lib.box(vis, Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4), M["black"])
 		_shape(Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4))
 	# steering column stub
-	Lib.cyl(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.38), 0.035, 0.035, 0.34, M["black"], Vector3(-1.1, 0, 0), 10)
+	Lib.cyl(vis, Vector3(0.55, FLOOR_Y + 0.92, FRONT_Z - 0.38), 0.035, 0.035, 0.34, M["black"], Vector3(-1.1, 0, 0), 10)
 	# light switch
 	Lib.box(vis, Vector3(W * 0.5 - 0.1, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.03, 0.12, 0.08), Lib.color_mat(Color(0.9, 0.9, 0.85)))
 	_part(Vector3(W * 0.5 - 0.12, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.1, 0.25, 0.2), "lights")
@@ -999,12 +999,12 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 	var sw := MeshInstance3D.new()
 	sw.mesh = Items.mesh("steering_wheel")
 	sw.name = "SteeringWheel"
-	sw.position = Vector3(-0.55, FLOOR_Y + 1.02, FRONT_Z - 0.56)
+	sw.position = Vector3(0.55, FLOOR_Y + 1.02, FRONT_Z - 0.56)
 	sw.rotation = Vector3(-1.1, 0, 0)
 	stv.add_child(sw)
 	_end()
 	for i in range(2):
-		var x: float = [-0.55, 0.55][i]
+		var x: float = [0.55, -0.55][i]
 		var sv := _begin("seat_driver" if i == 0 else "seat_passenger", vis)
 		var seat := MeshInstance3D.new()
 		seat.mesh = Items.mesh("car_seat")
@@ -1168,9 +1168,9 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 func _build_mounts() -> void:
 	var tx := W * 0.5 - 0.47
 	var kx := -W * 0.5 + 0.42
-	_mount("steering", Vector3(-0.55, FLOOR_Y + 1.0, FRONT_Z - 0.55), Vector3(0.45, 0.4, 0.25))
-	_mount("seat_driver", Vector3(-0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
-	_mount("seat_passenger", Vector3(0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
+	_mount("steering", Vector3(0.55, FLOOR_Y + 1.0, FRONT_Z - 0.55), Vector3(0.45, 0.4, 0.25))
+	_mount("seat_driver", Vector3(0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
+	_mount("seat_passenger", Vector3(-0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
 	_mount("radio", Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.33), Vector3(0.28, 0.16, 0.12))
 	_mount("headlight_l", Vector3(-0.85, 1.25, FRONT_Z + 1.33), Vector3(0.46, 0.3, 0.12))
 	_mount("headlight_r", Vector3(0.85, 1.25, FRONT_Z + 1.33), Vector3(0.46, 0.3, 0.12))
@@ -1212,7 +1212,7 @@ func _build_mounts() -> void:
 
 func _build_cameras() -> void:
 	cam_fp = Camera3D.new()
-	cam_fp.position = Vector3(-0.55, FLOOR_Y + 1.38, FRONT_Z - 1.2)
+	cam_fp.position = Vector3(0.55, FLOOR_Y + 1.38, FRONT_Z - 1.2)
 	cam_fp.rotation.y = PI
 	cam_fp.near = 0.05
 	cam_fp.far = 1200.0
@@ -2619,13 +2619,13 @@ func display_name() -> String:
 	return "Van"
 
 func seat_global(as_driver: bool) -> Vector3:
-	return to_global(Vector3(-0.55 if as_driver else 0.55, 1.0, 2.3))
+	return to_global(Vector3(0.55 if as_driver else -0.55, 1.0, 2.3))
 
 func exit_global() -> Vector3:
 	return to_global(Vector3(0.05, FLOOR_Y + 0.1, FRONT_Z - 1.9))
 
 func set_seat(as_driver: bool) -> void:
-	cam_fp.position.x = -0.55 if as_driver else 0.55
+	cam_fp.position.x = 0.55 if as_driver else -0.55
 
 func hitch_global() -> Vector3:
 	return to_global(Vector3(0, 0.75, REAR_Z - 0.55))

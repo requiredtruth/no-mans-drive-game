@@ -1,3 +1,13 @@
+### November 17 USA steering and Equip screen (1.15.4)
+
+- ✅ Steering wheel visually on **left** when looking forward, with driver seat, dash, drive interaction, and first-person camera all aligned.
+- ✅ Correct van and all vehicle classes for American left-hand drive, retaining passenger seats and drivable controls.
+- ✅ Dedicated Equip/Character button on desktop and Android touch, including when driving.
+- ✅ Equip shows a live front-facing 3D character with face/hair/body/wardrobe plus currently worn equipment.
+- ✅ Functional Equip/Remove actions use gameplay wearables and update armor/warmth/carry slots and saves.
+- ✅ Preserve separate cosmetic editing with a wardrobe button.
+- 🔄 CI Godot quality tour, physical Android multiplayer and UI checks remain the acceptance gate.
+
 ### November 17 face visibility fix (1.15.3)
 
 - ✅ Wardrobe preview must show the **front** of the selected character, not the back of her hair. Turn the avatar toward the camera and frame it closely.

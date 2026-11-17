@@ -120,38 +120,7 @@ func build_editor(parent: Container, done: Callable) -> void:
 	username.text = str(draft["username"])
 	username.custom_minimum_size = Vector2(0, 44)
 	parent.add_child(username)
-	var holder := SubViewportContainer.new()
-	holder.stretch = true
-	holder.custom_minimum_size = Vector2(300, 245)
-	parent.add_child(holder)
-	var vp := SubViewport.new()
-	vp.size = Vector2i(420, 340)
-	vp.own_world_3d = true
-	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	holder.add_child(vp)
-	var env := WorldEnvironment.new()
-	env.environment = Environment.new()
-	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color(0.16, 0.18, 0.22)
-	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color = Color(0.85, 0.85, 0.86)
-	env.environment.ambient_light_energy = 0.8
-	vp.add_child(env)
-	var light := DirectionalLight3D.new()
-	light.rotation = Vector3(-0.65, -0.45, 0)
-	vp.add_child(light)
-	var cam := Camera3D.new()
-	# Procedural avatars face -Z, so rotate the preview 180 degrees to face
-	# the +Z camera. Previously the editor only showed the back of the hair!
-	cam.position = Vector3(0, 1.40, 3.0)
-	cam.fov = 52.0
-	vp.add_child(cam)
-	cam.look_at(Vector3(0, 1.18, 0), Vector3.UP)
-	cam.current = true
-	var avatar = load("res://scripts/avatar.gd").new()
-	avatar.rotation.y = PI
-	vp.add_child(avatar)
-	avatar.rebuild(draft)
+	var avatar = add_avatar_preview(parent, draft)
 	var grid := GridContainer.new()
 	var pickers: Dictionary = {}
 	grid.columns = 2
@@ -185,3 +154,40 @@ func build_editor(parent: Container, done: Callable) -> void:
 		draft["username"] = username.text
 		save(draft)
 		done.call()))
+
+
+## Shared front-facing 3D character preview for wardrobe and Equip.
+func add_avatar_preview(parent: Container, look: Dictionary, minimum: Vector2 = Vector2(300, 245)) -> Node3D:
+	var holder := SubViewportContainer.new()
+	holder.stretch = true
+	holder.custom_minimum_size = minimum
+	parent.add_child(holder)
+	var vp := SubViewport.new()
+	vp.size = Vector2i(420, 340)
+	vp.own_world_3d = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	holder.add_child(vp)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_COLOR
+	env.environment.background_color = Color(0.16, 0.18, 0.22)
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.85, 0.85, 0.86)
+	env.environment.ambient_light_energy = 0.8
+	vp.add_child(env)
+	var light := DirectionalLight3D.new()
+	light.rotation = Vector3(-0.65, -0.45, 0)
+	vp.add_child(light)
+	var cam := Camera3D.new()
+	# Procedural avatars face -Z, so rotate the preview 180 degrees to face
+	# the +Z camera. Previously the editor only showed the back of the hair!
+	cam.position = Vector3(0, 1.40, 3.0)
+	cam.fov = 52.0
+	vp.add_child(cam)
+	cam.look_at(Vector3(0, 1.18, 0), Vector3.UP)
+	cam.current = true
+	var avatar = load("res://scripts/avatar.gd").new()
+	avatar.rotation.y = PI
+	vp.add_child(avatar)
+	avatar.rebuild(look)
+	return avatar

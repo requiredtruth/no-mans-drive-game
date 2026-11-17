@@ -10,23 +10,23 @@ const Structure = preload("res://scripts/structure.gd")
 
 const SPECS := {
 	"pickup": {"name": "Pickup Truck", "mass": 2100.0, "power": 7200.0, "top": 33.0, "fuel": 75.0, "w": 1.95, "wr": 0.42, "wz": [-1.75, 1.6], "wx": 0.86, "awd": true, "grip": 3.2,
-		"seat": Vector3(-0.42, 1.15, 0.15), "cam": Vector3(-0.42, 1.62, 0.12), "hitch": -2.85, "exit": Vector3(-1.9, 0.0, 0.2), "cargo": [Vector3(0, 1.0, -1.7), Vector3(1.6, 1.4, 1.9)]},
+		"seat": Vector3(0.42, 1.15, 0.15), "cam": Vector3(0.42, 1.62, 0.12), "hitch": -2.85, "exit": Vector3(1.9, 0.0, 0.2), "cargo": [Vector3(0, 1.0, -1.7), Vector3(1.6, 1.4, 1.9)]},
 	"work_truck": {"name": "Utility Work Truck", "mass": 3300.0, "power": 9800.0, "top": 29.0, "fuel": 110.0, "w": 2.05, "wr": 0.46, "wz": [-1.75, 1.6], "wx": 0.91, "awd": true, "grip": 3.2,
-		"seat": Vector3(-0.46, 1.19, 0.15), "cam": Vector3(-0.46, 1.68, 0.12), "hitch": -2.85, "exit": Vector3(-1.98, 0.0, 0.2), "cargo": [Vector3(0, 1.05, -1.7), Vector3(1.8, 1.4, 1.9)]},
+		"seat": Vector3(0.46, 1.19, 0.15), "cam": Vector3(0.46, 1.68, 0.12), "hitch": -2.85, "exit": Vector3(1.98, 0.0, 0.2), "cargo": [Vector3(0, 1.05, -1.7), Vector3(1.8, 1.4, 1.9)]},
 	"semi": {"name": "Semi Tractor", "mass": 7600.0, "power": 20000.0, "top": 25.0, "fuel": 260.0, "w": 2.5, "wr": 0.54, "wz": [-4.0, 2.3], "wx": 1.1, "awd": false, "grip": 3.25,
-		"seat": Vector3(-0.53, 1.75, 1.6), "cam": Vector3(-0.53, 2.25, 1.6), "hitch": -4.6, "exit": Vector3(-2.3, 0.0, 1.6), "cargo": [Vector3(0, 1.26, -3.1), Vector3(2.1, 1.0, 2.7)]},
+		"seat": Vector3(0.53, 1.75, 1.6), "cam": Vector3(0.53, 2.25, 1.6), "hitch": -4.6, "exit": Vector3(2.3, 0.0, 1.6), "cargo": [Vector3(0, 1.26, -3.1), Vector3(2.1, 1.0, 2.7)]},
 	"long_rv": {"name": "Extra-Long Bare RV", "mass": 6800.0, "power": 16500.0, "top": 23.0, "fuel": 210.0, "w": 2.48, "wr": 0.52, "wz": [-8.0, 1.85], "wx": 1.08, "awd": false, "grip": 3.3,
-		"seat": Vector3(-0.52, 1.35, 2.0), "cam": Vector3(-0.52, 1.9, 2.0), "hitch": -10.95, "exit": Vector3(-2.28, 0.0, 2.0), "cargo": [Vector3(0, 1.57, -4.6), Vector3(2.18, 2.3, 10.6)]},
+		"seat": Vector3(0.52, 1.35, 2.0), "cam": Vector3(0.52, 1.9, 2.0), "hitch": -10.95, "exit": Vector3(2.28, 0.0, 2.0), "cargo": [Vector3(0, 1.57, -4.6), Vector3(2.18, 2.3, 10.6)]},
 	"sedan": {"name": "Sedan", "mass": 1350.0, "power": 5200.0, "top": 40.0, "fuel": 50.0, "w": 1.8, "wr": 0.34, "wz": [-1.4, 1.35], "wx": 0.78, "awd": false, "grip": 3.0,
-		"seat": Vector3(-0.38, 0.75, -0.15), "cam": Vector3(-0.38, 1.18, -0.2), "hitch": -2.45, "exit": Vector3(-1.7, 0.0, -0.1), "cargo": [Vector3(0, 0.75, -1.85), Vector3(1.4, 0.4, 0.8)]},
+		"seat": Vector3(0.38, 0.75, -0.15), "cam": Vector3(0.38, 1.18, -0.2), "hitch": -2.45, "exit": Vector3(1.7, 0.0, -0.1), "cargo": [Vector3(0, 0.75, -1.85), Vector3(1.4, 0.4, 0.8)]},
 	"box_truck": {"name": "Box Truck", "mass": 4200.0, "power": 11500.0, "top": 26.0, "fuel": 130.0, "w": 2.3, "wr": 0.48, "wz": [-2.3, 2.1], "wx": 0.98, "awd": false, "grip": 3.1,
-		"seat": Vector3(-0.5, 1.45, 2.3), "cam": Vector3(-0.5, 2.0, 2.3), "hitch": -3.75, "exit": Vector3(-2.1, 0.0, 2.3), "cargo": [Vector3(0, 1.85, -1.15), Vector3(2.1, 2.2, 4.0)]},
+		"seat": Vector3(0.5, 1.45, 2.3), "cam": Vector3(0.5, 2.0, 2.3), "hitch": -3.75, "exit": Vector3(2.1, 0.0, 2.3), "cargo": [Vector3(0, 1.85, -1.15), Vector3(2.1, 2.2, 4.0)]},
 	"mini_rv": {"name": "Compact RV", "mass": 2700.0, "power": 7600.0, "top": 28.0, "fuel": 85.0, "w": 2.05, "wr": 0.43, "wz": [-1.85, 1.55], "wx": 0.9, "awd": false, "grip": 3.2,
-		"seat": Vector3(-0.43, 1.15, 1.45), "cam": Vector3(-0.43, 1.67, 1.45), "hitch": -2.75, "exit": Vector3(-1.9, 0.0, 1.45), "cargo": [Vector3(0, 1.4, -0.8), Vector3(1.8, 2.0, 3.4)]},
+		"seat": Vector3(0.43, 1.15, 1.45), "cam": Vector3(0.43, 1.67, 1.45), "hitch": -2.75, "exit": Vector3(1.9, 0.0, 1.45), "cargo": [Vector3(0, 1.4, -0.8), Vector3(1.8, 2.0, 3.4)]},
 	"mid_rv": {"name": "Touring RV", "mass": 3800.0, "power": 10500.0, "top": 27.0, "fuel": 120.0, "w": 2.28, "wr": 0.48, "wz": [-2.25, 1.85], "wx": 1.0, "awd": false, "grip": 3.2,
-		"seat": Vector3(-0.49, 1.28, 2.0), "cam": Vector3(-0.49, 1.82, 2.0), "hitch": -3.45, "exit": Vector3(-2.1, 0.0, 2.0), "cargo": [Vector3(0, 1.55, -1.1), Vector3(2.0, 2.2, 4.4)]},
+		"seat": Vector3(0.49, 1.28, 2.0), "cam": Vector3(0.49, 1.82, 2.0), "hitch": -3.45, "exit": Vector3(2.1, 0.0, 2.0), "cargo": [Vector3(0, 1.55, -1.1), Vector3(2.0, 2.2, 4.4)]},
 	"offroader": {"name": "Off-Roader", "mass": 1900.0, "power": 6800.0, "top": 34.0, "fuel": 70.0, "w": 1.85, "wr": 0.46, "wz": [-1.35, 1.4], "wx": 0.84, "awd": true, "grip": 3.6,
-		"seat": Vector3(-0.4, 1.2, 0.05), "cam": Vector3(-0.4, 1.7, 0.0), "hitch": -2.4, "exit": Vector3(-1.8, 0.0, 0.0), "cargo": [Vector3(0, 1.35, -1.2), Vector3(1.5, 0.9, 1.0)]},
+		"seat": Vector3(0.4, 1.2, 0.05), "cam": Vector3(0.4, 1.7, 0.0), "hitch": -2.4, "exit": Vector3(1.8, 0.0, 0.0), "cargo": [Vector3(0, 1.35, -1.2), Vector3(1.5, 0.9, 1.0)]},
 }
 
 const COLORS := [Color("8a2b22"), Color("2f4a6a"), Color("d9d4c4"), Color("3f5a3a"), Color("c49a3a"), Color("5a5a5c"), Color("1e1e20"), Color("6a8aa0")]
@@ -546,8 +546,10 @@ func _build() -> void:
 		_part(Vector3(sx * (float(spec["wx"]) + 0.12), wr + 0.12, axle_z), Vector3(0.35, wr * 2.2, wr * 2.4), "wheel%d" % wheels.size())
 		wheels.append(vw)
 	# interaction hotspots
-	_part(Vector3(-w * 0.5 - 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "drive")
-	_part(Vector3(w * 0.5 + 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "passenger")
+	# Vehicles face +Z. Viewed facing forward, +X is the American driver's LEFT.
+	# Keep the drive hotspot, wheel, cab camera and seat together.
+	_part(Vector3(w * 0.5 + 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "drive")
+	_part(Vector3(-w * 0.5 - 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "passenger")
 	_part(Vector3(0, light_y + 0.35, front_z - 0.5), Vector3(w - 0.2, 0.2, 0.9), "hood")
 	# battery under a flip-up cover at the front corner of the hood
 	var bpos := Vector3(w * 0.3, light_y + 0.47, front_z - 0.4)
