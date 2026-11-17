@@ -963,7 +963,7 @@ func _everything_trailers() -> void:
 		var id := "everything_trailer_%d" % i
 		if Game.vehicles.has(id):
 			continue
-		var lp := Vector3(-6.0 - i * 3.2, 0.0, -14.0)
+		var lp := Vector3(9.0 + i * 3.2, 0.0, -14.0)
 		var p: Vector3 = rv.to_global(lp)
 		p.y = gen.height(p.x, p.z) + 0.8
 		spawn_vehicle(id, kinds[i], p, Vector3(0, rv.rotation.y, 0), {})

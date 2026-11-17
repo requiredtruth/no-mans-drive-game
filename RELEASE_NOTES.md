@@ -9,3 +9,5 @@
 - Save files preserve the chosen map mode, rear-door state, fitted parts, cargo and installed engines.
 
 Automated Godot checks must pass before the Android APK is built and released. Actual Android hardware testing is still pending.
+- The opening interaction is available directly at the rear cargo access even when the separate door hotspot is obscured; the tailgate and camper hatches now rotate around their actual hinges.
+- Individual road-vehicle wheel types are persisted, and Everything trailers no longer occupy the item depot.

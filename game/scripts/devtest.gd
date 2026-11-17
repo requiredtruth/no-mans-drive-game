@@ -2259,6 +2259,8 @@ func _v112() -> void:
 		_check_quality(saved["rear_open"] and saved["cargo"].size() == 1, "cargo/door persisted: " + kind)
 		v.set_rear_open(false, false)
 		_check_quality(not v.rear_open, "rear access closes: " + kind)
+		v.cargo_store()
+		_check_quality(v.rear_open, "cargo interaction opens rear access: " + kind)
 	var a = w.vehicle_nodes["quality_v112_box_truck"]
 	_player_at(a.global_position + Vector3(3, 0.2, -5), -0.4)
 	await _settle(a.global_position)

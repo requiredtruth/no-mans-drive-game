@@ -60,7 +60,9 @@ var rear_open := false
 var _rear_gate: Node3D
 var _rear_gate_shape: CollisionShape3D
 var _rear_anim: Tween
+var _rear_gate_home := Vector3.ZERO
 var engine_kind := "engine_block"
+var wheel_kind := {}
 
 ## Cab interior: carpet, door cards, pillars, headliner, rear wall and a gauge cluster, so from
 ## the driver's seat you sit inside a real cab instead of looking out through a glass shell.
@@ -168,13 +170,14 @@ func _apply_state(s: Dictionary) -> void:
 	paint = int(s.get("paint", paint))
 	odometer = float(s.get("odometer", 0.0))
 	missing = s.get("missing", {})
+	wheel_kind = s.get("wheel_kind", {}).duplicate()
 	rear_open = bool(s.get("rear_open", false))
 	engine_kind = str(s.get("engine_kind", "engine_block"))
 
 func save_state() -> Dictionary:
 	return {"kind": kind, "xform": [Game.arr(global_position), Game.arr(rotation)], "fuel": fuel, "battery": battery,
 		"parts": parts, "upgrades": upgrades, "paint": paint, "odometer": odometer, "missing": missing,
-		"rear_open": rear_open, "engine_kind": engine_kind,
+		"rear_open": rear_open, "engine_kind": engine_kind, "wheel_kind": wheel_kind,
 		"trailer": trailer.vid if trailer and is_instance_valid(trailer) else "",
 		"cargo": Game.world.cargo_records(self) if Game.world else []}
 
@@ -264,7 +267,8 @@ func _build() -> void:
 				Lib.box(self, Vector3(s * (w * 0.5 + 0.02), 1.2, 0.95), Vector3(0.03, 0.04, 0.16), Items.steel())
 			_rear_gate = Node3D.new()
 			_rear_gate.name = "PickupTailgate"
-			_rear_gate.position = Vector3(0, 0.95, -2.78)
+			_rear_gate_home = Vector3(0, 0.95, -2.78)
+			_rear_gate.position = _rear_gate_home
 			add_child(_rear_gate)
 			Lib.box(_rear_gate, Vector3(0, 0.2, 0), Vector3(w - 0.1, 0.42, 0.08), _paint())
 			Lib.box(self, Vector3(0, 0.98, -1.76), Vector3(w - 0.2, 0.04, 2.0), Lib.mat("metal", Color(0.5, 0.5, 0.52), 1.5, false, 0.5, 0.7))
@@ -325,7 +329,7 @@ func _build() -> void:
 			Lib.box(self, Vector3(0, floor_y, center_z), Vector3(w, 0.12, length), inside)
 			Lib.box(self, Vector3(0, top_y, center_z), Vector3(w, 0.1, length), wall)
 			for side in [-1.0, 1.0]:
-				var x := side * w * 0.5
+				var x: float = float(side) * w * 0.5
 				Lib.box(self, Vector3(x, (floor_y + top_y) * 0.5, center_z), Vector3(0.08, top_y - floor_y, length), wall)
 				# Glazed side panels with trim and separate interior furnishings.
 				Lib.box(self, Vector3(x + side * 0.045, 2.08, -1.1), Vector3(0.014, 0.55, 1.2), Items.dark_steel())
@@ -337,8 +341,10 @@ func _build() -> void:
 			_shape(Vector3(0, (floor_y + top_y) * 0.5, fz), Vector3(w, top_y - floor_y, 0.09))
 			_rear_gate = Node3D.new()
 			_rear_gate.name = "CamperRearHatch"
+			_rear_gate_home = Vector3(0, top_y, rz - 0.02)
+			_rear_gate.position = _rear_gate_home
 			add_child(_rear_gate)
-			Lib.box(_rear_gate, Vector3(0, (floor_y + top_y) * 0.5, rz - 0.02), Vector3(w - 0.1, top_y - floor_y, 0.06), wall)
+			Lib.box(_rear_gate, Vector3(0, -(top_y - floor_y) * 0.5, 0), Vector3(w - 0.1, top_y - floor_y, 0.06), wall)
 			_rear_gate_shape = _shape(Vector3(0, (floor_y + top_y) * 0.5, rz), Vector3(w, top_y - floor_y, 0.08))
 			_part(Vector3(0, 1.65, rz - 0.2), Vector3(w * 0.7, 1.4, 0.22), "rear")
 			# Bed, cupboard, kitchenette, a table, and a real sleep hotspot inside.
@@ -376,8 +382,10 @@ func _build() -> void:
 		var r := -2.36 if kind == "sedan" else -2.08
 		_rear_gate = Node3D.new()
 		_rear_gate.name = "RearCargoHatch"
+		_rear_gate_home = Vector3(0, 1.35, r - 0.03)
+		_rear_gate.position = _rear_gate_home
 		add_child(_rear_gate)
-		Lib.box(_rear_gate, Vector3(0, 1.05, r - 0.03), Vector3(w - 0.15, 0.57, 0.06), _paint())
+		Lib.box(_rear_gate, Vector3(0, -0.3, 0), Vector3(w - 0.15, 0.57, 0.06), _paint())
 		_rear_gate_shape = _shape(Vector3(0, 1.05, r), Vector3(w - 0.15, 0.57, 0.08))
 		_part(Vector3(0, 1.1, r - 0.15), Vector3(w * 0.7, 0.65, 0.2), "rear")
 	# lights, grille, bumpers (front at the largest z of the body)
@@ -715,19 +723,20 @@ func set_rear_open(open: bool, animate := true) -> void:
 	if _rear_gate == null:
 		return
 	var target := Vector3(0, 2.45 if kind == "box_truck" and open else 0, 0)
-	var angle := -1.4 if open and kind != "box_truck" else 0.0
+	var angle := (1.4 if kind == "pickup" else -1.4) if open and kind != "box_truck" else 0.0
 	if not animate:
-		_rear_gate.position = target + (Vector3(0, 0.95, -2.78) if kind == "pickup" else Vector3.ZERO)
+		_rear_gate.position = target + _rear_gate_home
 		_rear_gate.rotation.x = angle
 	else:
 		_rear_anim = create_tween().set_parallel(true)
-		_rear_anim.tween_property(_rear_gate, "position", target + (Vector3(0, 0.95, -2.78) if kind == "pickup" else Vector3.ZERO), 0.35)
+		_rear_anim.tween_property(_rear_gate, "position", target + _rear_gate_home, 0.35)
 		_rear_anim.tween_property(_rear_gate, "rotation:x", angle, 0.35)
 		Audio.play_at("door", global_position, -5.0, 0.9)
 
 func cargo_store() -> void:
 	if not rear_open:
-		Game.notify("Open the rear cargo door first")
+		set_rear_open(true)
+		Game.notify("Rear cargo access opened")
 		return
 	var cargo: Node = get_node("Cargo")
 	if Game.equipped() != "":
@@ -798,7 +807,7 @@ func prompt_for(action: String) -> String:
 		"hood": return ("[E] Fit engine block" if missing.has("engine") and Game.equipped() != "" else "[G] Swap engine (Toolkit needed)" if Game.equipped() == "" else Mounts.car_hood_prompt(self))
 		"fuel": return "[E] Refuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
 		"rear": return "[E] %s rear cargo door" % ("Close" if rear_open else "Open")
-		"cargo": return ("[E] Store held item in %s" % display_name() if Game.equipped() != "" else "[E] Take an item from vehicle cargo") if rear_open else "[E] Open rear access first"
+		"cargo": return ("[E] Store held item in %s" % display_name() if Game.equipped() != "" else "[E] Take an item from vehicle cargo") if rear_open else "[E] Open rear cargo door"
 		"sleep": return "[E] Sleep in the camper bed"
 	return ""
 
