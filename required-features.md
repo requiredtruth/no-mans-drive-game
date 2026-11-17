@@ -1,3 +1,4 @@
+- ✅ Guard original van-only furniture placement calls when the Starter primary vehicle is a Car subclass, preventing runtime errors when holding a module near a randomly selected car.
 ### November 17 true sparse Starter map (1.15.5)
 
 - ✅ New default Starter option with a single random four-wheel drivable vehicle: van, sedan, pickup, work truck, off-roader, compact/touring RV, box truck.

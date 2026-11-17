@@ -642,7 +642,7 @@ func _update_placement() -> void:
 	if id == "" or kind == "placeable" or builder.active or Game.ui_open or _fish_state != "":
 		if _place_ghost:
 			_place_ghost.visible = false
-		if was_module != "" and Game.rv:
+		if was_module != "" and Game.rv and Game.rv.has_method("hide_free_preview"):
 			Game.rv.hide_free_preview()
 		return
 	if _place_ghost_id != id:
@@ -680,7 +680,7 @@ func _update_placement() -> void:
 			continue
 		break
 	# van furniture: aim at the van floor and it goes exactly there
-	var free_slot: String = Game.rv.free_slot_for(id) if Game.rv and kind == "module" else ""
+	var free_slot: String = Game.rv.free_slot_for(id) if Game.rv and Game.rv.has_method("free_slot_for") and kind == "module" else ""
 	if free_slot != "" and not hit.is_empty() and _host_of(hit["collider"] as Node) == Game.rv and Game.rv.is_inside(hit["position"]) and (hit["normal"] as Vector3).y > 0.6:
 		var rv = Game.rv
 		var lp: Vector3 = rv.to_local(hit["position"])
@@ -692,7 +692,7 @@ func _update_placement() -> void:
 			rv.preview_free(free_slot, _module_plan)
 			viewmodel.visible = false # the big piece in your arms would hide the preview
 			return
-	if was_module != "" and Game.rv:
+	if was_module != "" and Game.rv and Game.rv.has_method("hide_free_preview"):
 		Game.rv.hide_free_preview()
 	if hit.is_empty():
 		_place_ghost.visible = false

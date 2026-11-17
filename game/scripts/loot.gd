@@ -187,11 +187,11 @@ func _pump() -> void:
 		var need: float = rv.fuel_capacity() - rv.fuel
 		var amount := minf(need, left)
 		if amount < 0.5:
-			Game.notify("The van's tank is already full")
+			Game.notify("The vehicle's tank is already full")
 			return
 		rv.fuel += amount
 		left -= amount
-		Game.notify("Pumped %.0f L into the van" % amount)
+		Game.notify("Pumped %.0f L into the vehicle" % amount)
 	elif Game.equipped() == "fuel_can_empty":
 		var cans := mini(int(left / 10.0), int(Game.held()["n"]))
 		if cans <= 0:
@@ -200,9 +200,9 @@ func _pump() -> void:
 		Game.remove_item("fuel_can_empty", cans)
 		Game.add_item("fuel_can", cans, true)
 		left -= cans * 10.0
-		Game.notify("Filled the fuel can. Park the van next to the pump to fill it directly.")
+		Game.notify("Filled the fuel can. Park your vehicle next to the pump to fill it directly.")
 	else:
-		Game.notify("Hold an Empty Fuel Can to fill it, or park the van next to the pump")
+		Game.notify("Hold an Empty Fuel Can to fill it, or park your vehicle next to the pump")
 		return
 	Audio.play_at("splash", global_position, -10.0, 0.6)
 	Net.mark_removed(key, left)
