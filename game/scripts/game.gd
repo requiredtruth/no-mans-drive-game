@@ -97,8 +97,8 @@ func _setup_input() -> void:
 	_key("crouch", [KEY_CTRL], [JOY_BUTTON_RIGHT_STICK])
 	_key("pickup", [KEY_G], [JOY_BUTTON_B]) # place the held item / grab placed furniture
 	_key("drop", [KEY_Q], [JOY_BUTTON_MISC1]) # throw the held item
-	for i in range(7):
-		_key("slot_%d" % (i + 1), [KEY_1 + i])
+	for i in range(10): # 1-9 and 0: up to five hand slots plus an expedition pack's five
+		_key("slot_%d" % (i + 1), [KEY_1 + i if i < 9 else KEY_0])
 
 func _setup_buses() -> void:
 	for bus_name in ["SFX", "Ambience", "Vehicle", "UI"]:
@@ -149,7 +149,38 @@ const NEAR := 3.2
 const BASE_SLOTS := 5
 
 func slot_count() -> int:
-	return BASE_SLOTS + (2 if worn.has("backpack") else 0)
+	var extra := 0
+	for w in worn:
+		extra = maxi(extra, int(Data.ITEMS.get(w, {}).get("carry", 0)))
+	return BASE_SLOTS + extra
+
+## Total of a numeric stat over everything you wear (insulation, armor).
+func worn_stat(key: String) -> float:
+	var t := 0.0
+	for w in worn:
+		t += float(Data.ITEMS.get(w, {}).get(key, 0.0))
+	return t
+
+func wears_flag(key: String) -> bool:
+	for w in worn:
+		if Data.ITEMS.get(w, {}).get(key, false):
+			return true
+	return false
+
+var _flag_ids := {}
+## True if anything you carry, wear or have within reach has this data flag (e.g. "toolkit",
+## "builds", "butcher"): a multi-tool counts as a toolkit, a machete butchers like a knife.
+func has_flag(key: String) -> bool:
+	if not _flag_ids.has(key):
+		var ids: Array = []
+		for id in Data.ITEMS:
+			if Data.ITEMS[id].get(key, false):
+				ids.append(id)
+		_flag_ids[key] = ids
+	for id in _flag_ids[key]:
+		if count(id) > 0:
+			return true
+	return false
 
 func _fit_slots() -> void:
 	while slots.size() < slot_count():
@@ -343,6 +374,14 @@ func wear(id: String) -> bool:
 			if slots[i]["n"] <= 0:
 				_empty_slot(i)
 			break
+	# one thing per body slot: what was there comes off into your hands
+	var body_slot: String = Data.ITEMS[id].get("slot", "")
+	if body_slot != "":
+		for w in worn.keys():
+			if Data.ITEMS.get(w, {}).get("slot", "") == body_slot:
+				worn.erase(w)
+				_fit_slots()
+				add_item(w, 1, true)
 	worn[id] = true
 	_fit_slots()
 	notify("You put on the %s" % Data.item_name(id))
@@ -368,6 +407,8 @@ func diff(key: String) -> float:
 func consume(id: String) -> bool:
 	var it: Dictionary = Data.ITEMS.get(id, {})
 	if it.is_empty() or not (it["kind"] in ["food", "medical"]):
+		if not it.is_empty() and it["kind"] == "purify":
+			return purify_water()
 		return false
 	var in_hand := carried(id) > 0
 	if not remove_item(id, 1):
@@ -380,7 +421,21 @@ func consume(id: String) -> bool:
 	stats["energy"] = clamp(stats["energy"] + it.get("energy", 0), 0, 100)
 	stats["warmth"] = clamp(stats["warmth"] + it.get("warmth", 0), 0, 100)
 	Audio.play("eat")
-	notify("%s %s" % ["Drank" if id in ["water_clean", "water_dirty", "coffee", "soda", "berry_juice", "mocha_cola"] else "Ate", Data.item_name(id)] if it["kind"] == "food" else "Used %s" % Data.item_name(id))
+	notify("%s %s" % ["Drank" if id in Data.DRINKS else "Ate", Data.item_name(id)] if it["kind"] == "food" else "Used %s" % Data.item_name(id))
+	return true
+
+## Purification tablets: drop one into the dirty water you're carrying (or that lies within reach).
+func purify_water() -> bool:
+	var n := mini(count("water_dirty"), 3)
+	if n <= 0:
+		notify("Hold or set down Dirty Water first, then use a tablet on it")
+		return false
+	if not remove_item("water_purification_tablets", 1):
+		return false
+	remove_item("water_dirty", n)
+	add_item("water_clean", n, true)
+	Audio.play("click", -6.0, 1.4)
+	notify("The tablet fizzes: %d bottle%s of clean water" % [n, "s" if n > 1 else ""])
 	return true
 
 # ---------------------------------------------------------------- new / save / load
@@ -392,7 +447,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	weather = "clear"
 	# A rough start: a pocket knife in hand and a flashlight clipped on. The stripped van and the
 	# parts to get it going lie around the starting lot (see world.gd); the rest is scavenged.
-	worn = {"flashlight": true}
+	worn = {"flashlight": true, "nav_wristwatch": true}
 	slots = [{"id": "knife", "n": 1}]
 	selected_slot = 0
 	_fit_slots()
@@ -456,6 +511,7 @@ func save_game() -> bool:
 		return false
 	var d := world_snapshot()
 	d["version"] = 1
+	d["v17"] = true
 	d["slots"] = slots
 	d["worn"] = worn
 	d["stats"] = stats
@@ -481,6 +537,8 @@ func load_game_data() -> Dictionary:
 	var d: Dictionary = parsed
 	apply_world_snapshot(d)
 	worn = d.get("worn", {})
+	if not d.has("v17"):
+		worn["nav_wristwatch"] = true # saves from before 1.7 always showed the exact time
 	slots = []
 	for s in d.get("slots", []):
 		var rec := {"id": str(s.get("id", "")), "n": int(s.get("n", 0))}

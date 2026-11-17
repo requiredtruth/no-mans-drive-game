@@ -402,14 +402,14 @@ func _die() -> void:
 func get_prompt() -> String:
 	if state != "dead":
 		return ""
-	if Game.count("knife") <= 0:
+	if not Game.has_flag("butcher"):
 		return "%s carcass — you need a knife to butcher" % species.capitalize()
 	return "[E] Butcher %s" % species
 
 func interact(_player: Node) -> void:
 	if state != "dead":
 		return
-	if Game.count("knife") <= 0:
+	if not Game.has_flag("butcher"):
 		Game.notify("You need a knife")
 		return
 	var drops: Dictionary = spec["drops"]

@@ -1127,7 +1127,193 @@ func _walk_tree(n: Node) -> Array:
 		out.append_array(_walk_tree(c))
 	return out
 
+func _hold(id: String, n := 1) -> void:
+	Game.slots[Game.selected_slot] = {"id": id, "n": n}
+	Game._changed()
+
+func _v17() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	var D = Game.Data
+	w.hud.close_modal()
+	Game.time_of_day = 10.0
+	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
+	await _settle(pl.global_position)
+	await _wait(1.0)
+	_log("start worn: %s, clock '%s'" % [str(Game.worn.keys()), w.hud.clock.text])
+	# --- wearables: one per body slot, backpacks add carry slots
+	_hold("hiking_backpack")
+	Game.wear("hiking_backpack")
+	_log("hiking backpack -> slots %d (expect 8)" % Game.slots.size())
+	_hold("military_backpack")
+	Game.wear("military_backpack")
+	_log("military backpack -> slots %d (expect 9), worn %s, hiking pack back in hands: %s" % [Game.slots.size(), str(Game.worn.keys()), Game.carried("hiking_backpack") > 0])
+	_hold("red_jacket")
+	Game.wear("red_jacket")
+	_hold("tactical_helmet")
+	Game.wear("tactical_helmet")
+	_log("insulation %.0f, armor %.2f" % [Game.worn_stat("insulation"), Game.worn_stat("armor")])
+	var h0: float = Game.stats["health"]
+	pl.hurt(10.0, "wolf")
+	_log("wolf bite of 10 with a helmet took %.1f health (expect 8)" % (h0 - float(Game.stats["health"])))
+	Game.take_off("nav_wristwatch")
+	await _wait(0.2)
+	_log("clock without a watch: '%s'" % w.hud.clock.text)
+	_hold("nav_wristwatch")
+	Game.wear("nav_wristwatch")
+	# --- data flags
+	_hold("multi_tool_wrench")
+	_log("multi-tool counts as toolkit: %s; machete butchers: %s" % [Game.has_flag("toolkit"), D.ITEMS["machete"].get("butcher", false)])
+	# --- guns use their own ammo
+	_hold("double_barrel_shotgun")
+	Game.slots[1] = {"id": "ammo_box_12_gauge", "n": 6}
+	Game._changed()
+	pl._cooldown = 0.0
+	pl.use_primary()
+	_log("shotgun fired: shells left %d (expect 5)" % Game.carried("ammo_box_12_gauge"))
+	_hold("magnum")
+	pl.use_primary()
+	Game.slots[1] = {"id": "", "n": 0}
+	# --- purification tablets
+	_hold("water_purification_tablets", 2)
+	Game.slots[1] = {"id": "water_dirty", "n": 2}
+	Game._changed()
+	pl.use_primary()
+	_log("tablets: clean %d, dirty %d, tablets %d" % [Game.carried("water_clean"), Game.carried("water_dirty"), Game.carried("water_purification_tablets")])
+	Game.slots[1] = {"id": "", "n": 0}
+	# --- tools: chop power and ore
+	var tree: Node3D = null
+	var rockb: Node3D = null
+	for n in get_tree().root.find_children("*", "StaticBody3D", true, false):
+		if n.has_meta("res_kind") and is_instance_valid(n):
+			if n.get_meta("res_kind") == "tree" and tree == null and str(n.get_meta("tree_kind")) != "cactus":
+				tree = n
+			elif n.get_meta("res_kind") == "rock" and rockb == null:
+				rockb = n
+	if tree:
+		var tpos: Vector3 = tree.global_position
+		w.hit_resource(tree, tpos + Vector3(0, 1, 0), 2.0)
+		w.hit_resource(tree, tpos + Vector3(0, 1, 0), 2.0)
+		await _wait(0.3)
+		var drops := {}
+		for it in get_tree().get_nodes_in_group("world_item"):
+			if it.global_position.distance_to(tpos) < 4.0:
+				drops[it.id] = int(drops.get(it.id, 0)) + it.amount
+		_log("fire axe felled a tree in 2 swings: %s" % str(drops))
+	if rockb:
+		var rpos: Vector3 = rockb.global_position
+		for k in range(4):
+			w.hit_resource(rockb, rpos + Vector3(0, 0.5, 0), 1.0)
+		await _wait(0.3)
+		var drops2 := {}
+		for it in get_tree().get_nodes_in_group("world_item"):
+			if it.global_position.distance_to(rpos) < 4.0:
+				drops2[it.id] = int(drops2.get(it.id, 0)) + it.amount
+		_log("broke a rock: %s" % str(drops2))
+	# --- skillet speeds up cooking
+	var cf: Vector3 = rv.to_global(Vector3(7.0, 0, -6.0))
+	cf.y = w.gen.height(cf.x, cf.z)
+	var cid := Game.new_struct_id()
+	Net.place_structure(cid, {"type": "campfire", "pos": Game.arr(cf), "rot": 0.0, "data": {"fuel": 600.0}})
+	await _wait(0.3)
+	var fire: Node = w.structures[cid]
+	_player_at(_ground(cf.x + 1.4, cf.z), 0.0)
+	_hold("raw_venison")
+	fire.interact(pl)
+	_hold("camp_cast_iron_skillet")
+	fire._set_on_grill()
+	_hold("seasoned_hardwood")
+	fire.interact(pl)
+	_log("hardwood added: fuel %.0f s" % float(fire.data["fuel"]))
+	_look_at_point(cf + Vector3(0, 0.3, 0))
+	await _wait(8.5)
+	_log("venison steak after 8.5 s with a skillet: %s" % str(_find_item("cooked_venison") != null))
+	await _shot("x01_campfire_skillet")
+	# --- new furniture in a row
+	var bz: float = rv.global_position.z - 26.0
+	var base: Vector3 = Vector3(w.gen.road_x(bz) - 6.0, 0, bz)
+	var types: Array = ["mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven", "camp_folding_chair", "camp_canvas_bedroll", "deployable_tarp", "mod_retro_tv", "mod_led_wall_clock", "mod_weather_station", "mod_cassette_travel_case"]
+	var made := []
+	for i in range(types.size()):
+		var gp: Vector3 = base + Vector3((i % 6) * 2.4, 0, (i / 6) * 3.2)
+		gp.y = w.gen.height(gp.x, gp.z)
+		var sid := Game.new_struct_id()
+		Net.place_structure(sid, {"type": types[i], "pos": Game.arr(gp), "rot": PI, "data": {}})
+		made.append(sid)
+	await _wait(0.5)
+	for sid in made:
+		var st = w.structures.get(sid)
+		_log("  %s -> prompt '%s'" % [st.type if st else "?", st.get_prompt() if st else ""])
+		if st and st.type == "mod_retro_tv":
+			st.interact(pl)
+	var view: Vector3 = base + Vector3(6.0, 0.0, 9.0)
+	_player_at(_ground(view.x, view.z), PI, -0.35)
+	await _settle(view)
+	_look_at_point(base + Vector3(6.0, 0.0, 1.2))
+	await _wait(1.5)
+	await _shot("x02_new_furniture")
+	# --- hand items laid out on a table
+	var tp: Vector3 = rv.to_global(Vector3(9.0, 0, -12.0))
+	tp.y = w.gen.height(tp.x, tp.z)
+	var tid := Game.new_struct_id()
+	Net.place_structure(tid, {"type": "table", "pos": Game.arr(tp), "rot": 0.0, "data": {}})
+	await _wait(0.3)
+	var show := ["combat_19_pistol", "magnum", "nav_pocket_compass", "mod_decor_fuzzy_dice", "camp_coffee_percolator", "elec_circuit_board", "salvage_license_plate", "hunt_predator_skull", "mod_decor_mini_globe", "camp_cast_iron_skillet"]
+	for i in range(show.size()):
+		var ip: Vector3 = tp + Vector3(-0.55 + (i % 5) * 0.27, 0.8, -0.2 + (i / 5) * 0.38)
+		Game.place_item(show[i], 1, Transform3D(Basis(Vector3.UP, 0.4), ip - Vector3(0, Items.display_bounds(show[i]).position.y, 0)))
+	_player_at(_ground(tp.x, tp.z + 1.3), 0.0, -0.6)
+	_look_at_point(tp + Vector3(0, 0.8, 0))
+	await _wait(1.0)
+	await _shot("x03_items_on_table")
+	# --- hanging decor in the van cab
+	rv.modules["walls"] = true
+	rv._apply_visuals()
+	_van_door(pl)
+	await _wait(0.2)
+	pl.teleport(rv.to_global(Vector3(0.0, rv.FLOOR_Y + 0.05, 0.6)))
+	_hold("mod_decor_dreamcatcher")
+	_look_at_point(rv.to_global(Vector3(0.0, rv.ROOF_Y + 2.0, -0.2)))
+	await _wait(0.3)
+	pl._update_placement()
+	_log("aim at the ceiling: valid %s" % str(pl._place_valid))
+	pl.place_or_grab()
+	await _wait(0.5)
+	var dc = _find_item("mod_decor_dreamcatcher")
+	_log("dreamcatcher hung: %s (hung flag %s, placed %s) at local %s, roof %.2f" % [dc != null, str(dc._hung) if dc else "-", str(dc.placed) if dc else "-", str(rv.to_local(dc.global_position)) if dc else "-", rv.ROOF_Y])
+	if dc:
+		pl.teleport(rv.to_global(rv.to_local(dc.global_position) * Vector3(1, 0, 1) + Vector3(0.0, rv.FLOOR_Y + 0.05, 1.3)))
+		await _wait(0.2)
+		_look_at_point(dc.global_position + Vector3(0, 0.1, 0))
+	await _wait(0.5)
+	await _shot("x04_dreamcatcher")
+	_van_door(pl)
+	# --- viewmodels at dusk
+	var vp: Vector3 = rv.to_global(Vector3(14.0, 0, 0.0))
+	_player_at(_ground(vp.x, vp.z), 0.0, -0.1)
+	for id in ["torch", "combat_19_pistol", "double_barrel_shotgun", "fire_axe", "nav_pocket_compass", "camp_folding_lantern", "compound_bow", "machete"]:
+		Game.time_of_day = 20.8 if id in ["torch", "camp_folding_lantern"] else 11.0
+		_hold(id)
+		await _wait(0.5)
+		await _shot("vm17_" + id)
+		_log("  holding %s: nav '%s'" % [id, pl.nav_text])
+	_hold("nav_paper_roadmap")
+	pl._cooldown = 0.0
+	pl.use_primary()
+
 func _run() -> void:
+	if "--v17" in OS.get_cmdline_user_args():
+		var m17 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		m17._start_world({})
+		await _wait(1.5)
+		await _v17()
+		var f17 := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		f17.store_string("\n".join(log_lines))
+		f17.close()
+		get_tree().quit()
+		return
 	if "--v16" in OS.get_cmdline_user_args():
 		var m16 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")

@@ -115,6 +115,50 @@ func _physics_process(delta: float) -> void:
 	if host:
 		_glue(host)
 
+# ---- hanging cab decor (dice, dreamcatcher, bells...) swings as the vehicle moves
+var _hung := -1 # -1 unknown, 0 no, 1 yes
+var _sway := Vector2.ZERO
+var _sway_v := Vector2.ZERO
+var _last_host_pos := Vector3.ZERO
+var _last_host_vel := Vector3.ZERO
+
+func _process(delta: float) -> void:
+	if not placed or _model == null or delta <= 0.0:
+		return
+	if _hung == -1:
+		_hung = 0
+		if Game.Data.ITEMS.get(id, {}).get("hang", false):
+			var bb: AABB = Items.display_bounds(id)
+			var top := global_position + global_transform.basis.y * bb.end.y
+			var q := PhysicsRayQueryParameters3D.create(top - Vector3(0, 0.02, 0), top + Vector3(0, 0.08, 0), 1 | 16)
+			q.exclude = [get_rid()]
+			if not get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+				_hung = 1
+				set_meta("top", bb.end.y)
+	if _hung != 1:
+		return
+	var host: Node3D = get_parent().get_parent() if _attached else null
+	var acc := Vector3.ZERO
+	if host:
+		var hv := (host.global_position - _last_host_pos) / delta
+		if _last_host_pos != Vector3.ZERO and hv.length() < 80.0:
+			acc = (hv - _last_host_vel) / delta
+			_last_host_vel = hv
+		_last_host_pos = host.global_position
+	var la := global_transform.basis.inverse() * acc
+	# a damped pendulum pushed by the vehicle's acceleration (and a little road shake)
+	var push := Vector2(la.z, -la.x) * 0.012
+	if host and _last_host_vel.length() > 2.0:
+		push += Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 0.04
+	_sway_v += (push - _sway * 14.0) * delta * 6.0
+	_sway_v *= exp(-delta * 1.6)
+	_sway += _sway_v * delta
+	_sway = _sway.clamp(Vector2(-0.6, -0.6), Vector2(0.6, 0.6))
+	var top_y: float = get_meta("top", 0.0)
+	var b := Basis.from_euler(Vector3(_sway.x, 0, _sway.y))
+	var pivot := Vector3(0, top_y, 0)
+	_model.transform = Transform3D(b, pivot - b * pivot)
+
 func save_record() -> Dictionary:
 	var r := {"id": id, "n": amount, "pos": Game.arr(global_position), "rot": Game.arr(global_rotation)}
 	if placed:

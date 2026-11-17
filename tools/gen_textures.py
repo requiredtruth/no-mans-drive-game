@@ -80,6 +80,18 @@ def save_normal(name, height, strength):
     save_rgb(name + "_n", n * 0.5 + 0.5)
 
 
+ONLY = set(filter(None, os.environ.get("ONLY", "").split(",")))
+
+
+def run(fns):
+    """Generate textures (set ONLY=name1,name2 to regenerate just those)."""
+    for fn in fns:
+        if ONLY and fn.__name__ not in ONLY:
+            continue
+        fn()
+        print("generated", fn.__name__)
+
+
 def rgb(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
@@ -308,10 +320,8 @@ def needle_card():
     save_rgba("needle_card", img)
 
 
-for fn in [grass, dirt, sand, snow, rock, asphalt, bark, planks, metal_paint, rusty_metal,
-           fabric, concrete, water_normal, grass_card, leaf_card, needle_card]:
-    fn()
-    print("generated", fn.__name__)
+run([grass, dirt, sand, snow, rock, asphalt, bark, planks, metal_paint, rusty_metal,
+           fabric, concrete, water_normal, grass_card, leaf_card, needle_card])
 
 
 # --- v1.1 material set ------------------------------------------------------
@@ -440,9 +450,7 @@ def fabric_plaid():
     save_rgb("plaid", base)
 
 
-for fn in [brushed_metal, paint_chipped, leather, rubber, fur, shingles, logs, cardboard, skin, denim, fabric_plaid]:
-    fn()
-    print("generated", fn.__name__)
+run([brushed_metal, paint_chipped, leather, rubber, fur, shingles, logs, cardboard, skin, denim, fabric_plaid])
 
 
 # --- v1.2 houses ---------------------------------------------------------------
@@ -605,6 +613,123 @@ def vinyl():
     save_normal("vinyl", h + grain * 0.05, 3)
 
 
-for fn in [ribbed_metal, primer, insulation, laminate, upholstery, vinyl]:
-    fn()
-    print("generated", fn.__name__)
+run([ribbed_metal, primer, insulation, laminate, upholstery, vinyl])
+
+
+# --- 1.7: rugs and hides (mapped once across a rug, not tiled) --------------
+def _border(yy, xx, w):
+    return np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy)) < w
+
+
+def rug_persian():
+    """Medallion rug: deep red field, navy border bands, ivory lattice."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    cx, cy = xx - 0.5, yy - 0.5
+    weave = band(N, 200, 400, 600)
+    col = np.zeros((N, N, 3)) + np.array(rgb("7a1c1c"))
+    # field lattice
+    lat = (np.abs(np.sin(xx * np.pi * 14) * np.sin(yy * np.pi * 10)) > 0.85)
+    col[lat] = np.array(rgb("a8402a"))
+    # medallion
+    r = np.sqrt((cx * 1.3) ** 2 + cy ** 2)
+    ang = np.arctan2(cy, cx)
+    petal = 0.2 + 0.04 * np.cos(ang * 8)
+    col[r < petal] = np.array(rgb("1c2a4a"))
+    col[r < petal * 0.7] = np.array(rgb("d8b878"))
+    col[r < petal * 0.45] = np.array(rgb("8a2020"))
+    col[(np.abs(r - petal * 0.85) < 0.006)] = np.array(rgb("e8dcc0"))
+    # corner spandrels
+    for sx in (0, 1):
+        for sy in (0, 1):
+            d = np.sqrt((xx - sx) ** 2 + (yy - sy) ** 2)
+            col[(d < 0.22) & ~_border(yy, xx, 0.1)] = np.array(rgb("1c2a4a"))
+    # borders
+    edge = np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy))
+    col[edge < 0.1] = np.array(rgb("1c2a4a"))
+    vine = (edge < 0.1) & (np.abs(np.sin((xx + yy) * np.pi * 40)) > 0.75)
+    col[vine] = np.array(rgb("c89a50"))
+    col[(np.abs(edge - 0.1) < 0.006) | (np.abs(edge - 0.06) < 0.004)] = np.array(rgb("e8dcc0"))
+    col[edge < 0.015] = np.array(rgb("5a1010"))
+    col *= (0.82 + 0.3 * weave)[..., None]
+    save_rgb("rug_persian", col)
+    save_normal("rug_persian", weave * 0.6, 3)
+
+
+def rug_braided():
+    """Oval braided rag rug: concentric braided rings of mixed rags."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    cx, cy = (xx - 0.5) * 2, (yy - 0.5) * 2
+    r = np.sqrt(cx * cx + cy * cy)
+    ang = np.arctan2(cy, cx)
+    ring = r * 14
+    ri = np.floor(ring).astype(int)
+    braid = np.abs(np.sin((ang * 26 + (ri % 2) * 1.6) + ring * 0.0))
+    within = ring % 1.0
+    bump = np.sin(within * np.pi) * (0.6 + 0.4 * braid)
+    palette = np.array([rgb(h) for h in ["8a5a4a", "c8b090", "5a6a7a", "a08060", "6a4a3a", "b8a080", "7a8a6a"]])
+    col = palette[ri % len(palette)] * (0.55 + 0.5 * bump)[..., None]
+    col[r > 1.0] = np.array(rgb("6a4a3a")) * 0.5
+    save_rgb("rug_braided", col)
+    save_normal("rug_braided", bump, 6)
+
+
+def rug_wave():
+    """Indigo rug with a great breaking wave and foam curls."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    weave = band(N, 220, 420, 610)
+    col = np.zeros((N, N, 3)) + np.array(rgb("e8e0cc"))
+    crest = 0.55 + 0.18 * np.sin(xx * np.pi * 2.2 + 0.6) + 0.05 * np.sin(xx * np.pi * 9)
+    sea = yy > crest
+    col[sea] = np.array(rgb("1e3a6a"))
+    # bands of lighter water following the crest
+    for k in range(1, 7):
+        line = np.abs(yy - (crest + k * 0.06)) < 0.008
+        col[line & sea] = np.array(rgb("5a80b0"))
+    # foam fingers
+    foam = (np.abs(yy - crest) < 0.035) & (np.sin(xx * np.pi * 60) > 0.2)
+    col[foam] = np.array(rgb("f4f0e4"))
+    # distant mountain and sun
+    peak = np.maximum(0, 1 - np.abs(xx - 0.72) * 5)
+    mtn = (yy > 0.5 - 0.22 * peak) & (yy < 0.5) & (peak > 0) & ~sea
+    col[mtn] = np.array(rgb("3a5a8a"))
+    col[mtn & (yy < 0.5 - 0.16 * peak)] = np.array(rgb("f4f0e4"))
+    sun = np.sqrt((xx - 0.25) ** 2 + (yy - 0.25) ** 2) < 0.07
+    col[sun] = np.array(rgb("c03020"))
+    edge = np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy))
+    col[edge < 0.035] = np.array(rgb("1e3a6a"))
+    col *= (0.85 + 0.25 * weave)[..., None]
+    save_rgb("rug_wave", col)
+    save_normal("rug_wave", weave * 0.5, 3)
+
+
+def cowhide():
+    """Black-and-white cowhide with soft hair."""
+    big = spectral(N, 2.0, 620)
+    hair = band(N, 120, 500, 621, aniso=(0.3, 1.0))
+    spots = big > 0.58
+    col = np.where(spots[..., None], np.array(rgb("1c1814")), np.array(rgb("ece4d4")))
+    brown = (big > 0.555) & (big <= 0.58)
+    col[brown] = np.array(rgb("6a4a32"))
+    col = col * (0.85 + 0.25 * hair)[..., None]
+    save_rgb("cowhide", col)
+    save_normal("cowhide", hair * 0.6, 4)
+
+
+def rug_woven():
+    """Natural jute-style woven rug with darker stripes."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    warp = np.abs(np.sin(xx * np.pi * 120))
+    weft = np.abs(np.sin(yy * np.pi * 120))
+    over = ((np.floor(xx * 120) + np.floor(yy * 120)) % 2) == 0
+    h = np.where(over, warp, weft)
+    noise = spectral(N, 1.4, 630)
+    col = ramp(0.7 * h + 0.3 * noise, [(0, rgb("8a6a40")), (1, rgb("d8c090"))])
+    stripes = (np.abs(((yy * 6) % 1.0) - 0.5) < 0.05)
+    col[stripes] *= np.array([0.55, 0.45, 0.4])
+    edge = np.minimum(np.minimum(xx, 1 - xx), np.minimum(yy, 1 - yy))
+    col[edge < 0.03] *= 0.7
+    save_rgb("rug_woven", col)
+    save_normal("rug_woven", h, 5)
+
+
+run([rug_persian, rug_braided, rug_wave, cowhide, rug_woven])

@@ -34,7 +34,7 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ **Random houses along the road**: procedurally generated cottages, brick and log houses, cabins, hamlets and truck stops, with furnished interiors.
 - ✅ **Varied ambience**: no looping birdsong. Dozens of randomized bird, owl, crow, woodpecker, frog, coyote, wind and thunder one-shots, chosen by biome and time, with dawn/dusk choruses and call-and-answer.
 - Quality and detail bar: Nomad Drive, plus all of our extra additions.
-- 🔄 Build every item in the **item backlog** (`docs/item-backlog/`, three lists supplied by the user) over future versions. 1.6 adds the first of them.
+- 🔄 Build every item in the **item backlog** (`docs/item-backlog/`, three lists supplied by the user) over future versions. 1.6 adds the first of them; 1.7 adds the first big batch (about 170 items). **Finished items are listed in `done.md` and what is still to be made in `todo.md`.**
 
 ### Requests after 1.2 (addressed in 1.3)
 
@@ -59,6 +59,12 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ **You can see into and out of the vehicle**: every window and the doorway are real openings with see-through glass.
 - ✅ **The van must look as real as possible**, with the same feel as Nomad Drive: real body details, lights, bumpers, trim, chassis and underside.
 - Posting directly to `main` and publishing a new APK release are approved.
+
+### Requests after 1.6 (1.7)
+
+- ✅ Post to `main` and publish a new release APK.
+- ✅ Keep working through the item backlog. Track finished items in `done.md` and items still to be made in `todo.md`.
+- Keep everything as close as possible to Nomad Drive (the inspiration), while going much further with all our extra additions. High resolution.
 
 ## Core RV road-trip features
 

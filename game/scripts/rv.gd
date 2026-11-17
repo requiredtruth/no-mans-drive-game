@@ -1178,7 +1178,7 @@ func _ghostify(n: Node) -> void:
 		_ghostify(ch)
 
 func _toolkit_ok(slot: String) -> bool:
-	return not Data.VAN_SLOTS[slot].get("toolkit", false) or Game.count("toolkit") > 0
+	return not Data.VAN_SLOTS[slot].get("toolkit", false) or Game.has_flag("toolkit")
 
 func mount_prompt(slot: String) -> String:
 	var spec: Dictionary = Data.VAN_SLOTS[slot]
@@ -1277,6 +1277,14 @@ func missing_for_drive() -> Array:
 	if bare > 0:
 		out.append("%d wheel%s" % [bare, "s" if bare > 1 else ""])
 	return out
+
+## A tape from the cassette case: the next track plays on the van radio (it needs a radio fitted).
+func next_station() -> void:
+	if not modules.has("radio"):
+		Game.notify("Fit a radio in the van dash to play tapes")
+		return
+	radio_station = (radio_station + 1) % 3
+	_set_radio(true)
 
 func _set_radio(on: bool) -> void:
 	radio_on = on

@@ -43,6 +43,11 @@ var _survival_acc := 0.0
 var _howl_timer := 30.0
 var _hurt_cd := 0.0
 var _binocs := false # looking through the binoculars
+var _held_light: OmniLight3D # torch, flare, light stick or lantern in your hand
+var _held_flicker := false
+var _crank_radio: AudioStreamPlayer
+var nav_text := "" # what a held compass, roadmap or GPS tells you (shown by the HUD)
+var _nav_acc := 0.0
 
 func _ready() -> void:
 	collision_layer = 4
@@ -110,7 +115,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.select_slot(Game.selected_slot + 1)
 	elif event.is_action_pressed("hotbar_prev"):
 		Game.select_slot(Game.selected_slot - 1)
-	for i in range(mini(7, Game.slots.size())):
+	for i in range(mini(10, Game.slots.size())):
 		if event.is_action_pressed("slot_%d" % (i + 1)):
 			Game.select_slot(i)
 	if event.is_action_pressed("interact"):
@@ -146,7 +151,7 @@ func look(rel: Vector2) -> void:
 	head.rotation.x = pitch
 
 func toggle_flashlight() -> void:
-	if not Game.worn.has("flashlight") and Game.carried("flashlight") <= 0:
+	if not Game.worn.has("flashlight") and Game.carried("flashlight") <= 0 and not Game.wears_flag("headlamp"):
 		Game.notify("You don't have a flashlight")
 		return
 	flashlight.visible = not flashlight.visible
@@ -545,6 +550,10 @@ func _update_placement() -> void:
 	if n.y > 0.6:
 		pos -= Vector3(0, bb.position.y - 0.005, 0)
 		_place_valid = true
+	elif n.y < -0.6 and Data.ITEMS.get(id, {}).get("hang", false):
+		# hang cab decor from the ceiling or the mirror
+		pos -= Vector3(0, bb.end.y + 0.005, 0)
+		_place_valid = true
 	else:
 		# against a wall: stand it on the floor next to the wall would be guesswork — show red
 		pos += n * (maxf(bb.size.x, bb.size.z) * 0.5)
@@ -625,6 +634,24 @@ func _refresh_viewmodel() -> void:
 	_aiming = false
 	# grip pose per item: [position, rotation, scale]
 	var pose := [Vector3(0.0, 0.0, 0.0), Vector3(-0.35, 0.15, 0.08), 1.0]
+	var grip: String = Data.ITEMS.get(id, {}).get("grip", "")
+	if grip == "" and Data.ITEMS.get(id, {}).has("reach"):
+		grip = "long"
+	match grip:
+		"long":
+			pose = [Vector3(0, 0, 0), Vector3(-0.45, 0.2, 0.15), 1.0]
+		"knife":
+			pose = [Vector3(0, 0, 0), Vector3(-0.75, 0.25, 0.1), 1.2 if id == "knife" else 0.9]
+		"gun":
+			pose = [Vector3(-0.1, 0.04, -0.2), Vector3(-PI * 0.5, 0.0, 0.0), 1.0]
+		"pistol":
+			pose = [Vector3(-0.12, 0.0, -0.16), Vector3(-PI * 0.5, 0.0, 0.0), 1.15]
+		"bow":
+			pose = [Vector3(-0.2, 0.08, -0.08), Vector3(-0.05, 0.0, 0.25), 1.0]
+		"small":
+			pose = [Vector3(0, 0.0, -0.02), Vector3(-0.3, 0.2, 0.0), 1.0]
+	if Data.ITEMS.get(id, {}).has("light") and grip == "":
+		pose = [Vector3(0, -0.02, 0), Vector3(-0.25, 0.1, 0.05), 1.0]
 	match id:
 		"axe", "pickaxe", "hammer", "crowbar":
 			pose = [Vector3(0, 0, 0), Vector3(-0.45, 0.2, 0.15), 1.0]
@@ -644,10 +671,12 @@ func _refresh_viewmodel() -> void:
 			pose = [Vector3(0, 0, 0), Vector3.ZERO, 1.0]
 		_:
 			# carried objects: held out in front, big enough to see what you have
-			var bb: AABB = Items.bounds(id)
-			var big := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
-			var k := clampf(0.2 / maxf(big, 0.01), 0.35, 1.5)
-			pose = [Vector3(-0.1 - big * k * 0.25, -0.05, -0.08 - big * k * 0.2), Vector3(0.15, 0.5, 0.0), k]
+			# (tools, guns and lights keep the grip pose chosen above)
+			if grip == "" and not Data.ITEMS.get(id, {}).has("light"):
+				var bb: AABB = Items.bounds(id)
+				var big := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
+				var k := clampf(0.2 / maxf(big, 0.01), 0.35, 1.5)
+				pose = [Vector3(-0.1 - big * k * 0.25, -0.05, -0.08 - big * k * 0.2), Vector3(0.15, 0.5, 0.0), k]
 	if id != "":
 		var item := Items.instance(id)
 		item.position = pose[0]
@@ -660,12 +689,64 @@ func _refresh_viewmodel() -> void:
 	arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	arm.rotation = Vector3(0.0, 0.0, 0.25 if id != "" else 0.0)
 	viewmodel.add_child(arm)
-	if id in ["bow", "rifle"]:
+	_held_light = null
+	var lit: Dictionary = Data.ITEMS.get(id, {})
+	if lit.has("light"):
+		var bbl: AABB = Items.bounds(id)
+		_held_light = Lib.light(viewmodel, Vector3(0, bbl.end.y * 0.8, -0.1), lit["light"], float(lit.get("light_energy", 2.0)), float(lit.get("light_range", 9.0)))
+		_held_flicker = lit.get("flicker", false)
+		if id in ["torch", "road_flare"]:
+			var fl := CPUParticles3D.new()
+			fl.amount = 18
+			fl.lifetime = 0.35
+			fl.local_coords = true
+			fl.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+			fl.emission_sphere_radius = 0.02
+			fl.direction = Vector3.UP
+			fl.spread = 18.0
+			fl.gravity = Vector3(0, 0.6, 0)
+			fl.initial_velocity_min = 0.08
+			fl.initial_velocity_max = 0.2
+			fl.scale_amount_min = 0.5
+			fl.scale_amount_max = 1.0
+			var qm := QuadMesh.new()
+			qm.size = Vector2(0.035, 0.035)
+			var fm := StandardMaterial3D.new()
+			var soft := GradientTexture2D.new()
+			soft.fill = GradientTexture2D.FILL_RADIAL
+			soft.fill_from = Vector2(0.5, 0.5)
+			soft.fill_to = Vector2(1.0, 0.5)
+			var sg := Gradient.new()
+			sg.set_color(0, Color(1, 1, 1, 1))
+			sg.set_color(1, Color(1, 1, 1, 0))
+			soft.gradient = sg
+			soft.width = 32
+			soft.height = 32
+			fm.albedo_texture = soft
+			fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			fm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+			fm.vertex_color_use_as_albedo = true
+			fm.albedo_color = Color(1.0, 0.55, 0.2) if id == "torch" else Color(1.0, 0.25, 0.2)
+			qm.material = fm
+			fl.mesh = qm
+			fl.position = Vector3(0, bbl.end.y - 0.02, 0)
+			var grad := Gradient.new()
+			grad.set_color(0, Color(1, 0.9, 0.5, 1))
+			grad.set_color(1, Color(1, 0.2, 0.05, 0))
+			fl.color_ramp = grad
+			viewmodel.add_child(fl)
+	if _crank_radio and id != "camp_handcrank_radio":
+		_crank_radio.stop()
+	nav_text = ""
+	var grip2: String = Data.ITEMS.get(id, {}).get("grip", "")
+	if id in ["bow", "rifle"] or grip2 in ["gun", "bow"]:
 		var left := MeshInstance3D.new()
 		left.mesh = Items.arm_mesh()
 		left.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		left.scale = Vector3(-1, 1, 1)
-		left.position = Vector3(-0.3, 0.06, -0.12) if id == "bow" else Vector3(-0.1, 0.03, -0.32)
+		left.position = Vector3(-0.3, 0.06, -0.12) if grip2 == "bow" else Vector3(-0.1, 0.03, -0.32)
 		left.rotation = Vector3(0.3, 0.3, -0.2)
 		viewmodel.add_child(left)
 	if builder:
@@ -685,12 +766,20 @@ func _handle_tools(delta: float) -> void:
 	viewmodel.rotation.x = -sin(_swing * PI) * 1.1
 	viewmodel.position.z = -0.55 + sin(_swing * PI) * -0.15
 	var id := Game.equipped()
-	var aiming := Input.is_action_pressed("secondary") and id in ["bow", "rifle", "binoculars"] and not Game.ui_open
-	if Game.world.touch and Game.world.touch.aim_on and id in ["bow", "rifle", "binoculars"]:
+	var it_d: Dictionary = Data.ITEMS.get(id, {})
+	var can_aim: bool = id == "binoculars" or it_d.has("ammo") or it_d.get("grip", "") == "bow"
+	var aiming := Input.is_action_pressed("secondary") and can_aim and not Game.ui_open
+	if Game.world.touch and Game.world.touch.aim_on and can_aim:
 		aiming = true
 	if id == "binoculars" and _binocs:
 		aiming = true
-	var target_fov: float = Game.settings["fov"] * (0.45 if aiming and id == "rifle" else (0.25 if aiming and id == "binoculars" else (0.8 if aiming else 1.0)))
+	var target_fov: float = Game.settings["fov"] * (float(it_d.get("zoom", 0.8)) if aiming and it_d.has("ammo") else (0.25 if aiming and id == "binoculars" else (0.8 if aiming else 1.0)))
+	if _held_light and _held_flicker:
+		_held_light.light_energy = float(it_d.get("light_energy", 2.0)) * (0.85 + randf() * 0.3)
+	_nav_acc -= delta
+	if _nav_acc <= 0.0:
+		_nav_acc = 0.5
+		nav_text = _nav_reading(id)
 	camera.fov = lerpf(camera.fov, target_fov, delta * 10.0)
 	viewmodel.position.x = lerpf(viewmodel.position.x, 0.05 if aiming else 0.32, delta * 10.0)
 	if Game.ui_open or Game.paused:
@@ -710,28 +799,40 @@ func use_primary() -> void:
 		_cooldown = 0.6
 		return
 	var it: Dictionary = Data.ITEMS.get(id, {})
+	if it.has("ammo"):
+		var am: String = it["ammo"]
+		if Game.remove_item(am, 1):
+			for k in range(int(it.get("pellets", 1))):
+				_shoot(float(it["damage"]), float(it.get("spread", 0.012)), k == 0)
+		else:
+			Audio.play("click")
+			Game.notify("Out of ammo: needs %s" % Data.item_name(am))
+		_cooldown = float(it.get("rate", 1.0))
+		return
+	if it.get("grip", "") == "bow":
+		if Game.remove_item("arrow", 1):
+			var a := Node3D.new()
+			a.set_script(Arrow)
+			Game.world.add_child(a)
+			a.launch(camera.global_position + camera.global_transform.basis * Vector3(0, -0.05, -0.4), -camera.global_transform.basis.z * float(it.get("arrow_speed", 58.0)), float(it["damage"]), self)
+			Audio.play("bow")
+			_swing = 0.3
+		else:
+			Game.notify("No arrows. Craft some from wood, stone and feathers.")
+		_cooldown = 0.9 if id == "bow" else 0.7
+		return
+	if it.has("nav"):
+		if it["nav"] == "radio":
+			_toggle_crank_radio()
+		elif it["nav"] == "map":
+			Game.notify(_map_reading())
+		_cooldown = 0.4
+		return
+	if it.has("reach"):
+		_melee(float(it["damage"]), float(it.get("reach", 2.4)), id)
+		_cooldown = 0.45 if it.get("grip", "") == "knife" else (0.9 if float(it["damage"]) >= 40.0 else 0.6)
+		return
 	match id:
-		"axe", "pickaxe", "knife", "hammer", "crowbar":
-			_melee(float(it["damage"]), float(it.get("reach", 2.4)), id)
-			_cooldown = 0.6 if id != "knife" else 0.45
-		"bow":
-			if Game.remove_item("arrow", 1):
-				var a := Node3D.new()
-				a.set_script(Arrow)
-				Game.world.add_child(a)
-				a.launch(camera.global_position + camera.global_transform.basis * Vector3(0, -0.05, -0.4), -camera.global_transform.basis.z * 58.0, float(it["damage"]), self)
-				Audio.play("bow")
-				_swing = 0.3
-			else:
-				Game.notify("No arrows. Craft some from wood, stone and feathers.")
-			_cooldown = 0.9
-		"rifle":
-			if Game.remove_item("ammo", 1):
-				_shoot(float(it["damage"]))
-			else:
-				Audio.play("click")
-				Game.notify("Out of ammo")
-			_cooldown = 1.3
 		"fishing_rod":
 			_cast()
 			_cooldown = 0.6
@@ -742,7 +843,7 @@ func use_primary() -> void:
 			_binocs = not _binocs
 			_cooldown = 0.3
 		_:
-			if it.get("kind", "") in ["food", "medical"]:
+			if it.get("kind", "") in ["food", "medical", "purify"]:
 				Game.consume(id)
 				_cooldown = 0.8
 			elif it.get("kind", "") == "wear":
@@ -753,6 +854,72 @@ func use_primary() -> void:
 				_cooldown = 0.6
 			else:
 				_cooldown = 0.3
+
+func _toggle_crank_radio() -> void:
+	if _crank_radio == null:
+		_crank_radio = AudioStreamPlayer.new()
+		_crank_radio.bus = "Vehicle"
+		_crank_radio.volume_db = -8.0
+		add_child(_crank_radio)
+	if _crank_radio.playing:
+		_crank_radio.stop()
+		Game.notify("Radio off")
+		return
+	Audio.play("click", -4.0)
+	_crank_radio.stream = Audio.stream("radio_%d" % (randi() % 3), true)
+	_crank_radio.play(randf() * 20.0)
+	Game.notify("You wind the crank and the radio crackles into life")
+
+const _POI_NAMES := {"gas_station": "Gas station", "house": "House", "wrecks": "Car wrecks", "camp_ruin": "Old camp", "cabin": "Cabin",
+	"farm": "Farm", "hamlet": "Hamlet", "truck_stop": "Truck stop"}
+
+## The roadmap shows the stops marked along the highway near you.
+func _map_reading() -> String:
+	var gen = Game.world.gen
+	var here := int(floor(global_position.z / gen.CHUNK))
+	var found := []
+	for d in range(0, 40):
+		for ci in [here + d, here - d]:
+			if d == 0 and ci != here:
+				continue
+			var poi: Dictionary = gen.poi_for_row(ci)
+			if poi.is_empty():
+				continue
+			var to: Vector3 = poi["pos"] - global_position
+			found.append("%s %.1f km %s" % [_POI_NAMES.get(poi["type"], "Stop"), to.length() / 1000.0, "north" if to.z < 0.0 else "south"])
+		if found.size() >= 4:
+			break
+	if found.is_empty():
+		return "The map shows nothing but road for miles"
+	return "Roadmap: " + " · ".join(found.slice(0, 4))
+
+## What a held compass or GPS reads right now.
+func _nav_reading(id: String) -> String:
+	var it: Dictionary = Data.ITEMS.get(id, {})
+	var nav: String = it.get("nav", "")
+	var fwd := -camera.global_transform.basis.z
+	var deg := int(round(rad_to_deg(wrapf(atan2(fwd.x, -fwd.z), 0.0, TAU)))) % 360
+	match nav:
+		"compass":
+			var to: Vector3 = (Game.rv.global_position - global_position) if Game.rv else Vector3.ZERO
+			var vd := int(round(rad_to_deg(wrapf(atan2(to.x, -to.z), 0.0, TAU)))) % 360
+			return "Compass: heading %03d°   ·   van bearing %03d°, %d m" % [deg, vd, int(to.length())]
+		"gps":
+			var gen = Game.world.gen
+			var here := int(floor(global_position.z / gen.CHUNK))
+			var best := ""
+			var best_d := INF
+			for d in range(-30, 31):
+				var poi: Dictionary = gen.poi_for_row(here + d)
+				if not poi.is_empty() and poi["type"] in ["gas_station", "truck_stop"]:
+					var dd: float = (poi["pos"] - global_position).length()
+					if dd < best_d:
+						best_d = dd
+						best = "%s %.1f km %s" % [_POI_NAMES[poi["type"]], dd / 1000.0, "north" if poi["pos"].z < global_position.z else "south"]
+			return "GPS: %03d°   ·   nearest fuel: %s" % [deg, best if best != "" else "none in range"]
+	if Game.wears_flag("altimeter"):
+		return ""
+	return ""
 
 func _melee(dmg: float, reach: float, tool: String) -> void:
 	_swing = 1.0
@@ -771,34 +938,36 @@ func _melee(dmg: float, reach: float, tool: String) -> void:
 		return
 	if col.has_meta("res_kind"):
 		var kind: String = col.get_meta("res_kind")
+		var td: Dictionary = Data.ITEMS.get(tool, {})
 		if kind == "tree":
-			if tool != "axe":
-				Game.notify("You need a hatchet to chop trees")
+			if float(td.get("chop", 0.0)) <= 0.0:
+				Game.notify("You need a hatchet, axe or saw to chop trees")
 				Audio.play_at("hit", hit["position"], -6.0)
 				return
 			Audio.play_at("chop", hit["position"])
-			Game.world.hit_resource(col, hit["position"])
+			Game.world.hit_resource(col, hit["position"], float(td["chop"]))
 		elif kind == "rock":
-			if tool != "pickaxe":
-				Game.notify("You need a pickaxe to mine rock")
+			if float(td.get("mine", 0.0)) <= 0.0:
+				Game.notify("You need a pickaxe or sledge hammer to break rock")
 				Audio.play_at("hit", hit["position"], -6.0, 1.4)
 				return
 			Audio.play_at("hit", hit["position"], 0.0, 1.5)
-			Game.world.hit_resource(col, hit["position"])
+			Game.world.hit_resource(col, hit["position"], float(td["mine"]))
 		elif kind == "bush":
 			Game.world.harvest_bush(col)
 		return
 	Audio.play_at("hit", hit["position"], -8.0, 1.2)
 
-func _shoot(dmg: float) -> void:
-	Audio.play("gunshot")
-	_swing = 0.35
-	var flash := Lib.light(camera, Vector3(0, 0, -1), Color(1, 0.8, 0.5), 4.0, 8.0)
-	get_tree().create_timer(0.06).timeout.connect(flash.queue_free)
-	Game.world.alert_animals(global_position, 110.0)
+func _shoot(dmg: float, base_spread := 0.012, fx := true) -> void:
+	if fx:
+		Audio.play("gunshot")
+		_swing = 0.35
+		var flash := Lib.light(camera, Vector3(0, 0, -1), Color(1, 0.8, 0.5), 4.0, 8.0)
+		get_tree().create_timer(0.06).timeout.connect(flash.queue_free)
+		Game.world.alert_animals(global_position, 110.0)
 	var space := get_world_3d().direct_space_state
 	var from := camera.global_position
-	var spread := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * (0.002 if Input.is_action_pressed("secondary") else 0.012)
+	var spread := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * (base_spread * 0.2 if Input.is_action_pressed("secondary") and base_spread < 0.03 else base_spread)
 	var dir := (camera.global_transform.basis * (Vector3(0, 0, -1) + spread)).normalized()
 	var q := PhysicsRayQueryParameters3D.create(from, from + dir * 300.0, 1 | 8 | 16)
 	q.exclude = [get_rid()]
@@ -910,8 +1079,9 @@ func effective_temp() -> float:
 			t += 14.0
 	elif Game.world.is_sheltered(global_position):
 		t += 6.0
-	if Game.worn.has("jacket"):
-		t += 12.0
+	t += Game.worn_stat("insulation")
+	if Game.weather == "rain" and Game.wears_flag("rain"):
+		t += 5.0
 	return t
 
 func _survival(delta: float) -> void:
@@ -954,6 +1124,8 @@ func _survival(delta: float) -> void:
 func hurt(amount: float, cause: String, flash := true) -> void:
 	if dead or amount <= 0.0 or Game.god_mode:
 		return
+	if cause != "exposure":
+		amount *= 1.0 - minf(Game.worn_stat("armor"), 0.6)
 	Game.stats["health"] = maxf(Game.stats["health"] - amount, 0.0)
 	if flash and _hurt_cd <= 0.0:
 		_hurt_cd = 0.3

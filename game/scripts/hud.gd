@@ -277,11 +277,21 @@ func _process(delta: float) -> void:
 		bars[k].value = st[k]
 	var h := int(Game.time_of_day)
 	var m := int((Game.time_of_day - h) * 60.0)
-	clock.text = "Day %d   %02d:%02d" % [Game.day, h, m]
+	if Game.wears_flag("watch"):
+		clock.text = "Day %d   %02d:%02d" % [Game.day, h, m]
+	else:
+		# no watch: you only know roughly what time it is from the sky
+		var part := "Night"
+		for e in [[5, "Dawn"], [7, "Morning"], [11, "Midday"], [14, "Afternoon"], [18, "Evening"], [20, "Dusk"], [21, "Night"]]:
+			if Game.time_of_day >= float(e[0]):
+				part = e[1]
+		clock.text = "Day %d   %s" % [Game.day, part]
 	var p: Node3D = Game.player
 	if p and Game.world:
 		var w = Game.world
 		info.text = "%s · %s · %d°C" % [w.gen.biome_name(p.global_position.x, p.global_position.z), Game.weather.capitalize(), int(round(p.effective_temp()))]
+		if Game.wears_flag("altimeter"):
+			info.text += " · Alt %d m" % int(round(p.global_position.y))
 		prompt_label.text = p.prompt
 		var b = p.builder
 		if b.active and not p.driving:
@@ -289,7 +299,7 @@ func _process(delta: float) -> void:
 			var cost_txt: String = ("carried ×%d" % Game.count(b.kit)) if b.kit != "" else Data.cost_text(Data.PIECES[pc]["cost"])
 			build_info.text = "PLACING: %s  (%s) — %s\n[USE] place · [R/ROT] rotate · [RMB] demolish · [B/BUILD] stop" % [Data.PIECES[pc]["name"], cost_txt, b.reason if not b.valid else "ready"]
 		else:
-			build_info.text = ""
+			build_info.text = p.nav_text
 		dash.visible = p.driving
 		hotbar_box.visible = not p.driving
 		held_label.visible = not p.driving
@@ -343,7 +353,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			Game.player.builder.stop()
 			Game.notify("Stopped building")
 		elif not modal:
-			if Game.count("hammer") > 0:
+			if Game.has_flag("builds"):
 				open_build_menu()
 			else:
 				Game.notify("You need a Builder's Hammer (workbench: 2 Wood, 1 Stone, 1 Rope)")
@@ -464,7 +474,7 @@ func open_book() -> void:
 		var ml := UI.label("Fitted (%d): %s\nEmpty (%d): %s" % [fitted.size(), ", ".join(fitted) if not fitted.is_empty() else "nothing yet", empty.size(), ", ".join(empty)], 13, Color(0.78, 0.78, 0.72))
 		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		left.add_child(ml)
-	var help := UI.label("Carry a part to the van and press E to fit it; while you hold one, the spot it goes in glows green. Furniture (counter, fridge, cupboard, dinette, toilet, bed, heater) goes anywhere on the floor: aim where you want it, R turns it, G fits it. G with empty hands takes a module back out. You carry only what fits in your hands%s." % (" and backpack" if Game.worn.has("backpack") else " (5 slots; a Backpack adds 2 more)"), 14, Color(0.75, 0.75, 0.7))
+	var help := UI.label("Carry a part to the van and press E to fit it; while you hold one, the spot it goes in glows green. Furniture (counter, fridge, cupboard, dinette, toilet, bed, heater) goes anywhere on the floor: aim where you want it, R turns it, G fits it. G with empty hands takes a module back out. You carry only what fits in your hands%s." % (" and backpack" if Game.slot_count() > Game.BASE_SLOTS else " (5 slots; a backpack adds 1 to 5 more)"), 14, Color(0.75, 0.75, 0.7))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	left.add_child(help)
 	var right := VBoxContainer.new()
@@ -566,8 +576,12 @@ func open_cheats() -> void:
 	add.call("All tools & weapons", func() -> void:
 		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 1.5 + Vector3(0, 0.8, 0)
 		var i := 0
-		for id in ["knife", "axe", "pickaxe", "hammer", "bow", "rifle", "fishing_rod", "arrow", "ammo", "backpack", "toolkit"]:
-			Game.spawn_item(id, Data_.stack(id), base + Vector3((i % 4) * 0.45 - 0.7, 0, (i / 4) * 0.45))
+		var ids := ["knife", "axe", "pickaxe", "hammer", "bow", "rifle", "fishing_rod", "arrow", "ammo", "backpack", "toolkit"]
+		for t in Data_.ITEMS:
+			if Data_.ITEMS[t]["kind"] in ["tool", "ammo"] and not ids.has(t):
+				ids.append(t)
+		for id in ids:
+			Game.spawn_item(id, Data_.stack(id), base + Vector3((i % 6) * 0.45 - 1.1, 0, (i / 6) * 0.45))
 			i += 1)
 	add.call("Restore health & needs", func() -> void:
 		for k in Game.stats:

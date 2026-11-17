@@ -1,32 +1,44 @@
-## No Man's Drive 1.6.0: furnish the van your way
+## No Man's Drive 1.7.0: the big item update
 
-**Put furniture anywhere in the van**
-- The kitchen counter, fridge, cupboard, dinette, toilet cubicle, bed frame and cabin heater no longer have fixed spots. Carry one inside, aim at the van floor and a see-through preview shows exactly where it will stand: green if it fits, red if something is in the way. **R** turns it, **G** (or E) fits it.
-- Furniture slides flush against the walls and turns its back to the nearest wall on its own. It won't go in the doorway, on top of other furniture, or where you're standing.
-- Whatever sits on top moves with it: the stove, sink and coffee maker stay on the counter, and the mattress stays on the bed frame. Burners still cook wherever the stove ends up.
-- **G** with empty hands takes a piece out again so you can move it. Your layout is saved.
-- Loose furniture (beds, tables, chairs, crates, and the new sofa, rug, lamp, plant and shelves) can still go anywhere inside the van or on its roof.
+About 170 new items from the item backlog, each with its own detailed 3D model, plus the gameplay to go with them. The full list of what's done is in `done.md`, and what's still to come is in `todo.md`.
 
-**Carry five things at once**
-- You now have five hand slots (a backpack adds two more). Use 1–7 or the mouse wheel to pick one.
+**Clothes and backpacks**
+- Wear one thing per body slot: body, head, back and wrist. Putting something new on swaps the old one into your hands.
+- New clothes: ripped T-shirt, survivor clothes, red and blue jackets, work clothes, leather vest, wool poncho, rain poncho (keeps you warmer in the rain), military helmet, sandstorm goggles.
+- Helmet, vest and work clothes protect you from animal attacks.
+- Bigger backpacks carry more: burlap bag +1, rucksack +2, hiking pack +3, military pack +4, expedition pack +5 slots.
+- Watches: without one you only know the rough time of day ("Morning", "Dusk"). You start wearing one. The survival watch also shows your altitude.
 
-**A better start**
-- **A spare tire:** the starting lot now has five tires for four wheels.
-- **No more losing tires by accident:** E only ever fits a tire or battery. Pulling one off is now **G** with empty hands. A worn tire or dead battery can be fitted again too, at lower condition.
-- **Hitch the trailer straight away:** the flatbed trailer is parked right behind the van with its tongue at the hitch. Walk to the tongue and press E. Hitching now works from a bit further away.
-- **A house just up the road:** about 70 m up the road from the start, across from the lot, a furnished house always has a kitchen counter, fridge, bed frame, mattress, cupboard, ceiling light and a chair to find, plus food and first aid.
-- **No wolves at the start:** wolves and bears now live deep in the woods, well away from the road and buildings. They never appear right next to you, and none come near the starting lot on the first day. A pack that loses you goes back to its own patch of forest.
+**Weapons and tools**
+- Combat 19 pistol, pocket pistol, magnum revolver, double barrel shotgun (fires a spread of pellets) and compound bow. Each gun takes its own ammo: 9mm, .25 ACP, .44 Magnum, 12 gauge shells.
+- Fire axe, stone hatchet, stone pickaxe, heavy pickaxe, sledge hammer, framing hammer, machete, combat knife, kitchen knife, spiked bat, hand saw, multi-tool wrench and a plain rock.
+- Stronger tools chop and break things in fewer swings. Any knife or machete can butcher, the multi-tool works as a toolkit, and any hammer opens the build menu.
 
-**New items**
-- Food: bag of chips, energy bar, beef jerky, apple, loaf of bread, instant noodles (cook them on the fire or stove with clean water to make hot noodles).
-- Painkillers. Duct tape: patch the van's body at the hood, no toolkit needed.
-- Crowbar (melee tool). Binoculars: use them to look far down the road.
-- From the new item backlog: tinned hotdogs, can of cashews, Peaches O'Reilly, berry juice, Mocha Cola, emergency ration pack and Jason's Choccy Block. The full three-part list is saved in the repository (`docs/item-backlog/`) for future versions.
-- New furniture: sofa, floor lamp (switch it on and off), rug, potted plant, shelf unit. Find them in houses or build them.
-- Workbench recipes for duct tape, crowbar and binoculars. All new items turn up in loot.
+**Light and navigation**
+- Hold a torch or road flare (real flames), a chemical light stick or a folding camp lantern to light your way.
+- The tactical headlamp works like the flashlight with your hands free (F).
+- Pocket compass: shows your heading and the way back to the van. Paper roadmap: lists the next stops on the highway. Retro GPS: finds the nearest fuel. Hand-crank radio: music anywhere.
 
-**Saves:** older saves load as before. Furniture already fitted stays where it was.
+**Food, cooking and camp**
+- Each animal now gives its own meat and parts: venison, rabbit, wolf and bird meat, sinew, bones, fat, pelts, claws, antlers and skulls.
+- Carrots and corn to grow and roast, red, yellow and the rare golden mystic berries, milk, energy drinks, sodas, cereal and pet food (in a pinch).
+- A cast iron skillet, cooking pot or coffee percolator on the fire makes everything there cook up to twice as fast. Fill a thermos with hot coffee to stay warm on the road.
+- Campfires now burn hardwood, charcoal, sticks, driftwood and old magazines. Hardwood and charcoal burn longest.
+- Smelt on the fire: wood into charcoal, copper and lead ore into ingots.
+- Water purification tablets clean up to three bottles of dirty water at once. New medicine: gauze, morphine, adrenaline, splint, antidote, trauma kit, hand warmers and space blankets.
 
-Controls: E pick up / fit / use / open and close doors · G place or fit, or take a part out with empty hands · R rotate · Q throw · 1–7 pick a hand slot · Tab notebook. On touch: PLACE, THROW and BOOK buttons.
+**Gathering and crafting**
+- Rocks give copper, lead and sulphur ore, saltpeter and sometimes obsidian. Trees drop sticks, seasoned hardwood and raw rubber. Driftwood washes up on lake shores.
+- Over 80 new workbench recipes: leatherwork, backpacks, clothes, stone tools, gunpowder and ammo, camp gear and electronics.
+- Salvage and junk (license plates, hubcaps, bent spoons, old watches, springs, car parts) break down at the workbench into useful parts.
+
+**Make the van your own**
+- Ten pieces of cab decor: fuzzy dice, cactus air freshener, sun catcher, brass bells, dreamcatcher, mirror ball, wind spinner, spring palm, mini globe and hourglass. Aim at the van ceiling to hang them up. They swing as you drive.
+- Five rugs with detailed patterns: Persian, braided, Japanese wave, cowhide and woven.
+- New furniture: folding camp chair, canvas bedroll, shade tarp, retro TV, LED clock, weather station and a cassette case that plays tapes on the van radio.
+
+**Saves:** older saves load as before and keep showing the exact time.
+
+Controls: E pick up / use · G place, or aim at the ceiling to hang decor · R rotate · F flashlight or headlamp · LMB use what you hold (eat, wear, shoot, read the map) · 1–9 and 0 pick a hand slot · Tab notebook.
 
 If the install fails over an older version, uninstall the older version first.

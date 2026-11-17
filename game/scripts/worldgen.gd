@@ -275,6 +275,13 @@ func build_chunk(cx: int, cz: int, removed: Dictionary, detail: bool) -> Diction
 		if removed.has(key) or absf(x - road_x(z)) < ROAD_HALF + 1.0 or _near_poi(x, z, 1.0) or is_water(x, z, 0.0):
 			continue
 		var item := "wood" if rng.randf() < 0.6 + cw.z * 0.3 - cw.x * 0.5 else "stone"
+		var r2 := rng.randf()
+		if item == "wood" and r2 < 0.5:
+			item = "stick"
+		elif item == "stone" and r2 < 0.3:
+			item = "rock"
+		if r2 > 0.55 and lake_mask(x, z, cw) > 0.02 and height(x, z) < water_level(x, z) + 1.5:
+			item = "drift_wood"
 		feats.append({"t": "pickup", "item": item, "pos": Vector3(x, hs_sample(hs, x - ox, z - oz), z), "rot": rng.randf() * TAU, "key": key})
 	var rock_count := int(3 + cw.w * 8 + cw.x * 5)
 	for t in range(rock_count):

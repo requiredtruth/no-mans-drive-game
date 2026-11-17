@@ -3,6 +3,18 @@ extends StaticBody3D
 
 const Data = preload("res://scripts/data.gd")
 const GRID := 3.0
+## Free-standing furniture whose prompt already says "[G] Pick up".
+const FURNITURE := ["chair", "table", "sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit",
+	"mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven",
+	"camp_folding_chair", "camp_canvas_bedroll", "deployable_tarp", "mod_retro_tv", "mod_led_wall_clock",
+	"mod_weather_station", "mod_cassette_travel_case"]
+const EXTRA_FURNITURE := ["mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven",
+	"camp_folding_chair", "camp_canvas_bedroll", "deployable_tarp", "mod_retro_tv", "mod_led_wall_clock",
+	"mod_weather_station", "mod_cassette_travel_case"]
+var _label3: Label3D
+var _screen: MeshInstance3D
+var _spin: Node3D
+var _tick := 0.0
 
 var id := ""
 var type := ""
@@ -274,8 +286,9 @@ func _build() -> void:
 			_col(Vector3(-0.48, 0.8, 0), Vector3(0.03, 1.6, 0.36))
 			_col(Vector3(0.48, 0.8, 0), Vector3(0.03, 1.6, 0.36))
 			_col(Vector3(0, 0.8, -0.17), Vector3(0.96, 1.6, 0.015))
-	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table",
-			"sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"]:
+	if type in EXTRA_FURNITURE:
+		_build_extra()
+	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern"] or type in FURNITURE:
 		add_to_group("placeable")
 
 func _build_campfire() -> void:
@@ -387,6 +400,11 @@ func _refresh() -> void:
 		"floor_lamp":
 			if _lamp:
 				_lamp.visible = data.get("on", true)
+		"mod_retro_tv":
+			if _lamp:
+				_lamp.visible = data.get("on", false)
+			if _screen:
+				_screen.material_override = Lib.color_mat(Color(0.5, 0.65, 0.8), 0.2, 0.0, Color(0.55, 0.7, 0.95), 1.6) if data.get("on", false) else Lib.color_mat(Color(0.06, 0.08, 0.07), 0.15, 0.2)
 		"planter":
 			for c in _plant.get_children():
 				c.queue_free()
@@ -404,7 +422,7 @@ func _refresh() -> void:
 				sprout.position = Vector3(x, 0, 0)
 				_plant.add_child(sprout)
 				if g >= 1.0:
-					var fruit_col := Color("d6402f") if crop == "tomato" else (Color("b03a2a") if crop == "coffee_beans" else Color("b89060"))
+					var fruit_col: Color = Color("d6402f") if crop == "tomato" else (Color("b03a2a") if crop == "coffee_beans" else Data.ITEMS.get(crop, {}).get("color", Color("b89060")))
 					for f in range(3):
 						Lib.sphere(_plant, Vector3(x + randf_range(-0.12, 0.12), 0.25 + f * 0.08, randf_range(-0.12, 0.12)), 0.05, Lib.color_mat(fruit_col, 0.4))
 
@@ -426,6 +444,20 @@ func _process(delta: float) -> void:
 		"lantern":
 			var night := Game.time_of_day < 6.5 or Game.time_of_day > 19.0
 			_lamp.visible = night
+		"mod_retro_tv":
+			if _lamp and _lamp.visible:
+				_lamp.light_energy = 0.7 + randf() * 0.35
+		"mod_led_wall_clock", "mod_weather_station":
+			_tick -= delta
+			if _spin:
+				_spin.rotation.y += delta * (2.0 + (6.0 if Game.weather in ["rain", "snow"] else 0.0))
+			if _tick <= 0.0 and _label3:
+				_tick = 1.0
+				var h := int(Game.time_of_day)
+				if type == "mod_led_wall_clock":
+					_label3.text = "%02d:%02d" % [h, int((Game.time_of_day - h) * 60.0)]
+				else:
+					_label3.text = "%d°C\n%s" % [int(round(Game.world.temperature_at(global_position))) if Game.world else 0, Game.weather.capitalize()]
 
 ## Called by the world once per in-game hour.
 func game_hour() -> void:
@@ -455,7 +487,7 @@ func is_sheltered() -> bool:
 # ------------------------------------------------------------------ interaction
 func get_prompt() -> String:
 	var p := _prompt()
-	if is_in_group("placeable") and type not in ["chair", "table", "sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit"] and p != "":
+	if is_in_group("placeable") and type not in FURNITURE and p != "":
 		p += "   [G] Pick up"
 	return p
 
@@ -465,7 +497,7 @@ func _prompt() -> String:
 			var fuel: float = float(data.get("fuel", 0.0))
 			var held := Game.equipped()
 			if fuel > 0.0:
-				if held == "wood":
+				if _burn_value(held) > 0.0:
 					return "[E] Add wood  (%d min of fuel)" % int(fuel / 60.0 + 1)
 				if _cookable(held):
 					return "[E] Set the %s on the grill" % Data.item_name(held)
@@ -504,21 +536,38 @@ func _prompt() -> String:
 			return "Potted plant   [G] Pick up"
 		"shelf_unit":
 			return "Shelf unit: set things on the shelves   [G] Pick up"
+		"mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven":
+			return "%s   [G] Pick up" % Data.item_name(type)
+		"camp_folding_chair":
+			return "[E] Sit down and rest   [G] Pick up"
+		"camp_canvas_bedroll":
+			return "[E] Sleep on the bedroll   [G] Roll it up"
+		"deployable_tarp":
+			return "Shade tarp: keeps the rain off   [G] Pack it up"
+		"mod_retro_tv":
+			return "[E] Turn the TV %s   [G] Pick up" % ("off" if data.get("on", false) else "on")
+		"mod_led_wall_clock":
+			return "Clock   [G] Pick up"
+		"mod_weather_station":
+			return "Weather station: %s   [G] Pick up" % _forecast()
+		"mod_cassette_travel_case":
+			return "[E] Play a tape on the van radio   [G] Pick up"
 	return ""
 
 func interact(player: Node) -> void:
 	match type:
 		"campfire":
 			if float(data.get("fuel", 0.0)) <= 0.0:
-				if Game.remove_item("wood", 1):
-					data["fuel"] = 240.0
+				var fuel_id := Game.equipped() if _burn_value(Game.equipped()) > 0.0 else "wood"
+				if Game.remove_item(fuel_id, 1):
+					data["fuel"] = 240.0 * _burn_value(fuel_id)
 					_refresh()
 					_save_data()
 					Audio.play_at("chop", global_position)
 				else:
 					Game.notify("You need wood to light the fire")
-			elif Game.equipped() == "wood":
-				add_fuel()
+			elif _burn_value(Game.equipped()) > 0.0:
+				add_fuel(Game.equipped())
 				Audio.play_at("chop", global_position, -6.0, 1.3)
 			elif _cookable(Game.equipped()):
 				_set_on_grill()
@@ -537,9 +586,23 @@ func interact(player: Node) -> void:
 			_planter_interact()
 		"workbench":
 			assemble()
-		"chair", "sofa":
-			Game.stats["energy"] = minf(Game.stats["energy"] + (5.0 if type == "chair" else 8.0), 100.0)
+		"chair", "sofa", "camp_folding_chair":
+			Game.stats["energy"] = minf(Game.stats["energy"] + (8.0 if type == "sofa" else 5.0), 100.0)
 			Game.notify("You rest for a moment")
+		"camp_canvas_bedroll":
+			Game.world.sleep(global_position + Vector3(0, 0.4, 0))
+		"mod_retro_tv":
+			data["on"] = not data.get("on", false)
+			Audio.play_at("click", global_position, -6.0)
+			_refresh()
+			_save_data()
+		"mod_cassette_travel_case":
+			if Game.rv and Game.rv.has_method("next_station"):
+				Game.rv.next_station()
+				if Game.rv.radio_on:
+					Game.notify("You slot a tape into the van radio")
+			else:
+				Game.notify("A case full of road-trip mixtapes")
 		"floor_lamp":
 			data["on"] = not data.get("on", true)
 			Audio.play_at("click", global_position, -6.0)
@@ -574,11 +637,17 @@ func _spill_legacy() -> void:
 	data.erase("items")
 	_save_data()
 
-func add_fuel() -> bool:
-	if not Game.remove_item("wood", 1):
+## How long something burns compared with a log (0 = it doesn't).
+func _burn_value(id: String) -> float:
+	if id == "wood":
+		return 1.0
+	return float(Data.ITEMS.get(id, {}).get("burn", 0.0))
+
+func add_fuel(fuel_id := "wood") -> bool:
+	if not Game.remove_item(fuel_id, 1):
 		Game.notify("You need wood")
 		return false
-	data["fuel"] = minf(float(data.get("fuel", 0.0)) + 180.0, 1200.0)
+	data["fuel"] = minf(float(data.get("fuel", 0.0)) + 180.0 * _burn_value(fuel_id), 1500.0)
 	_refresh()
 	_save_data()
 	return true
@@ -586,8 +655,8 @@ func add_fuel() -> bool:
 func _planter_interact() -> void:
 	var crop: String = data.get("crop", "")
 	if crop == "":
-		for seed_id in ["seeds_tomato", "seeds_potato", "seeds_coffee"]:
-			if Game.count(seed_id) > 0:
+		for seed_id in Data.ITEMS:
+			if Data.ITEMS[seed_id]["kind"] == "seed" and Game.count(seed_id) > 0:
 				Game.remove_item(seed_id, 1)
 				data["crop"] = Data.ITEMS[seed_id]["grows"]
 				data["growth"] = 0.0
@@ -601,8 +670,10 @@ func _planter_interact() -> void:
 		var n := randi_range(3, 5)
 		Game.add_item(crop, n)
 		if randf() < 0.6:
-			var seed_for := {"tomato": "seeds_tomato", "potato": "seeds_potato", "coffee_beans": "seeds_coffee"}
-			Game.add_item(seed_for[crop], randi_range(1, 2))
+			for seed_id in Data.ITEMS:
+				if Data.ITEMS[seed_id].get("grows", "") == crop:
+					Game.add_item(seed_id, randi_range(1, 2))
+					break
 		data["crop"] = ""
 		data["growth"] = 0.0
 		Audio.play("pickup")
@@ -766,3 +837,195 @@ func assemble() -> void:
 		Game.place_item(out, n, Transform3D(global_transform.basis, front), host)
 	Audio.play_at("hammer", global_position, -3.0)
 	Game.notify("You made %s%s" % [Data.item_name(out), (" ×%d" % int(r["n"])) if int(r["n"]) > 1 else ""])
+
+# ------------------------------------------------------------------ 1.7 furniture
+func _forecast() -> String:
+	var t := int(round(Game.world.temperature_at(global_position))) if Game.world else 0
+	var w := Game.weather
+	var tip := "clear skies"
+	match w:
+		"rain": tip = "rain now, keep the fire covered"
+		"snow": tip = "snow, stay warm"
+		"cloudy": tip = "clouds building, rain possible"
+	return "%d°C, %s" % [t, tip]
+
+func _rug_mat(tex_name: String, tint := Color.WHITE) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = Lib.tex(tex_name)
+	m.albedo_color = tint
+	m.roughness = 0.95
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if ResourceLoader.exists("res://assets/textures/%s_n.png" % tex_name):
+		m.normal_enabled = true
+		m.normal_texture = Lib.tex(tex_name + "_n")
+	return m
+
+## A flat rug: a thin pile with the pattern mapped once across the top.
+func _flat_rug(w: float, d: float, tex_name: String, round_rug := false) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var h := 0.014
+	if round_rug:
+		var segs := 48
+		for i in range(segs):
+			var a0 := TAU * i / segs
+			var a1 := TAU * (i + 1) / segs
+			var p0 := Vector3(cos(a0) * w * 0.5, h, sin(a0) * d * 0.5)
+			var p1 := Vector3(cos(a1) * w * 0.5, h, sin(a1) * d * 0.5)
+			var c := Vector3(0, h, 0)
+			Lib._tri(st, [c, p1, p0], [Vector3.UP, Vector3.UP, Vector3.UP], [Vector2(0.5, 0.5), Vector2(0.5 + cos(a1) * 0.5, 0.5 + sin(a1) * 0.5), Vector2(0.5 + cos(a0) * 0.5, 0.5 + sin(a0) * 0.5)])
+			var q0 := Vector3(p0.x, 0.0, p0.z)
+			var q1 := Vector3(p1.x, 0.0, p1.z)
+			var n0 := Vector3(cos(a0), 0, sin(a0))
+			var n1 := Vector3(cos(a1), 0, sin(a1))
+			Lib._tri(st, [p0, p1, q1], [n0, n1, n1], [Vector2(0, 0), Vector2(0.02, 0), Vector2(0.02, 0.02)])
+			Lib._tri(st, [p0, q1, q0], [n0, n1, n0], [Vector2(0, 0), Vector2(0.02, 0.02), Vector2(0, 0.02)])
+	elif tex_name == "cowhide":
+		# an irregular hide outline
+		var segs := 40
+		var pts := []
+		for i in range(segs):
+			var a := TAU * i / segs
+			var r := 1.0 + 0.12 * sin(a * 4.0) + 0.08 * sin(a * 7.0 + 1.0) + (0.18 if absf(sin(a * 2.0)) > 0.92 else 0.0)
+			pts.append(Vector3(cos(a) * w * 0.5 * r, h, sin(a) * d * 0.5 * r))
+		for i in range(segs):
+			var p0: Vector3 = pts[i]
+			var p1: Vector3 = pts[(i + 1) % segs]
+			Lib._tri(st, [Vector3(0, h, 0), p1, p0], [Vector3.UP, Vector3.UP, Vector3.UP], [Vector2(0.5, 0.5), Vector2(0.5 + p1.x / w, 0.5 + p1.z / d), Vector2(0.5 + p0.x / w, 0.5 + p0.z / d)])
+	else:
+		var a := Vector3(-w * 0.5, h, -d * 0.5)
+		var b := Vector3(w * 0.5, h, -d * 0.5)
+		var c2 := Vector3(w * 0.5, h, d * 0.5)
+		var d2 := Vector3(-w * 0.5, h, d * 0.5)
+		Lib._tri(st, [a, b, c2], [Vector3.UP, Vector3.UP, Vector3.UP], [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1)])
+		Lib._tri(st, [a, c2, d2], [Vector3.UP, Vector3.UP, Vector3.UP], [Vector2(0, 0), Vector2(1, 1), Vector2(0, 1)])
+		for e in [[a, b, Vector3.FORWARD], [b, c2, Vector3.RIGHT], [c2, d2, Vector3.BACK], [d2, a, Vector3.LEFT]]:
+			var e0: Vector3 = e[0]
+			var e1: Vector3 = e[1]
+			var nn: Vector3 = e[2]
+			Lib._tri(st, [e0, e1, Vector3(e1.x, 0, e1.z)], [nn, nn, nn], [Vector2(0, 0), Vector2(1, 0), Vector2(1, 0.01)])
+			Lib._tri(st, [e0, Vector3(e1.x, 0, e1.z), Vector3(e0.x, 0, e0.z)], [nn, nn, nn], [Vector2(0, 0), Vector2(1, 0.01), Vector2(0, 0.01)])
+	st.generate_tangents()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _rug_mat(tex_name)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	_col(Vector3(0, 0.008, 0), Vector3(w, 0.016, d))
+
+func _build_extra() -> void:
+	var alu := Lib.mat("metal", Color(0.78, 0.8, 0.82), 2.0, false, 0.3, 0.85)
+	match type:
+		"mod_rug_persian":
+			_flat_rug(1.9, 1.25, "rug_persian")
+			for x in [-0.98, 0.98]:
+				for k in range(14):
+					Lib.cyl(self, Vector3(x + signf(x) * 0.03, 0.004, -0.6 + k * 0.092), 0.004, 0.004, 0.06, Lib.color_mat(Color(0.92, 0.88, 0.78), 0.9), Vector3(0, 0, PI * 0.5), 4)
+		"mod_rug_braided":
+			_flat_rug(1.5, 1.0, "rug_braided", true)
+		"mod_rug_japanese_wave":
+			_flat_rug(1.7, 1.1, "rug_wave")
+		"mod_rug_cowhide":
+			_flat_rug(1.6, 1.3, "cowhide")
+		"mod_rug_woven":
+			_flat_rug(1.5, 0.9, "rug_woven")
+		"camp_folding_chair":
+			var fab := Lib.mat("canvas", Color(0.25, 0.42, 0.7), 1.2, false, 0.9)
+			# X-frame legs, front and back
+			for z in [-0.22, 0.22]:
+				Lib.cyl(self, Vector3(0, 0.24, z), 0.012, 0.012, 0.66, alu, Vector3(0, 0, 0.82))
+				Lib.cyl(self, Vector3(0, 0.24, z), 0.012, 0.012, 0.66, alu, Vector3(0, 0, -0.82))
+			for x in [-0.27, 0.27]:
+				Lib.cyl(self, Vector3(x, 0.44, 0), 0.012, 0.012, 0.46, alu, Vector3(PI * 0.5, 0, 0))
+				Lib.cyl(self, Vector3(x, 0.62, 0.05), 0.014, 0.014, 0.42, alu, Vector3(PI * 0.5, 0, 0))
+				Lib.box(self, Vector3(x, 0.635, 0.05), Vector3(0.06, 0.02, 0.36), fab)
+				Lib.cyl(self, Vector3(x, 0.75, 0.24), 0.012, 0.012, 0.66, alu, Vector3(-0.2, 0, 0))
+			# sagging seat and back sling
+			var sling := Lib.box(self, Vector3(0, 0.42, 0.0), Vector3(0.52, 0.02, 0.44), fab, false, Vector3.ZERO, 0.008)
+			sling.scale = Vector3(1, 1.6, 1)
+			Lib.box(self, Vector3(0, 0.8, 0.25), Vector3(0.52, 0.46, 0.02), fab, false, Vector3(-0.2, 0, 0), 0.008)
+			# cup holder in the right armrest
+			Lib.cyl(self, Vector3(0.34, 0.6, -0.12), 0.04, 0.035, 0.08, Lib.mat("canvas", Color(0.2, 0.2, 0.22), 1.0, false))
+			_col(Vector3(0, 0.4, 0), Vector3(0.62, 0.8, 0.5))
+		"camp_canvas_bedroll":
+			var can := Lib.mat("canvas", Color(0.45, 0.5, 0.32), 0.9, false, 0.95)
+			Lib.box(self, Vector3(0, 0.04, 0.05), Vector3(0.8, 0.08, 1.95), can, false, Vector3.ZERO, 0.035)
+			Lib.box(self, Vector3(0, 0.085, 0.25), Vector3(0.72, 0.03, 1.4), Lib.mat("plaid", Color(0.85, 0.55, 0.45), 1.6, false, 0.95), false, Vector3.ZERO, 0.012)
+			Lib.cyl(self, Vector3(0, 0.08, -0.8), 0.08, 0.08, 0.7, can, Vector3(0, 0, PI * 0.5))
+			Lib.box(self, Vector3(0, 0.15, -0.62), Vector3(0.5, 0.1, 0.3), Lib.mat("canvas", Color(0.92, 0.9, 0.84), 1.0, false), false, Vector3.ZERO, 0.045)
+			for x in [-0.22, 0.22]:
+				Lib.box(self, Vector3(x, 0.08, -0.8), Vector3(0.03, 0.17, 0.17), Lib.mat("leather", Color(0.6, 0.4, 0.25), 2.0, false))
+			_col(Vector3(0, 0.06, 0), Vector3(0.8, 0.12, 2.0))
+		"deployable_tarp":
+			var tarp := Lib.mat("canvas", Color(0.3, 0.45, 0.62), 0.5, false, 0.85)
+			var pole := Lib.mat("metal", Color(0.35, 0.36, 0.38), 2.0, false, 0.5, 0.7)
+			for p in [Vector3(-1.4, 1.1, -1.4), Vector3(1.4, 1.1, -1.4), Vector3(-1.4, 0.85, 1.4), Vector3(1.4, 0.85, 1.4)]:
+				Lib.cyl(self, Vector3(p.x, p.y, p.z), 0.02, 0.02, p.y * 2.0, pole)
+				Lib.cyl(self, Vector3(p.x * 1.25, 0.6, p.z * 1.25), 0.003, 0.003, 1.3, Lib.color_mat(Color(0.9, 0.85, 0.6)), Vector3(p.z * 0.25, 0, -p.x * 0.25))
+			var sheet := Lib.box(self, Vector3(0, 2.0, 0), Vector3(2.9, 0.012, 2.9), tarp, false, Vector3(-0.09, 0, 0))
+			sheet.material_override = sheet.material_override.duplicate()
+			sheet.material_override.cull_mode = BaseMaterial3D.CULL_DISABLED
+			_col(Vector3(0, 2.02, 0), Vector3(2.9, 0.04, 2.9), Vector3(-0.09, 0, 0))
+			for p in [Vector3(-1.4, 1.1, -1.4), Vector3(1.4, 1.1, -1.4), Vector3(-1.4, 0.85, 1.4), Vector3(1.4, 0.85, 1.4)]:
+				_col(Vector3(p.x, p.y, p.z), Vector3(0.05, p.y * 2.0, 0.05))
+		"mod_retro_tv":
+			var veneer := Lib.mat("planks", Color(0.55, 0.36, 0.2), 2.5, false, 0.45)
+			Lib.box(self, Vector3(0, 0.3, 0), Vector3(0.62, 0.48, 0.46), veneer, false, Vector3.ZERO, 0.03)
+			Lib.box(self, Vector3(-0.07, 0.31, -0.231), Vector3(0.44, 0.36, 0.01), Lib.color_mat(Color(0.14, 0.13, 0.12), 0.5), false, Vector3.ZERO, 0.004)
+			_screen = Lib.box(self, Vector3(-0.07, 0.31, -0.238), Vector3(0.38, 0.3, 0.008), Lib.color_mat(Color(0.06, 0.08, 0.07), 0.15, 0.2), false, Vector3.ZERO, 0.03)
+			for k in range(2):
+				Lib.cyl(self, Vector3(0.23, 0.42 - k * 0.1, -0.235), 0.025, 0.025, 0.02, Lib.color_mat(Color(0.75, 0.72, 0.68), 0.3, 0.6), Vector3(PI * 0.5, 0, 0))
+			for k in range(5):
+				Lib.box(self, Vector3(0.23, 0.2 - k * 0.018, -0.232), Vector3(0.09, 0.006, 0.005), Lib.color_mat(Color(0.1, 0.1, 0.1)))
+			for x in [-0.26, 0.26]:
+				Lib.cyl(self, Vector3(x, 0.03, 0), 0.015, 0.01, 0.06, veneer)
+			for a in [-0.35, 0.35]:
+				Lib.cyl(self, Vector3(sin(a) * 0.12, 0.7, 0.05), 0.004, 0.004, 0.36, Lib.color_mat(Color(0.8, 0.8, 0.82), 0.3, 0.9), Vector3(0, 0, a))
+			_lamp = Lib.light(self, Vector3(0, 0.32, -0.6), Color(0.6, 0.72, 1.0), 0.8, 4.0)
+			_col(Vector3(0, 0.3, 0), Vector3(0.62, 0.6, 0.46))
+			_refresh()
+		"mod_led_wall_clock":
+			Lib.box(self, Vector3(0, 0.06, 0), Vector3(0.24, 0.12, 0.07), Lib.color_mat(Color(0.08, 0.08, 0.09), 0.4), false, Vector3.ZERO, 0.015)
+			Lib.box(self, Vector3(0, 0.065, -0.036), Vector3(0.2, 0.08, 0.004), Lib.color_mat(Color(0.03, 0.02, 0.02), 0.1))
+			_label3 = Label3D.new()
+			_label3.font_size = 64
+			_label3.pixel_size = 0.0011
+			_label3.modulate = Color(1.0, 0.25, 0.18)
+			_label3.position = Vector3(0, 0.065, -0.04)
+			_label3.rotation.y = PI
+			_label3.text = "--:--"
+			add_child(_label3)
+			_col(Vector3(0, 0.06, 0), Vector3(0.24, 0.12, 0.07))
+		"mod_weather_station":
+			var white := Lib.color_mat(Color(0.92, 0.92, 0.9), 0.35)
+			for a in [0.0, TAU / 3.0, TAU * 2.0 / 3.0]:
+				Lib.cyl(self, Vector3(cos(a) * 0.12, 0.3, sin(a) * 0.12), 0.01, 0.01, 0.64, alu, Vector3(sin(a) * 0.38, 0, -cos(a) * 0.38))
+			Lib.cyl(self, Vector3(0, 0.9, 0), 0.015, 0.015, 0.9, alu)
+			# louvred thermometer screen
+			for k in range(5):
+				Lib.cyl(self, Vector3(0, 0.72 + k * 0.035, 0), 0.09, 0.1, 0.02, white)
+			Lib.box(self, Vector3(0, 0.95, -0.1), Vector3(0.18, 0.14, 0.04), Lib.color_mat(Color(0.2, 0.2, 0.22), 0.4), false, Vector3.ZERO, 0.01)
+			_label3 = Label3D.new()
+			_label3.font_size = 40
+			_label3.pixel_size = 0.0012
+			_label3.modulate = Color(0.6, 1.0, 0.7)
+			_label3.position = Vector3(0, 0.95, -0.123)
+			_label3.rotation.y = PI
+			add_child(_label3)
+			_spin = Node3D.new()
+			_spin.position = Vector3(0, 1.38, 0)
+			add_child(_spin)
+			for a in [0.0, TAU / 3.0, TAU * 2.0 / 3.0]:
+				Lib.cyl(_spin, Vector3(cos(a) * 0.07, 0, sin(a) * 0.07), 0.004, 0.004, 0.14, alu, Vector3(0, -a, PI * 0.5))
+				Lib.sphere(_spin, Vector3(cos(a) * 0.14, 0, sin(a) * 0.14), 0.03, white, Vector3(1, 1, 0.6))
+			Lib.box(self, Vector3(0.12, 1.3, 0), Vector3(0.2, 0.01, 0.01), alu)
+			Lib.box(self, Vector3(0.22, 1.3, 0), Vector3(0.01, 0.08, 0.06), Lib.color_mat(Color(0.85, 0.2, 0.15)))
+			_col(Vector3(0, 0.7, 0), Vector3(0.35, 1.4, 0.35))
+		"mod_cassette_travel_case":
+			var shell := Lib.mat("leather", Color(0.25, 0.25, 0.27), 3.0, false, 0.6)
+			Lib.box(self, Vector3(0, 0.06, 0), Vector3(0.42, 0.12, 0.26), shell, false, Vector3.ZERO, 0.02)
+			Lib.box(self, Vector3(0, 0.125, 0.12), Vector3(0.12, 0.02, 0.02), Lib.color_mat(Color(0.7, 0.68, 0.6), 0.3, 0.8))
+			for k in range(6):
+				var col: Color = [Color(0.85, 0.2, 0.2), Color(0.2, 0.5, 0.85), Color(0.95, 0.8, 0.2), Color(0.25, 0.7, 0.35), Color(0.9, 0.9, 0.88), Color(0.6, 0.3, 0.7)][k]
+				Lib.box(self, Vector3(-0.17 + k * 0.068, 0.17, -0.02), Vector3(0.012, 0.07, 0.11), Lib.color_mat(col, 0.4))
+			_col(Vector3(0, 0.08, 0), Vector3(0.42, 0.16, 0.26))

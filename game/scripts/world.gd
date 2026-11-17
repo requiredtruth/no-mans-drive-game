@@ -711,8 +711,8 @@ func _drop(body: Node3D, id: String, n: int) -> void:
 	p.y = maxf(p.y, gen.height(p.x, p.z)) + 0.6
 	Game.drop_pile(id, n, p)
 
-func hit_resource(body: Node3D, at: Vector3) -> void:
-	var hits: int = int(body.get_meta("hits")) + 1
+func hit_resource(body: Node3D, at: Vector3, power := 1.0) -> void:
+	var hits: float = float(body.get_meta("hits")) + power
 	body.set_meta("hits", hits)
 	impact_puff(at, body.get_meta("res_kind") == "tree")
 	var key: String = body.get_meta("res_key")
@@ -726,6 +726,12 @@ func hit_resource(body: Node3D, at: Vector3) -> void:
 				_drop(body, "wood", randi_range(4, 6))
 				if randf() < 0.5:
 					_drop(body, "fiber", randi_range(1, 2))
+				if randf() < 0.6:
+					_drop(body, "stick", randi_range(1, 3))
+				if kind == "dead" or randf() < 0.2:
+					_drop(body, "seasoned_hardwood", randi_range(1, 2))
+				if kind == "palm" or randf() < 0.06:
+					_drop(body, "raw_rubber", 1)
 			Audio.play_at("chop", at, 4.0, 0.6)
 			Net.mark_removed(key, true)
 	else:
@@ -733,6 +739,21 @@ func hit_resource(body: Node3D, at: Vector3) -> void:
 			_drop(body, "stone", randi_range(3, 5))
 			if randf() < 0.25:
 				_drop(body, "scrap", 1)
+			# ore seams: what you find depends on the land
+			var bw: Vector4 = gen.biome_weights(at.x, at.z)
+			var roll := randf()
+			if roll < 0.22:
+				_drop(body, "copper_ore", randi_range(1, 2))
+			elif roll < 0.4:
+				_drop(body, "lead_ore", randi_range(1, 2))
+			elif roll < 0.4 + 0.25 * (bw.x + 0.3):
+				_drop(body, "sulphur_ore", randi_range(1, 2))
+			elif roll < 0.75:
+				_drop(body, "saltpeter", 1)
+			if randf() < 0.05:
+				_drop(body, "obsidian_chunk", 1)
+			if randf() < 0.3:
+				_drop(body, "rock", 1)
 			Net.mark_removed(key, true)
 		elif randf() < 0.35:
 			_drop(body, "stone", 1)
@@ -741,9 +762,13 @@ func harvest_bush(body: Node3D) -> void:
 	var kind: String = body.get_meta("bush_kind")
 	match kind:
 		"berry":
-			_drop(body, "berries", randi_range(2, 4))
+			var bh := hash(body.get_meta("res_key"))
+			var berry: String = ["berries", "berries", "red_berry", "yellow_berry"][absi(bh) % 4]
+			_drop(body, berry, randi_range(2, 4))
 			if randf() < 0.15:
 				_drop(body, "seeds_tomato", 1)
+			if randf() < 0.02:
+				_drop(body, "golden_mystic_berry", 1)
 		"mushroom":
 			_drop(body, "mushroom", randi_range(1, 3))
 		_:
@@ -751,7 +776,7 @@ func harvest_bush(body: Node3D) -> void:
 			if randf() < 0.35:
 				_drop(body, "wood", 1)
 			if randf() < 0.08:
-				_drop(body, "seeds_potato", 1)
+				_drop(body, ["seeds_potato", "carrot_seeds", "corn_seeds"][randi() % 3], 1)
 	Audio.play("pickup", -4.0)
 	Net.mark_removed(body.get_meta("res_key"), Game.day)
 
@@ -815,8 +840,12 @@ func _cook_tick(dt: float) -> void:
 				here.append(it)
 		if here.is_empty():
 			continue
+		# a skillet, pot or percolator on the heat cooks everything with it faster
+		var boost := 1.0
 		for it in here:
-			it.set_meta("cook", float(it.get_meta("cook", 0.0)) + dt)
+			boost = maxf(boost, float(Data.ITEMS.get(it.id, {}).get("cook_boost", 1.0)))
+		for it in here:
+			it.set_meta("cook", float(it.get_meta("cook", 0.0)) + dt * boost)
 		_cook_here(here)
 
 func _cook_here(here: Array) -> void:

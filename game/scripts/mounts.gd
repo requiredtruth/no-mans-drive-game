@@ -8,7 +8,7 @@ extends RefCounted
 const Data = preload("res://scripts/data.gd")
 
 static func _toolkit() -> bool:
-	return Game.count("toolkit") > 0
+	return Game.has_flag("toolkit")
 
 static func _tk_hint() -> String:
 	return "" if _toolkit() else "  (needs a Toolkit in hand or within reach)"
