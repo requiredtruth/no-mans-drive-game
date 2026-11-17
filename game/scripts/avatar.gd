@@ -23,23 +23,30 @@ func rebuild(a: Dictionary) -> void:
 	elif build == 3:
 		shoulders -= 0.04
 	var legs := Lib.color_mat(dark, 0.9)
+	var top_name: String = Profile.OPTIONS["top"][clampi(int(a.get("top", 0)), 0, Profile.OPTIONS["top"].size() - 1)]
+	var wearing_dress := "dress" in top_name.to_lower()
 	var pants_name: String = Profile.OPTIONS["bottom"][clampi(int(a.get("bottom", 0)), 0, Profile.OPTIONS["bottom"].size() - 1)]
-	if "skirt" in pants_name.to_lower():
+	if "skirt" in pants_name.to_lower() and not wearing_dress:
 		Lib.cyl(self, Vector3(0, 0.78, 0), 0.26, 0.40 if "Maxi" in pants_name else 0.33, 0.63, Lib.color_mat(cloth.lightened(0.1)))
-	elif "shorts" in pants_name.to_lower():
+	elif "shorts" in pants_name.to_lower() and not wearing_dress:
 		for x in [-0.155, 0.155]:
 			Lib.cyl(self, Vector3(x, 0.85, 0), 0.15, 0.15, 0.26, legs)
 	for x in [-0.155, 0.155]:
-		Lib.cyl(self, Vector3(x, 0.47, 0), 0.12, 0.12, 0.75, skin_mat if "skirt" in pants_name.to_lower() or "shorts" in pants_name.to_lower() else legs)
+		Lib.cyl(self, Vector3(x, 0.47, 0), 0.12, 0.12, 0.75, skin_mat if wearing_dress or "skirt" in pants_name.to_lower() or "shorts" in pants_name.to_lower() else legs)
 		var shoe_name: String = Profile.OPTIONS["shoes"][clampi(int(a.get("shoes", 0)), 0, Profile.OPTIONS["shoes"].size() - 1)]
 		if shoe_name != "Barefoot":
 			Lib.box(self, Vector3(x, 0.10, -0.06), Vector3(0.255, 0.18, 0.39), black if shoe_name in ["Hiking boots", "Loafers", "Cowboy boots"] else trim_mat)
 		if "boots" in shoe_name.to_lower():
 			Lib.cyl(self, Vector3(x, 0.30, 0), 0.135, 0.135, 0.36, black)
-	var top_name: String = Profile.OPTIONS["top"][clampi(int(a.get("top", 0)), 0, Profile.OPTIONS["top"].size() - 1)]
 	Lib.cyl(self, Vector3(0, 1.22, 0), shoulders * 0.86, 0.23, 0.72, body_mat)
-	if "dress" in top_name.to_lower() or "Overalls" in top_name:
-		Lib.cyl(self, Vector3(0, 0.82, 0), 0.235, 0.46 if "Maxi" in top_name else 0.37, 0.58, body_mat)
+	if wearing_dress:
+		# Smooth flared fabric, fitted waist and a contrasting neckline;
+		# pants are hidden under the dress instead of clipping through it.
+		Lib.cyl(self, Vector3(0, 0.88, 0), 0.20, 0.46 if "Maxi" in top_name else 0.39, 0.80, body_mat, Vector3.ZERO, 28)
+		Lib.cyl(self, Vector3(0, 1.14, 0), 0.225, 0.225, 0.055, trim_mat, Vector3.ZERO, 28)
+		Lib.box(self, Vector3(0, 1.48, -0.225), Vector3(0.22, 0.055, 0.045), trim_mat)
+	elif "Overalls" in top_name:
+		Lib.cyl(self, Vector3(0, 0.82, 0), 0.235, 0.37, 0.58, body_mat)
 	if "coat" in top_name.to_lower() or "jacket" in top_name.to_lower() or "Raincoat" in top_name:
 		Lib.box(self, Vector3(0, 1.14, 0.205), Vector3(shoulders * 1.8, 0.7, 0.10), trim_mat)
 	if "Cardigan" in top_name or "Hoodie" in top_name:
@@ -57,7 +64,12 @@ func rebuild(a: Dictionary) -> void:
 	var hairstyle: String = Profile.OPTIONS["hair"][clampi(int(a.get("hair", 0)), 0, Profile.OPTIONS["hair"].size() - 1)]
 	Lib.sphere(self, Vector3(0, 2.027, 0.015), 0.222, hair_mat, Vector3(1.0, 0.59, 1.0))
 	if hairstyle in ["Long straight", "Long wavy", "Loose curls", "Locs", "Curly", "Afro"]:
-		Lib.sphere(self, Vector3(0, 1.79, 0.135), 0.235, hair_mat, Vector3(1.13, 1.6, 0.75))
+		# Shoulder-to-midback length, with visible strands and a clean face.
+		Lib.sphere(self, Vector3(0, 1.74, 0.145), 0.235, hair_mat, Vector3(1.1, 1.9, 0.8))
+		if hairstyle in ["Long straight", "Long wavy", "Loose curls"]:
+			for i in range(7):
+				var x := (float(i) - 3.0) * 0.067
+				Lib.cyl(self, Vector3(x, 1.49, 0.17), 0.045, 0.032, 0.54, hair_mat, Vector3(0.10 if i % 2 == 0 else -0.10, 0, 0), 10)
 	elif hairstyle in ["Ponytail", "High ponytail", "French braid"]:
 		Lib.cyl(self, Vector3(0, 1.69, 0.23), 0.08, 0.045, 0.44, hair_mat)
 	elif hairstyle in ["Twin tails", "Twin braids", "Space buns"]:

@@ -3,7 +3,7 @@ extends Node
 const UI = preload("res://scripts/ui.gd")
 const PATH := "user://character.cfg"
 const OPTIONS := {
-	"gender": ["Woman", "Man", "Nonbinary"],
+	"gender": ["Female", "Male"],
 	"build": ["Soft", "Athletic", "Broad", "Slender", "Curvy"],
 	"skin": ["Porcelain", "Fair", "Warm ivory", "Light olive", "Golden", "Tan", "Bronze", "Deep brown", "Ebony", "Cool brown"],
 	"hair": ["Pixie", "Bob", "Long straight", "Long wavy", "Ponytail", "High ponytail", "Twin tails", "French braid", "Twin braids", "Bun", "Space buns", "Short crop", "Messy", "Curly", "Afro", "Side part", "Undercut", "Mohawk", "Locs", "Loose curls"],
@@ -17,12 +17,12 @@ const OPTIONS := {
 	"bag": ["None", "Backpack", "Mini backpack", "Crossbody bag", "Handbag", "Tote bag", "Satchel", "Messenger bag", "Fanny pack", "Camera bag"],
 	"earrings": ["None", "Gold studs", "Silver studs", "Hoops", "Dangling earrings", "Flower earrings", "Star earrings", "Pearl earrings"],
 	"makeup": ["Natural", "Rosy cheeks", "Pink lipstick", "Red lipstick", "Berry lipstick", "Winged eyeliner", "Smoky eyes", "Glitter", "Freckles", "Pastel look"],
-	"outfit_color": ["Rose", "Sky", "Emerald", "Lavender", "Cream", "Black", "Red", "Amber", "Mint", "White", "Navy", "Coral", "Brown", "Pastel pink", "Purple", "Teal"],
+	"outfit_color": ["Rose", "Sky", "Emerald", "Lavender", "Cream", "Black", "Red", "Amber", "Mint", "White", "Navy", "Coral", "Brown", "Pastel pink", "Purple", "Teal", "Bright pink"],
 	"accent_color": ["Cream", "Pink", "Gold", "Silver", "Black", "Blue", "Mint", "Purple", "Red", "Orange", "White", "Brown"],
 }
 const SKINS := ["f5d9c4", "e9bc9e", "d9ae8d", "b58b64", "ce985e", "b3774b", "93603f", "6e452e", "412c24", "704934"]
 const HAIRS := ["1b1518", "32201b", "5b3523", "8a5a39", "ad7938", "d4b367", "e9d8aa", "803921", "c85d32", "a82432", "e477a3", "ab88d8", "6b9dc4", "3a9b93", "a2a5ae", "e1ddcf"]
-const PALETTE := ["d37c96", "629cce", "4a9972", "9977bd", "e2d6ba", "292b34", "c34d43", "c79548", "8fc5a0", "e4e4dc", "344c71", "e8997d", "74543c", "eab6ca", "7d55ac", "4b9f9b"]
+const PALETTE := ["d37c96", "629cce", "4a9972", "9977bd", "e2d6ba", "292b34", "c34d43", "c79548", "8fc5a0", "e4e4dc", "344c71", "e8997d", "74543c", "eab6ca", "7d55ac", "4b9f9b", "f36fae"]
 const ACCENTS := ["e7ded0", "e3a6ba", "d8ac53", "aeb6c1", "323034", "659dc5", "9bd9be", "a584c0", "ce6659", "e8a058", "f9f7ef", "694d36"]
 var appearance: Dictionary = {}
 var created := false
@@ -34,6 +34,16 @@ func _ready() -> void:
 	if cfg.load(PATH) == OK:
 		for key in appearance:
 			appearance[key] = cfg.get_value("character", key, appearance[key])
+		# Existing female characters retain custom looks. Older untouched defaults
+		# get the newly requested pink-dress, long-hair appearance once.
+		if int(cfg.get_value("character", "schema_version", 1)) < 2:
+			var previous_gender := int(appearance.get("gender", 0))
+			if previous_gender == 2 or (previous_gender == 0 and int(appearance.get("hair", 0)) == 0 and int(appearance.get("top", 0)) == 0 and int(appearance.get("outfit_color", 1)) == 1):
+				_female_preset(appearance)
+			cfg.set_value("character", "schema_version", 2)
+			for key in appearance:
+				cfg.set_value("character", key, appearance[key])
+			cfg.save(PATH)
 		created = true
 	normalize(appearance)
 
@@ -43,11 +53,29 @@ func defaults() -> Dictionary:
 		d[key] = 0
 	d["skin"] = 3
 	d["hair_color"] = 2
-	d["outfit_color"] = 1
+	_female_preset(d)
 	return d
+
+func _female_preset(d: Dictionary) -> void:
+	d["gender"] = 0
+	d["hair"] = OPTIONS["hair"].find("Long straight")
+	d["top"] = OPTIONS["top"].find("Sundress")
+	d["bottom"] = OPTIONS["bottom"].find("Denim shorts")
+	d["outfit_color"] = OPTIONS["outfit_color"].find("Bright pink")
+	d["accent_color"] = OPTIONS["accent_color"].find("Pink")
+
+func _male_preset(d: Dictionary) -> void:
+	d["gender"] = 1
+	d["hair"] = OPTIONS["hair"].find("Short crop")
+	d["top"] = OPTIONS["top"].find("Classic T-shirt")
+	d["bottom"] = OPTIONS["bottom"].find("Jeans")
+	d["outfit_color"] = OPTIONS["outfit_color"].find("Navy")
+	d["accent_color"] = OPTIONS["accent_color"].find("Cream")
 
 func normalize(d: Dictionary) -> void:
 	d["username"] = clean_name(str(d.get("username", "")))
+	# Migrate saved nonbinary index (2) to Female; only Female (0) and Male (1) remain.
+	d["gender"] = 1 if int(d.get("gender", 0)) == 1 else 0
 	for key in OPTIONS:
 		d[key] = clampi(int(d.get(key, 0)), 0, OPTIONS[key].size() - 1)
 
@@ -66,6 +94,7 @@ func save(d: Dictionary) -> void:
 	var cfg := ConfigFile.new()
 	for key in appearance:
 		cfg.set_value("character", key, appearance[key])
+	cfg.set_value("character", "schema_version", 2)
 	cfg.save(PATH)
 	created = true
 	if Net.active():
@@ -120,6 +149,7 @@ func build_editor(parent: Container, done: Callable) -> void:
 	vp.add_child(avatar)
 	avatar.rebuild(draft)
 	var grid := GridContainer.new()
+	var pickers: Dictionary = {}
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 8)
@@ -135,8 +165,17 @@ func build_editor(parent: Container, done: Callable) -> void:
 			pick.add_item(choice)
 		pick.select(int(draft.get(field, 0)))
 		cell.add_child(pick)
+		pickers[field] = pick
 		pick.item_selected.connect(func(idx: int) -> void:
-			draft[field] = idx
+			if field == "gender" and int(draft.get("gender", 0)) != idx:
+				if idx == 0:
+					_female_preset(draft)
+				else:
+					_male_preset(draft)
+				for changed in ["hair", "top", "bottom", "outfit_color", "accent_color"]:
+					(pickers[changed] as OptionButton).select(int(draft[changed]))
+			else:
+				draft[field] = idx
 			avatar.rebuild(draft))
 	parent.add_child(UI.button("Save character & username", func() -> void:
 		draft["username"] = username.text

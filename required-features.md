@@ -1,3 +1,11 @@
+### November 17 character defaults (1.15.1)
+
+- ✅ Character creation offers **Female and Male only**, removing the third gender option.
+- ✅ The default Female appearance has **long straight hair and a bright pink sundress**, with extended hair strands and a dress skirt that hides underlying pants.
+- ✅ Switching to Female applies this look in the editor while retaining the ability to change each wardrobe option afterwards.
+- ✅ Prior untouched Female profiles migrate to the new default appearance without overriding customized outfits; unsupported prior gender index migrates to Female.
+- ✅ Push update to main and publish v1.15.1 signed Android APK after automated checks.
+
 ### November 17 multiplayer, character customization and gardening (1.15.0)
 
 - ✅ Create a Linux `server.sh` that downloads an engine if required and launches a headless ENet world with persistent state; server source in this same repository.
