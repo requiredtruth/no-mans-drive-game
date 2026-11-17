@@ -38,7 +38,12 @@ func rebuild(a: Dictionary) -> void:
 			Lib.box(self, Vector3(x, 0.10, -0.06), Vector3(0.255, 0.18, 0.39), black if shoe_name in ["Hiking boots", "Loafers", "Cowboy boots"] else trim_mat)
 		if "boots" in shoe_name.to_lower():
 			Lib.cyl(self, Vector3(x, 0.30, 0), 0.135, 0.135, 0.36, black)
-	Lib.cyl(self, Vector3(0, 1.22, 0), shoulders * 0.86, 0.23, 0.72, body_mat)
+	# A single smoothly sculpted garment surface avoids separate circular chest
+	# pieces, which looked unnatural from the front and side. All tops use it.
+	if gender == 0:
+		_female_upper_body(body_mat, shoulders, build)
+	else:
+		Lib.cyl(self, Vector3(0, 1.22, 0), shoulders * 0.86, 0.23, 0.72, body_mat)
 	if wearing_dress:
 		# Smooth flared fabric, fitted waist and a contrasting neckline;
 		# pants are hidden under the dress instead of clipping through it.
@@ -101,3 +106,63 @@ func rebuild(a: Dictionary) -> void:
 			Lib.sphere(self, Vector3(x, 1.82, -0.165), 0.04, Lib.color_mat(Color("df8996")), Vector3(1.0, 0.6, 0.3))
 	if display_name != "":
 		Lib.label3d(self, Vector3(0, 2.36, 0), display_name, 36)
+
+
+## Female clothing torso is one continuous smooth-shaded mesh, not two glued-on spheres.
+## The shallow paired front contour follows the clothing material; no exposed anatomy.
+## All outfit types, hairstyles and multiplayer avatars share the same geometry.
+func _female_upper_body(material: Material, shoulder_width: float, body_build: int) -> void:
+	var rings := 18
+	var sides := 40
+	var y_min := 0.90
+	var y_max := 1.58
+	var fullness := 0.105
+	if body_build == 3:
+		fullness = 0.080
+	elif body_build == 4:
+		fullness = 0.120
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for r in range(rings + 1):
+		var y: float = lerpf(y_min, y_max, float(r) / float(rings))
+		var upper: float = smoothstep(1.02, 1.52, y)
+		var width: float = lerpf(0.190, shoulder_width * 0.86, upper)
+		var depth: float = lerpf(0.197, 0.226, upper)
+		for i in range(sides):
+			var theta: float = TAU * float(i) / float(sides)
+			var x: float = cosf(theta) * width
+			var z: float = sinf(theta) * depth
+			# The avatar faces negative Z. Add a soft symmetrical silhouette
+			# at chest height, fading continuously into waist/shoulders/sides.
+			var front: float = pow(maxf(-sinf(theta), 0.0), 2.0)
+			var lateral: float = exp(-pow((absf(x) - 0.112) / 0.137, 2.0))
+			var vertical: float = exp(-pow((y - 1.385) / 0.148, 2.0))
+			z -= fullness * front * lateral * vertical
+			st.add_vertex(Vector3(x, y, z))
+	for r in range(rings):
+		for i in range(sides):
+			var nxt: int = (i + 1) % sides
+			var lo: int = r * sides + i
+			var hi: int = (r + 1) * sides + i
+			var lo_next: int = r * sides + nxt
+			var hi_next: int = (r + 1) * sides + nxt
+			st.add_index(lo)
+			st.add_index(hi)
+			st.add_index(lo_next)
+			st.add_index(hi)
+			st.add_index(hi_next)
+			st.add_index(lo_next)
+	# Close the top of the clothing with a smooth shoulder surface.
+	var crown: int = (rings + 1) * sides
+	st.add_vertex(Vector3(0, y_max, 0))
+	for i in range(sides):
+		var top: int = rings * sides + i
+		var next_top: int = rings * sides + (i + 1) % sides
+		st.add_index(crown)
+		st.add_index(next_top)
+		st.add_index(top)
+	st.generate_normals()
+	var torso := MeshInstance3D.new()
+	torso.mesh = st.commit()
+	torso.material_override = material
+	add_child(torso)

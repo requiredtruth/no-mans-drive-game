@@ -1,3 +1,11 @@
+### November 17 character silhouette update (1.15.2)
+
+- ✅ Give Female characters a natural and proportionate chest silhouette under every outfit, including the long-hair pink-dress default.
+- ✅ Sculpt a continuous torso mesh with smooth normals, instead of attaching separate round parts.
+- ✅ Keep clothing coverage modest, proportions tasteful and looks consistent in the editor and synchronized multiplayer puppets.
+- ✅ Preserve Male body and existing avatar profiles.
+- ✅ Post to main and publish v1.15.2 signed APK after tests.
+
 ### November 17 character defaults (1.15.1)
 
 - ✅ Character creation offers **Female and Male only**, removing the third gender option.
