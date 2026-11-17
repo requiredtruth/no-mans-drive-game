@@ -317,6 +317,41 @@ func _build(id: String) -> Mesh:
 		"backpack": return _backpack()
 		"worn_tire": return _tire(true)
 		"worn_battery": return _battery(true)
+		"wire": return _wire()
+		"bolts": return _bolts(rng)
+		"pipe": return _pipe()
+		"foam": return _foam()
+		"glass": return _glass_pane()
+		"bottle_empty": return _bottle(Color(0.85, 0.92, 1.0, 0.22), Color("2a6fb0"))
+		"fuel_can_empty": return _jerrycan(Color(0.42, 0.12, 0.1))
+		"paint_can": return _spray()
+		"engine_block": return _engine_block()
+		"steering_wheel": return _steering_wheel()
+		"car_seat": return _car_seat()
+		"van_door": return _van_door()
+		"headlight": return _headlight()
+		"radio": return _radio()
+		"floor_kit": return _floor_kit()
+		"wall_panels": return _wall_panels()
+		"kitchen_unit": return _kitchen_unit()
+		"stove_unit": return _stove_unit()
+		"sink_unit": return _sink_unit()
+		"coffee_maker": return _coffee_maker()
+		"fridge_unit": return _fridge_unit()
+		"cupboard_unit": return _cupboard_unit(Vector3(0.56, 0.9, 0.7))
+		"overhead_unit": return _cupboard_unit(Vector3(0.44, 0.45, 0.9))
+		"dinette_kit": return _dinette_kit()
+		"toilet_unit": return _toilet_unit()
+		"bed_frame": return _bed_frame()
+		"mattress": return _mattress()
+		"ceiling_light": return _ceiling_light()
+		"water_tank": return _water_tank()
+		"solar_panel": return _solar_panel()
+		"bull_bar": return _bull_bar()
+		"heater_unit": return _heater_unit()
+		"fuel_tank_xl": return _fuel_tank_xl()
+		"tune_kit": return _tune_kit()
+		"offroad_tire": return _tire(false, true)
 	var st := _st()
 	box(st, Vector3(0, 0.05, 0), Vector3(0.1, 0.1, 0.1))
 	return _mesh([[st, c(Color.GRAY)]])
@@ -476,7 +511,7 @@ func _arrow() -> Mesh:
 	return _mesh([[shaft, wood()], [head, dark_steel()], [fl, c(Color(0.85, 0.2, 0.15), 0.8)]])
 
 # ------------------------------------------------------------------ containers & consumables
-func _jerrycan() -> Mesh:
+func _jerrycan(col := Color(0.7, 0.1, 0.08)) -> Mesh:
 	var body := _st()
 	box(body, Vector3(0, 0.17, 0), Vector3(0.12, 0.32, 0.24))
 	for s in [-1.0, 1.0]:
@@ -487,7 +522,7 @@ func _jerrycan() -> Mesh:
 	box(body, Vector3(0, 0.38, 0), Vector3(0.03, 0.015, 0.15))
 	var spout := _st()
 	lathe(spout, [Vector2(0.02, 0.33), Vector2(0.02, 0.37), Vector2(0.022, 0.37), Vector2(0.022, 0.38)], 14, Vector3(0, 0, 0.08))
-	return _mesh([[body, paint(Color(0.7, 0.1, 0.08))], [spout, dark_steel()]])
+	return _mesh([[body, paint(col)], [spout, dark_steel()]])
 
 func _can(label: Color, band_col: Color, r: float, h: float) -> Mesh:
 	var rim := _st()
@@ -655,9 +690,14 @@ func _engine_parts() -> Mesh:
 	torus(piston, Vector3(0.06, 0.125, 0.052), 0.015, 0.006, 12, 6, Vector3.RIGHT)
 	return _mesh([[gear, steel()], [piston, dark_steel()]])
 
-func _tire(worn := false) -> Mesh:
+func _tire(worn := false, knobby := false) -> Mesh:
 	var t := _st()
 	torus(t, Vector3(0, 0.12, 0), 0.24, 0.11, 32, 14, Vector3.UP)
+	if knobby:
+		for i in range(28):
+			var a := TAU * i / 28.0
+			for side in [-1.0, 1.0]:
+				box(t, Vector3(cos(a) * 0.345, 0.12 + side * 0.045, sin(a) * 0.345), Vector3(0.03, 0.05, 0.05), Basis(Vector3.UP, -a + side * 0.25))
 	var rim := _st()
 	lathe(rim, [Vector2(0.0, 0.08), Vector2(0.17, 0.07), Vector2(0.17, 0.17), Vector2(0.0, 0.16)], 24, Vector3.ZERO, false, false)
 	for i in range(5):
@@ -782,6 +822,393 @@ func _backpack() -> Mesh:
 	box(buckles, Vector3(0, 0.22, 0.152), Vector3(0.05, 0.03, 0.01))
 	return _mesh([[body, m("canvas", Color(0.55, 0.62, 0.45), 4.0, 0.9)], [pocket, m("canvas", Color(0.45, 0.5, 0.36), 4.0, 0.9)],
 		[straps, leather()], [buckles, dark_steel()]])
+
+# ------------------------------------------------------------------ 1.4: materials, containers, van modules
+func laminate() -> StandardMaterial3D: return m("laminate", Color.WHITE, 3.0, 0.45)
+func upholstery() -> StandardMaterial3D: return m("upholstery", Color.WHITE, 0.9, 0.95)
+func white_plastic() -> StandardMaterial3D: return c(Color(0.92, 0.92, 0.9), 0.35)
+func black_plastic() -> StandardMaterial3D: return c(Color(0.08, 0.08, 0.09), 0.5)
+func glass_m() -> StandardMaterial3D:
+	var g := Lib.color_mat(Color(0.7, 0.85, 0.95, 0.35), 0.05, 0.2).duplicate()
+	g.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	g.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return g
+
+func _wire() -> Mesh:
+	var s := _st()
+	for k in range(5):
+		torus(s, Vector3(0, 0.008 + k * 0.009, 0), 0.075 - (k % 2) * 0.004, 0.0045, 30, 5)
+	Lib._tube(s, Vector3(0.075, 0.04, 0), Vector3(0.14, 0.01, 0.05), 0.004, 0.004, 5)
+	var spool := _st()
+	lathe(spool, [Vector2(0.035, 0.0), Vector2(0.035, 0.05)], 16, Vector3.ZERO, false, false)
+	return _mesh([[s, m("metal", Color(0.95, 0.55, 0.3), 8.0, 0.3, 0.9)], [spool, black_plastic()]])
+
+func _bolts(rng: RandomNumberGenerator) -> Mesh:
+	var tray := _st()
+	box(tray, Vector3(0, 0.005, 0), Vector3(0.16, 0.01, 0.11))
+	for sx in [-1.0, 1.0]:
+		box(tray, Vector3(sx * 0.078, 0.02, 0), Vector3(0.006, 0.03, 0.11))
+	for sz in [-1.0, 1.0]:
+		box(tray, Vector3(0, 0.02, sz * 0.053), Vector3(0.16, 0.03, 0.006))
+	var hw := _st()
+	for i in range(9):
+		var p := Vector3(rng.randf_range(-0.06, 0.06), 0.012, rng.randf_range(-0.035, 0.035))
+		if i % 3 == 0:
+			torus(hw, p + Vector3(0, 0.004, 0), 0.009, 0.004, 6, 4)
+		else:
+			var b := Basis.from_euler(Vector3(PI * 0.5, rng.randf() * TAU, 0))
+			lathe(hw, [Vector2(0.01, 0.0), Vector2(0.01, 0.007)], 6, p)
+			Lib._tube(hw, p + Vector3(0, 0.004, 0), p + b * Vector3(0, 0.05, 0) + Vector3(0, 0.004, 0), 0.005, 0.005, 6)
+	return _mesh([[tray, m("cardboard", Color(0.8, 0.75, 0.65), 6.0)], [hw, steel()]])
+
+func _pipe() -> Mesh:
+	var s := _st()
+	Lib._tube(s, Vector3(-0.3, 0.03, 0), Vector3(0.24, 0.03, 0), 0.026, 0.026, 14)
+	Lib._tube(s, Vector3(0.24, 0.03, 0), Vector3(0.3, 0.03, 0.06), 0.026, 0.026, 14)
+	var ends := _st()
+	torus(ends, Vector3(-0.3, 0.03, 0), 0.026, 0.006, 16, 5, Vector3.RIGHT)
+	torus(ends, Vector3(-0.26, 0.03, 0), 0.027, 0.005, 16, 5, Vector3.RIGHT)
+	return _mesh([[s, m("metal", Color(0.7, 0.72, 0.74), 6.0, 0.35, 0.85)], [ends, m("rust", Color.WHITE, 6.0)]])
+
+func _foam() -> Mesh:
+	var s := _st()
+	for k in range(3):
+		box(s, Vector3(0, 0.025 + k * 0.05, 0), Vector3(0.36 - k * 0.01, 0.045, 0.26), Basis(Vector3.UP, k * 0.06 - 0.06))
+	return _mesh([[s, m("insulation", Color(1.0, 0.92, 0.6), 2.0, 1.0)]])
+
+func _glass_pane() -> Mesh:
+	var g := _st()
+	box(g, Vector3(0, 0.008, 0), Vector3(0.4, 0.006, 0.3))
+	var edge := _st()
+	for sz in [-1.0, 1.0]:
+		box(edge, Vector3(0, 0.008, sz * 0.15), Vector3(0.41, 0.014, 0.012))
+	for sx in [-1.0, 1.0]:
+		box(edge, Vector3(sx * 0.2, 0.008, 0), Vector3(0.012, 0.014, 0.3))
+	return _mesh([[g, glass_m()], [edge, m("rubber", Color(0.4, 0.4, 0.4), 4.0)]])
+
+func _spray() -> Mesh:
+	var b := _st()
+	lathe(b, [Vector2(0.03, 0.0), Vector2(0.032, 0.005), Vector2(0.032, 0.15), Vector2(0.024, 0.17), Vector2(0.012, 0.175)], 20)
+	var cap := _st()
+	lathe(cap, [Vector2(0.031, 0.165), Vector2(0.031, 0.2), Vector2(0.026, 0.21)], 18)
+	var lab := _st()
+	lathe(lab, [Vector2(0.0325, 0.04), Vector2(0.0325, 0.11)], 20, Vector3.ZERO, false, false)
+	return _mesh([[b, steel()], [cap, c(Color(0.25, 0.55, 0.8), 0.3)], [lab, paint(Color(0.9, 0.85, 0.2))]])
+
+func _engine_block() -> Mesh:
+	var blk := _st()
+	taper(blk, 0.0, Vector2(0.5, 0.3), 0.12, Vector2(0.56, 0.36))
+	box(blk, Vector3(0, 0.25, 0), Vector3(0.56, 0.26, 0.36))
+	taper(blk, 0.38, Vector2(0.56, 0.36), 0.44, Vector2(0.5, 0.28))
+	var cover := _st()
+	box(cover, Vector3(0, 0.47, 0), Vector3(0.48, 0.06, 0.22))
+	for i in range(4):
+		lathe(cover, [Vector2(0.016, 0.5), Vector2(0.016, 0.53)], 10, Vector3(-0.18 + i * 0.12, 0, 0))
+	var pulleys := _st()
+	for p in [[Vector3(-0.29, 0.2, 0.05), 0.08], [Vector3(-0.29, 0.38, -0.08), 0.05], [Vector3(-0.29, 0.34, 0.12), 0.04]]:
+		var bs := Basis(Vector3.FORWARD, PI * 0.5)
+		Lib._tube(pulleys, p[0] + Vector3(0.02, 0, 0), p[0] - Vector3(0.02, 0, 0), p[1], p[1], 20)
+		_disc(pulleys, p[0] - Vector3(0.02, 0, 0), p[1], Vector3.LEFT, 20)
+	var exh := _st()
+	for i in range(4):
+		var z0 := -0.18 + i * 0.12
+		Lib._tube(exh, Vector3(z0, 0.32, 0.18), Vector3(z0 * 0.4, 0.2, 0.25), 0.022, 0.022, 8)
+	Lib._tube(exh, Vector3(-0.08, 0.2, 0.25), Vector3(0.1, 0.12, 0.26), 0.03, 0.03, 10)
+	var filt := _st()
+	lathe(filt, [Vector2(0.04, 0.0), Vector2(0.042, 0.01), Vector2(0.042, 0.1), Vector2(0.035, 0.11)], 16, Vector3(0.2, 0.08, -0.2))
+	return _mesh([[blk, m("metal", Color(0.42, 0.44, 0.46), 4.0, 0.6, 0.6)], [cover, paint(Color(0.65, 0.12, 0.1))], [pulleys, dark_steel()],
+		[exh, m("rust", Color.WHITE, 5.0, 0.8, 0.5)], [filt, paint(Color(0.15, 0.3, 0.7))]])
+
+func _steering_wheel() -> Mesh:
+	var rim := _st()
+	torus(rim, Vector3(0, 0.03, 0), 0.19, 0.018, 36, 10)
+	var hub := _st()
+	lathe(hub, [Vector2(0.05, 0.0), Vector2(0.055, 0.03), Vector2(0.045, 0.06)], 18)
+	for a in [PI * 0.5, PI * 0.5 + 2.2, PI * 0.5 - 2.2]:
+		Lib._tube(hub, Vector3(0, 0.035, 0), Vector3(cos(a) * 0.18, 0.03, sin(a) * 0.18), 0.016, 0.012, 8)
+	return _mesh([[rim, m("leather", Color(0.25, 0.25, 0.27), 8.0, 0.6)], [hub, black_plastic()]])
+
+func _car_seat() -> Mesh:
+	var cush := _st()
+	box(cush, Vector3(0, 0.16, 0.0), Vector3(0.5, 0.12, 0.5))
+	box(cush, Vector3(0, 0.5, -0.24), Vector3(0.5, 0.62, 0.13), Basis(Vector3.RIGHT, -0.18))
+	box(cush, Vector3(0, 0.89, -0.31), Vector3(0.28, 0.16, 0.1), Basis(Vector3.RIGHT, -0.18))
+	for sx in [-1.0, 1.0]:
+		box(cush, Vector3(sx * 0.24, 0.2, 0.0), Vector3(0.06, 0.1, 0.48))
+		box(cush, Vector3(sx * 0.24, 0.5, -0.22), Vector3(0.06, 0.55, 0.15), Basis(Vector3.RIGHT, -0.18))
+	var frame := _st()
+	for sx in [-0.18, 0.18]:
+		box(frame, Vector3(sx, 0.02, 0), Vector3(0.03, 0.03, 0.5))
+		box(frame, Vector3(sx, 0.07, 0.15), Vector3(0.03, 0.09, 0.03))
+		box(frame, Vector3(sx, 0.07, -0.15), Vector3(0.03, 0.09, 0.03))
+		box(frame, Vector3(sx, 0.81, -0.31), Vector3(0.012, 0.1, 0.012))
+	return _mesh([[cush, m("denim", Color(0.6, 0.62, 0.68), 2.5, 0.95)], [frame, dark_steel()]])
+
+func _van_door() -> Mesh:
+	var panel := _st()
+	box(panel, Vector3(0, 0.62, 0), Vector3(0.88, 1.2, 0.06))
+	box(panel, Vector3(0, 1.82, 0), Vector3(0.88, 0.12, 0.06))
+	for sx in [-1.0, 1.0]:
+		box(panel, Vector3(sx * 0.41, 1.5, 0), Vector3(0.06, 0.55, 0.06))
+	var glass := _st()
+	box(glass, Vector3(0, 1.5, 0), Vector3(0.78, 0.52, 0.01))
+	var hw := _st()
+	box(hw, Vector3(0.32, 1.0, 0.04), Vector3(0.14, 0.04, 0.03))
+	for y in [0.3, 1.55]:
+		box(hw, Vector3(-0.45, y, 0), Vector3(0.03, 0.14, 0.04))
+	var seal := _st()
+	box(seal, Vector3(0, 1.22, 0.031), Vector3(0.82, 0.03, 0.004))
+	return _mesh([[panel, m("primer", Color.WHITE, 1.0, 0.7, 0.3)], [glass, glass_m()], [hw, steel()], [seal, rubber()]])
+
+func _headlight() -> Mesh:
+	var house := _st()
+	box(house, Vector3(0, 0.07, -0.03), Vector3(0.26, 0.14, 0.1))
+	var bezel := _st()
+	box(bezel, Vector3(0, 0.07, 0.025), Vector3(0.28, 0.16, 0.02))
+	var reflector := _st()
+	lathe(reflector, [Vector2(0.0, 0.0), Vector2(0.05, 0.02), Vector2(0.06, 0.04)], 18, Vector3(-0.06, 0.07, 0.0))
+	var lens := _st()
+	box(lens, Vector3(0, 0.07, 0.037), Vector3(0.25, 0.13, 0.006))
+	return _mesh([[house, black_plastic()], [bezel, steel()], [reflector, m("metal", Color(1, 1, 1), 4.0, 0.1, 1.0)], [lens, glass_m()]])
+
+func _radio() -> Mesh:
+	var body := _st()
+	box(body, Vector3(0, 0.03, -0.06), Vector3(0.18, 0.05, 0.16))
+	var face := _st()
+	box(face, Vector3(0, 0.03, 0.025), Vector3(0.19, 0.055, 0.012))
+	var disp := _st()
+	box(disp, Vector3(0.0, 0.035, 0.032), Vector3(0.08, 0.018, 0.002))
+	var knobs := _st()
+	for i in range(2):
+		var x := -0.07 + i * 0.14
+		Lib._tube(knobs, Vector3(x, 0.03, 0.03), Vector3(x, 0.03, 0.045), 0.011, 0.01, 14)
+	for i in range(5):
+		box(knobs, Vector3(-0.04 + i * 0.02, 0.012, 0.033), Vector3(0.014, 0.008, 0.004))
+	return _mesh([[body, dark_steel()], [face, black_plastic()], [disp, Lib.color_mat(Color(0.2, 0.6, 0.3), 0.2, 0.0, Color(0.3, 1.0, 0.5), 0.6)], [knobs, steel()]])
+
+func _floor_kit() -> Mesh:
+	var planks := _st()
+	for k in range(5):
+		box(planks, Vector3(0, 0.012 + k * 0.022, 0), Vector3(0.9, 0.02, 0.18))
+	var straps := _st()
+	for x in [-0.3, 0.3]:
+		box(straps, Vector3(x, 0.056, 0), Vector3(0.03, 0.118, 0.186))
+	return _mesh([[planks, m("vinyl", Color.WHITE, 1.0, 0.6)], [straps, m("canvas", Color(0.2, 0.3, 0.7), 4.0)]])
+
+func _wall_panels() -> Mesh:
+	var face := _st()
+	var core := _st()
+	for k in range(3):
+		var y := 0.03 + k * 0.05
+		box(core, Vector3(0, y, 0), Vector3(1.0, 0.035, 0.6))
+		box(face, Vector3(0, y + 0.02, 0), Vector3(1.0, 0.006, 0.6))
+	return _mesh([[core, m("insulation", Color.WHITE, 1.5, 0.6, 0.6)], [face, c(Color(0.9, 0.88, 0.84), 0.8)]])
+
+func _kitchen_unit() -> Mesh:
+	var carc := _st()
+	box(carc, Vector3(0, 0.44, 0), Vector3(1.0, 0.84, 0.56))
+	var top := _st()
+	box(top, Vector3(0, 0.88, 0.01), Vector3(1.04, 0.05, 0.6))
+	var doors := _st()
+	for i in range(3):
+		box(doors, Vector3(-0.33 + i * 0.33, 0.44, 0.285), Vector3(0.31, 0.78, 0.012))
+	var hw := _st()
+	for i in range(3):
+		box(hw, Vector3(-0.22 + i * 0.33, 0.7, 0.296), Vector3(0.1, 0.015, 0.015))
+	box(hw, Vector3(0, 0.02, 0.27), Vector3(1.0, 0.04, 0.02))
+	return _mesh([[carc, laminate()], [top, m("concrete", Color(0.6, 0.6, 0.62), 2.0, 0.3)], [doors, laminate()], [hw, steel()]])
+
+func _stove_unit() -> Mesh:
+	var body := _st()
+	box(body, Vector3(0, 0.05, 0), Vector3(0.5, 0.1, 0.42))
+	var grates := _st()
+	for x in [-0.12, 0.12]:
+		torus(grates, Vector3(x, 0.115, 0), 0.08, 0.006, 20, 5)
+		for k in range(4):
+			var a := TAU * k / 4.0 + 0.4
+			box(grates, Vector3(x + cos(a) * 0.06, 0.115, sin(a) * 0.06), Vector3(0.06, 0.008, 0.01), Basis(Vector3.UP, -a))
+	var burners := _st()
+	for x in [-0.12, 0.12]:
+		lathe(burners, [Vector2(0.04, 0.1), Vector2(0.035, 0.112)], 16, Vector3(x, 0, 0))
+	var knobs := _st()
+	for x in [-0.12, 0.12]:
+		Lib._tube(knobs, Vector3(x, 0.05, 0.21), Vector3(x, 0.05, 0.235), 0.018, 0.015, 12)
+	return _mesh([[body, c(Color(0.12, 0.12, 0.13), 0.3, 0.4)], [grates, dark_steel()], [burners, brass()], [knobs, steel()]])
+
+func _sink_unit() -> Mesh:
+	var basin := _st()
+	lathe(basin, [Vector2(0.0, 0.02), Vector2(0.15, 0.03), Vector2(0.17, 0.16), Vector2(0.2, 0.17)], 28, Vector3.ZERO, false, false)
+	var deck := _st()
+	box(deck, Vector3(0, 0.17, 0), Vector3(0.46, 0.012, 0.42))
+	var tap := _st()
+	Lib._tube(tap, Vector3(0, 0.17, -0.17), Vector3(0, 0.35, -0.17), 0.012, 0.012, 10)
+	Lib._tube(tap, Vector3(0, 0.35, -0.17), Vector3(0, 0.33, -0.05), 0.011, 0.009, 10)
+	box(tap, Vector3(0.05, 0.2, -0.17), Vector3(0.05, 0.015, 0.015))
+	var drain := _st()
+	Lib._tube(drain, Vector3(0, 0.02, 0), Vector3(0, -0.06, 0), 0.02, 0.02, 10)
+	return _mesh([[basin, m("metal", Color(0.9, 0.9, 0.92), 3.0, 0.2, 0.9)], [deck, m("metal", Color(0.85, 0.85, 0.87), 3.0, 0.3, 0.8)], [tap, steel()], [drain, black_plastic()]])
+
+func _coffee_maker() -> Mesh:
+	var body := _st()
+	box(body, Vector3(0, 0.02, 0), Vector3(0.2, 0.04, 0.2))
+	box(body, Vector3(0, 0.15, -0.07), Vector3(0.2, 0.3, 0.06))
+	box(body, Vector3(0, 0.28, 0.0), Vector3(0.2, 0.06, 0.2))
+	var jug := _st()
+	lathe(jug, [Vector2(0.0, 0.04), Vector2(0.06, 0.045), Vector2(0.065, 0.1), Vector2(0.05, 0.16), Vector2(0.045, 0.17)], 18, Vector3(0, 0, 0.03), false, false)
+	var coffee := _st()
+	lathe(coffee, [Vector2(0.0, 0.045), Vector2(0.058, 0.05), Vector2(0.062, 0.09), Vector2(0.0, 0.09)], 18, Vector3(0, 0, 0.03), false, true)
+	var light := _st()
+	box(light, Vector3(0.07, 0.03, 0.101), Vector3(0.015, 0.01, 0.002))
+	return _mesh([[body, black_plastic()], [jug, glass_m()], [coffee, c(Color(0.18, 0.09, 0.04), 0.1)], [light, Lib.color_mat(Color(1, 0.2, 0.1), 0.3, 0.0, Color(1, 0.2, 0.1), 1.0)]])
+
+func _fridge_unit() -> Mesh:
+	var body := _st()
+	box(body, Vector3(0, 0.6, -0.01), Vector3(0.56, 1.2, 0.56))
+	var door := _st()
+	box(door, Vector3(0, 0.8, 0.28), Vector3(0.55, 0.78, 0.03))
+	box(door, Vector3(0, 0.2, 0.28), Vector3(0.55, 0.36, 0.03))
+	var hw := _st()
+	box(hw, Vector3(0.22, 0.9, 0.305), Vector3(0.025, 0.3, 0.025))
+	box(hw, Vector3(0.22, 0.3, 0.305), Vector3(0.025, 0.14, 0.025))
+	var vent := _st()
+	for k in range(5):
+		box(vent, Vector3(0, 1.1 + k * 0.012, -0.29), Vector3(0.4, 0.006, 0.004))
+	return _mesh([[body, white_plastic()], [door, c(Color(0.88, 0.88, 0.86), 0.25)], [hw, steel()], [vent, black_plastic()]])
+
+func _cupboard_unit(sz: Vector3) -> Mesh:
+	var carc := _st()
+	box(carc, Vector3(0, sz.y * 0.5, 0), sz)
+	var door := _st()
+	box(door, Vector3(0, sz.y * 0.5, sz.z * 0.5 + 0.008), Vector3(sz.x - 0.03, sz.y - 0.03, 0.014))
+	var hw := _st()
+	box(hw, Vector3(sz.x * 0.38, sz.y * 0.55, sz.z * 0.5 + 0.022), Vector3(0.018, minf(sz.y * 0.3, 0.2), 0.018))
+	return _mesh([[carc, laminate()], [door, laminate()], [hw, steel()]])
+
+func _dinette_kit() -> Mesh:
+	var top := _st()
+	box(top, Vector3(0, 0.02, 0), Vector3(0.9, 0.04, 0.7))
+	var cush := _st()
+	for k in range(2):
+		box(cush, Vector3(0, 0.1 + k * 0.12, 0), Vector3(0.8, 0.11, 0.42), Basis(Vector3.UP, k * 0.1 - 0.05))
+	var leg := _st()
+	Lib._tube(leg, Vector3(-0.3, 0.33, 0.2), Vector3(0.35, 0.33, 0.2), 0.025, 0.025, 10)
+	lathe(leg, [Vector2(0.12, 0.29), Vector2(0.12, 0.305)], 18, Vector3(0.38, 0, -0.1))
+	return _mesh([[top, m("concrete", Color(0.6, 0.6, 0.62), 2.0, 0.3)], [cush, upholstery()], [leg, steel()]])
+
+func _toilet_unit() -> Mesh:
+	var bowl := _st()
+	lathe(bowl, [Vector2(0.12, 0.0), Vector2(0.15, 0.05), Vector2(0.17, 0.3), Vector2(0.19, 0.38)], 22)
+	var tank := _st()
+	box(tank, Vector3(0, 0.26, -0.2), Vector3(0.36, 0.52, 0.12))
+	var seat := _st()
+	torus(seat, Vector3(0, 0.395, 0.0), 0.15, 0.025, 22, 6)
+	box(seat, Vector3(0, 0.55, -0.12), Vector3(0.34, 0.3, 0.025), Basis(Vector3.RIGHT, -0.25))
+	var btn := _st()
+	lathe(btn, [Vector2(0.02, 0.52), Vector2(0.02, 0.53)], 12, Vector3(0, 0, -0.2))
+	return _mesh([[bowl, c(Color(0.96, 0.96, 0.96), 0.12)], [tank, c(Color(0.94, 0.94, 0.94), 0.15)], [seat, c(Color(0.9, 0.9, 0.88), 0.3)], [btn, steel()]])
+
+func _bed_frame() -> Mesh:
+	var slats := _st()
+	for k in range(4):
+		box(slats, Vector3(0, 0.015 + k * 0.03, 0), Vector3(1.2, 0.025, 0.12), Basis(Vector3.UP, (k - 1.5) * 0.04))
+	var sides := _st()
+	for z in [-0.22, 0.22]:
+		box(sides, Vector3(0, 0.07, z), Vector3(1.3, 0.14, 0.08))
+	var hw := _st()
+	for x in [-0.5, 0.5]:
+		box(hw, Vector3(x, 0.15, 0), Vector3(0.03, 0.02, 0.52))
+	return _mesh([[slats, wood()], [sides, laminate()], [hw, dark_steel()]])
+
+func _mattress() -> Mesh:
+	var s := _st()
+	box(s, Vector3(0, 0.09, 0), Vector3(0.95, 0.16, 0.65))
+	ellipsoid(s, Vector3(0, 0.25, 0), Vector3(0.45, 0.1, 0.32), 6, 14)
+	var tie := _st()
+	for x in [-0.3, 0.3]:
+		box(tie, Vector3(x, 0.17, 0), Vector3(0.03, 0.34, 0.67))
+	return _mesh([[s, m("upholstery", Color(1.6, 1.6, 1.55), 3.0, 0.95)], [tie, m("canvas", Color(0.7, 0.3, 0.2), 4.0)]])
+
+func _ceiling_light() -> Mesh:
+	var base := _st()
+	lathe(base, [Vector2(0.15, 0.0), Vector2(0.155, 0.02)], 22)
+	var dome := _st()
+	lathe(dome, [Vector2(0.14, 0.02), Vector2(0.12, 0.05), Vector2(0.06, 0.075), Vector2(0.0, 0.08)], 22, Vector3.ZERO, false, false)
+	return _mesh([[base, white_plastic()], [dome, Lib.color_mat(Color(1, 0.97, 0.88), 0.2, 0.0, Color(1, 0.92, 0.75), 0.3)]])
+
+func _water_tank() -> Mesh:
+	var t := _st()
+	box(t, Vector3(0, 0.18, 0), Vector3(0.7, 0.32, 0.4))
+	for sx in [-1.0, 1.0]:
+		Lib._tube(t, Vector3(sx * 0.35, 0.02, 0.2), Vector3(sx * 0.35, 0.34, 0.2), 0.02, 0.02, 8)
+		Lib._tube(t, Vector3(sx * 0.35, 0.02, -0.2), Vector3(sx * 0.35, 0.34, -0.2), 0.02, 0.02, 8)
+	var cap := _st()
+	lathe(cap, [Vector2(0.045, 0.34), Vector2(0.045, 0.37), Vector2(0.04, 0.375)], 16, Vector3(0.2, 0, 0))
+	Lib._tube(cap, Vector3(-0.35, 0.06, 0), Vector3(-0.42, 0.06, 0), 0.015, 0.015, 8)
+	return _mesh([[t, c(Color(0.92, 0.92, 0.9, 1.0), 0.5)], [cap, c(Color(0.2, 0.4, 0.75), 0.4)]])
+
+func _solar_panel() -> Mesh:
+	var cells := _st()
+	for i in range(6):
+		for j in range(4):
+			box(cells, Vector3(-0.42 + i * 0.168, 0.032, -0.21 + j * 0.14), Vector3(0.16, 0.004, 0.132))
+	var back := _st()
+	box(back, Vector3(0, 0.02, 0), Vector3(1.0, 0.02, 0.6))
+	var frame := _st()
+	for sz in [-1.0, 1.0]:
+		box(frame, Vector3(0, 0.025, sz * 0.3), Vector3(1.02, 0.04, 0.02))
+	for sx in [-1.0, 1.0]:
+		box(frame, Vector3(sx * 0.5, 0.025, 0), Vector3(0.02, 0.04, 0.6))
+	return _mesh([[cells, Lib.color_mat(Color(0.06, 0.1, 0.26), 0.12, 0.6)], [back, c(Color(0.85, 0.85, 0.85), 0.6)], [frame, m("metal", Color(0.85, 0.86, 0.88), 6.0, 0.3, 0.9)]])
+
+func _bull_bar() -> Mesh:
+	var s := _st()
+	for x in [-0.45, 0.45]:
+		Lib._tube(s, Vector3(x, 0.0, 0), Vector3(x, 0.62, 0), 0.03, 0.03, 12)
+		torus(s, Vector3(x, 0.62, 0), 0.0, 0.03, 4, 6)
+	Lib._tube(s, Vector3(-0.5, 0.6, 0), Vector3(0.5, 0.6, 0), 0.03, 0.03, 12)
+	Lib._tube(s, Vector3(-0.5, 0.2, 0), Vector3(0.5, 0.2, 0), 0.03, 0.03, 12)
+	Lib._tube(s, Vector3(-0.45, 0.62, 0), Vector3(-0.2, 0.75, 0), 0.025, 0.025, 10)
+	Lib._tube(s, Vector3(0.45, 0.62, 0), Vector3(0.2, 0.75, 0), 0.025, 0.025, 10)
+	Lib._tube(s, Vector3(-0.2, 0.75, 0), Vector3(0.2, 0.75, 0), 0.025, 0.025, 10)
+	var plate := _st()
+	box(plate, Vector3(0, 0.1, -0.06), Vector3(0.8, 0.02, 0.12))
+	return _mesh([[s, m("metal", Color(0.9, 0.9, 0.92), 6.0, 0.18, 0.95)], [plate, dark_steel()]])
+
+func _heater_unit() -> Mesh:
+	var body := _st()
+	box(body, Vector3(0, 0.15, 0), Vector3(0.36, 0.3, 0.2))
+	var grille := _st()
+	for k in range(7):
+		box(grille, Vector3(0, 0.06 + k * 0.032, 0.102), Vector3(0.3, 0.012, 0.006))
+	var knob := _st()
+	Lib._tube(knob, Vector3(0.14, 0.27, 0.1), Vector3(0.14, 0.27, 0.12), 0.015, 0.013, 12)
+	var hose := _st()
+	Lib._tube(hose, Vector3(-0.18, 0.1, 0), Vector3(-0.3, 0.05, 0.08), 0.03, 0.03, 10)
+	return _mesh([[body, paint(Color(0.55, 0.2, 0.14))], [grille, steel()], [knob, black_plastic()], [hose, m("metal", Color(0.8, 0.8, 0.8), 12.0, 0.4, 0.8)]])
+
+func _fuel_tank_xl() -> Mesh:
+	var t := _st()
+	box(t, Vector3(0, 0.12, 0), Vector3(0.9, 0.22, 0.5))
+	ellipsoid(t, Vector3(-0.45, 0.12, 0), Vector3(0.03, 0.11, 0.25), 6, 10)
+	ellipsoid(t, Vector3(0.45, 0.12, 0), Vector3(0.03, 0.11, 0.25), 6, 10)
+	var straps := _st()
+	for x in [-0.25, 0.25]:
+		box(straps, Vector3(x, 0.12, 0), Vector3(0.04, 0.24, 0.52))
+	var neck := _st()
+	Lib._tube(neck, Vector3(0.3, 0.22, 0.15), Vector3(0.38, 0.3, 0.15), 0.03, 0.03, 10)
+	return _mesh([[t, m("metal", Color(0.3, 0.31, 0.32), 4.0, 0.5, 0.7)], [straps, m("rust", Color.WHITE, 6.0)], [neck, steel()]])
+
+func _tune_kit() -> Mesh:
+	var b := _st()
+	box(b, Vector3(0, 0.05, 0), Vector3(0.34, 0.1, 0.22))
+	var turbo := _st()
+	torus(turbo, Vector3(0, 0.15, 0), 0.06, 0.035, 18, 8, Vector3.FORWARD)
+	Lib._tube(turbo, Vector3(0, 0.15, 0.0), Vector3(0, 0.15, 0.08), 0.03, 0.035, 12)
+	Lib._tube(turbo, Vector3(0.06, 0.15, 0), Vector3(0.14, 0.17, 0), 0.025, 0.025, 10)
+	var plugs := _st()
+	for i in range(4):
+		lathe(plugs, [Vector2(0.008, 0.1), Vector2(0.008, 0.13), Vector2(0.004, 0.15)], 8, Vector3(-0.12 + i * 0.025, 0, 0.07))
+	return _mesh([[b, m("cardboard", Color(1.0, 0.45, 0.35), 4.0)], [turbo, m("metal", Color(0.75, 0.75, 0.78), 6.0, 0.3, 0.9)], [plugs, c(Color(0.9, 0.9, 0.88), 0.3)]])
 
 # ------------------------------------------------------------------ first-person arm
 ## Right forearm + hand gripping at the origin; the forearm runs back toward +Z/-Y.

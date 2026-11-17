@@ -143,6 +143,13 @@ func _rv_state(xf: Transform3D, state: Dictionary) -> void:
 		Game.rv.remote_transform(xf)
 		Game.rv.fuel = float(state.get("fuel", Game.rv.fuel))
 		Game.rv.water = float(state.get("water", Game.rv.water))
+		# fitted modules and pulled parts follow the host's van
+		var mods: Dictionary = state.get("modules", {})
+		if mods != Game.rv.modules or state.get("missing", {}) != Game.rv.missing:
+			Game.rv.modules = mods.duplicate()
+			Game.rv.missing = state.get("missing", {}).duplicate()
+			Game.rv.wheel_kind = state.get("wheel_kind", {}).duplicate()
+			Game.rv._apply_visuals()
 
 func claim_driver(on: bool) -> bool:
 	if not active():

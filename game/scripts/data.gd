@@ -1,5 +1,5 @@
 extends RefCounted
-## Static game data: items, recipes, cooking, build pieces, RV parts and upgrades.
+## Static game data: items, workbench and heat recipes, van modules, build pieces, parts.
 
 const ITEMS := {
 	# Materials
@@ -17,6 +17,43 @@ const ITEMS := {
 	"toolkit": {"name": "Toolkit", "color": Color("c0392b"), "kind": "material"},
 	"worn_tire": {"name": "Worn Tire", "color": Color("3a3a3a"), "kind": "material"},
 	"worn_battery": {"name": "Dead Battery", "color": Color("4a4a4a"), "kind": "material"},
+	"wire": {"name": "Copper Wire", "color": Color("c87a3a"), "kind": "material"},
+	"bolts": {"name": "Nuts & Bolts", "color": Color("9a9a9a"), "kind": "material"},
+	"pipe": {"name": "Metal Pipe", "color": Color("8a9096"), "kind": "material"},
+	"foam": {"name": "Foam Padding", "color": Color("d8c890"), "kind": "material"},
+	"glass": {"name": "Glass Pane", "color": Color("a8d0d8"), "kind": "material"},
+	# Empty containers: drink a bottle and you keep the bottle; fill it at a sink, lake, well or rain collector
+	"bottle_empty": {"name": "Empty Bottle", "color": Color("c8e0f0"), "kind": "container"},
+	"fuel_can_empty": {"name": "Empty Fuel Can", "color": Color("903028"), "kind": "container"},
+	"paint_can": {"name": "Spray Paint", "color": Color("4f8fbf"), "kind": "paint"},
+	# Van modules: carry them to their spot on the van and press [E] to fit them. [G] takes them out again.
+	"engine_block": {"name": "Engine Block", "color": Color("5a5e64"), "kind": "module"},
+	"steering_wheel": {"name": "Steering Wheel", "color": Color("2a2a2a"), "kind": "module"},
+	"car_seat": {"name": "Car Seat", "color": Color("4a4e58"), "kind": "module"},
+	"van_door": {"name": "Side Door", "color": Color("a0a29e"), "kind": "module"},
+	"headlight": {"name": "Headlight", "color": Color("e0e4e8"), "kind": "module"},
+	"radio": {"name": "Car Radio", "color": Color("303236"), "kind": "module"},
+	"floor_kit": {"name": "Vinyl Flooring", "color": Color("b09a7e"), "kind": "module"},
+	"wall_panels": {"name": "Insulated Wall Panels", "color": Color("e0ddd6"), "kind": "module"},
+	"kitchen_unit": {"name": "Kitchen Counter", "color": Color("d2b68e"), "kind": "module"},
+	"stove_unit": {"name": "Gas Stove", "color": Color("2a2a2c"), "kind": "module"},
+	"sink_unit": {"name": "Sink & Tap", "color": Color("c0c4c8"), "kind": "module"},
+	"coffee_maker": {"name": "Coffee Maker", "color": Color("1e1e20"), "kind": "module"},
+	"fridge_unit": {"name": "Fridge", "color": Color("ececea"), "kind": "module"},
+	"cupboard_unit": {"name": "Storage Cupboard", "color": Color("d2b68e"), "kind": "module"},
+	"overhead_unit": {"name": "Overhead Cabinet", "color": Color("d2b68e"), "kind": "module"},
+	"dinette_kit": {"name": "Dinette (table & benches)", "color": Color("6a7080"), "kind": "module"},
+	"toilet_unit": {"name": "Cassette Toilet", "color": Color("f2f2f2"), "kind": "module"},
+	"bed_frame": {"name": "Bed Frame", "color": Color("d2b68e"), "kind": "module"},
+	"mattress": {"name": "Mattress", "color": Color("e8e6e0"), "kind": "module"},
+	"ceiling_light": {"name": "Ceiling Light", "color": Color("f0e8c8"), "kind": "module"},
+	"water_tank": {"name": "Water Tank (60 L)", "color": Color("e0e0e0"), "kind": "module"},
+	"solar_panel": {"name": "Solar Panel", "color": Color("1e2a50"), "kind": "module"},
+	"bull_bar": {"name": "Bull Bar", "color": Color("b8bcc0"), "kind": "module"},
+	"heater_unit": {"name": "Cabin Heater", "color": Color("8a3a2a"), "kind": "module"},
+	"fuel_tank_xl": {"name": "Long-Range Fuel Tank", "color": Color("3a3a3a"), "kind": "module"},
+	"tune_kit": {"name": "Engine Tune Kit", "color": Color("c0392b"), "kind": "module"},
+	"offroad_tire": {"name": "Off-Road Tire", "color": Color("1a1a1a"), "kind": "module"},
 	# Food & drink
 	"raw_meat": {"name": "Raw Meat", "color": Color("c0504d"), "kind": "food", "food": 8, "water": 0, "health": -6, "cook": "cooked_meat"},
 	"cooked_meat": {"name": "Cooked Meat", "color": Color("8b4a2b"), "kind": "food", "food": 35, "water": -2, "health": 4},
@@ -75,45 +112,125 @@ const STACK := {
 	"wood": 3, "stone": 4, "scrap": 4, "fiber": 6, "rope": 3, "cloth": 4, "hide": 2, "feather": 12,
 	"berries": 8, "mushroom": 6, "tomato": 4, "potato": 4, "coffee_beans": 3, "raw_meat": 2, "cooked_meat": 2,
 	"bandage": 4, "seeds_tomato": 6, "seeds_potato": 6, "seeds_coffee": 3, "ammo": 30, "arrow": 12, "soda": 2,
-	"roast_mushroom": 4, "baked_potato": 3,
+	"roast_mushroom": 4, "baked_potato": 3, "wire": 4, "bolts": 8, "pipe": 2, "foam": 3, "glass": 2,
+	"bottle_empty": 3, "water_clean": 2, "water_dirty": 2,
 }
 
 static func stack(id: String) -> int:
 	return int(STACK.get(id, 1))
 
-## Crafting recipes. "station": "" (hands), "workbench", "fire".
+## Workbench recipes. Lay the ingredients on top of a workbench, look at the bench and press
+## [E] to put them together; [R] picks between several matching recipes. The result appears on
+## the bench (big things are set down in front of it).
 const RECIPES := [
-	{"out": "rope", "n": 1, "cost": {"fiber": 3}, "station": ""},
-	{"out": "arrow", "n": 4, "cost": {"wood": 1, "feather": 1, "stone": 1}, "station": ""},
-	{"out": "bandage", "n": 1, "cost": {"cloth": 2}, "station": ""},
-	{"out": "axe", "n": 1, "cost": {"wood": 2, "stone": 2, "rope": 1}, "station": ""},
-	{"out": "pickaxe", "n": 1, "cost": {"wood": 3, "stone": 3, "rope": 1}, "station": ""},
-	{"out": "knife", "n": 1, "cost": {"stone": 2, "wood": 1, "rope": 1}, "station": ""},
-	{"out": "bow", "n": 1, "cost": {"wood": 4, "rope": 2}, "station": ""},
-	{"out": "fishing_rod", "n": 1, "cost": {"wood": 2, "rope": 2}, "station": ""},
-	{"out": "hammer", "n": 1, "cost": {"wood": 2, "stone": 1, "rope": 1}, "station": ""},
-	{"out": "jacket", "n": 1, "cost": {"hide": 4, "rope": 2}, "station": ""},
-	{"out": "backpack", "n": 1, "cost": {"hide": 2, "cloth": 2, "rope": 2}, "station": ""},
-	{"out": "ammo", "n": 6, "cost": {"scrap": 3}, "station": "workbench"},
-	{"out": "engine_parts", "n": 1, "cost": {"scrap": 6, "rope": 1}, "station": "workbench"},
-	{"out": "toolkit", "n": 1, "cost": {"scrap": 4, "wood": 2}, "station": "workbench"},
-	{"out": "tire", "n": 1, "cost": {"hide": 3, "scrap": 4, "rope": 2}, "station": "workbench"},
-	{"out": "medkit", "n": 1, "cost": {"bandage": 2, "water_clean": 1, "fiber": 2}, "station": "workbench"},
-	{"out": "rifle", "n": 1, "cost": {"scrap": 12, "wood": 4, "engine_parts": 1}, "station": "workbench"},
-	{"out": "scrap", "n": 3, "cost": {"worn_tire": 1}, "station": "workbench"},
-	{"out": "scrap", "n": 3, "cost": {"worn_battery": 1}, "station": "workbench"},
+	# basics
+	{"out": "rope", "n": 1, "cost": {"fiber": 3}},
+	{"out": "arrow", "n": 4, "cost": {"wood": 1, "feather": 1, "stone": 1}},
+	{"out": "bandage", "n": 2, "cost": {"cloth": 1}},
+	{"out": "axe", "n": 1, "cost": {"wood": 2, "stone": 2, "rope": 1}},
+	{"out": "pickaxe", "n": 1, "cost": {"wood": 3, "stone": 3, "rope": 1}},
+	{"out": "knife", "n": 1, "cost": {"stone": 2, "wood": 1, "rope": 1}},
+	{"out": "bow", "n": 1, "cost": {"wood": 4, "rope": 2}},
+	{"out": "fishing_rod", "n": 1, "cost": {"wood": 2, "rope": 2}},
+	{"out": "hammer", "n": 1, "cost": {"wood": 2, "stone": 1, "rope": 1}},
+	{"out": "jacket", "n": 1, "cost": {"hide": 4, "rope": 2}},
+	{"out": "backpack", "n": 1, "cost": {"hide": 2, "cloth": 2, "rope": 2}},
+	{"out": "medkit", "n": 1, "cost": {"bandage": 2, "water_clean": 1, "fiber": 2}},
+	# metalwork
+	{"out": "bolts", "n": 6, "cost": {"scrap": 2}},
+	{"out": "pipe", "n": 2, "cost": {"scrap": 2, "bolts": 1}},
+	{"out": "ammo", "n": 6, "cost": {"scrap": 2, "bolts": 2}},
+	{"out": "engine_parts", "n": 1, "cost": {"scrap": 4, "bolts": 2}},
+	{"out": "toolkit", "n": 1, "cost": {"scrap": 3, "wood": 1, "bolts": 2}},
+	{"out": "tire", "n": 1, "cost": {"hide": 3, "scrap": 3, "rope": 2}},
+	{"out": "rifle", "n": 1, "cost": {"pipe": 1, "wood": 3, "engine_parts": 1}},
+	{"out": "scrap", "n": 3, "cost": {"worn_tire": 1}},
+	{"out": "scrap", "n": 2, "cost": {"worn_battery": 1}},
+	{"out": "wire", "n": 2, "cost": {"worn_battery": 1, "scrap": 1}},
+	{"out": "foam", "n": 2, "cost": {"fiber": 4, "cloth": 1}},
+	{"out": "bottle_empty", "n": 2, "cost": {"glass": 1}},
+	# van modules
+	{"out": "engine_block", "n": 1, "cost": {"engine_parts": 3, "pipe": 1, "bolts": 4}},
+	{"out": "steering_wheel", "n": 1, "cost": {"pipe": 1, "rope": 1, "bolts": 1}},
+	{"out": "car_seat", "n": 1, "cost": {"foam": 2, "cloth": 2, "pipe": 1}},
+	{"out": "van_door", "n": 1, "cost": {"scrap": 4, "glass": 1, "bolts": 2}},
+	{"out": "headlight", "n": 1, "cost": {"glass": 1, "wire": 1}},
+	{"out": "radio", "n": 1, "cost": {"wire": 2, "scrap": 1, "worn_battery": 1}},
+	{"out": "floor_kit", "n": 1, "cost": {"wood": 3, "cloth": 1}},
+	{"out": "wall_panels", "n": 1, "cost": {"wood": 3, "foam": 2}},
+	{"out": "kitchen_unit", "n": 1, "cost": {"wood": 4, "bolts": 2}},
+	{"out": "stove_unit", "n": 1, "cost": {"scrap": 3, "pipe": 1, "wire": 1}},
+	{"out": "sink_unit", "n": 1, "cost": {"scrap": 2, "pipe": 2}},
+	{"out": "coffee_maker", "n": 1, "cost": {"scrap": 1, "glass": 1, "wire": 1}},
+	{"out": "fridge_unit", "n": 1, "cost": {"scrap": 4, "wire": 2, "foam": 1}},
+	{"out": "cupboard_unit", "n": 1, "cost": {"wood": 3, "bolts": 1}},
+	{"out": "overhead_unit", "n": 1, "cost": {"wood": 2, "bolts": 2}},
+	{"out": "dinette_kit", "n": 1, "cost": {"wood": 3, "foam": 1, "cloth": 1}},
+	{"out": "toilet_unit", "n": 1, "cost": {"scrap": 2, "pipe": 1, "stone": 1}},
+	{"out": "bed_frame", "n": 1, "cost": {"wood": 4, "bolts": 1}},
+	{"out": "mattress", "n": 1, "cost": {"foam": 3, "cloth": 2}},
+	{"out": "ceiling_light", "n": 1, "cost": {"wire": 1, "glass": 1, "scrap": 1}},
+	{"out": "water_tank", "n": 1, "cost": {"scrap": 3, "pipe": 1, "bolts": 1}},
+	{"out": "solar_panel", "n": 1, "cost": {"glass": 2, "wire": 2, "scrap": 2}},
+	{"out": "bull_bar", "n": 1, "cost": {"pipe": 2, "bolts": 2}},
+	{"out": "heater_unit", "n": 1, "cost": {"scrap": 3, "wire": 1, "engine_parts": 1}},
+	{"out": "fuel_tank_xl", "n": 1, "cost": {"scrap": 4, "pipe": 1, "bolts": 2}},
+	{"out": "tune_kit", "n": 1, "cost": {"engine_parts": 2, "wire": 1, "bolts": 2}},
+	{"out": "offroad_tire", "n": 1, "cost": {"tire": 1, "hide": 1, "bolts": 1}},
+	{"out": "paint_can", "n": 1, "cost": {"berries": 3, "scrap": 1}},
 ]
 
-## Cooking at a campfire or the RV stove.
+## Heat recipes: set the ingredients on a burning campfire or a lit stove and they cook on
+## their own. Multi-ingredient dishes (stew, coffee) cook when everything sits on the heat.
+const COOK_TIME := 14.0
 const COOKING := [
+	{"out": "stew", "n": 1, "cost": {"raw_meat": 1, "potato": 1, "tomato": 1, "water_clean": 1}},
+	{"out": "coffee", "n": 1, "cost": {"coffee_beans": 1, "water_clean": 1}},
 	{"out": "cooked_meat", "n": 1, "cost": {"raw_meat": 1}},
 	{"out": "cooked_fish", "n": 1, "cost": {"raw_fish": 1}},
 	{"out": "roast_mushroom", "n": 1, "cost": {"mushroom": 1}},
 	{"out": "baked_potato", "n": 1, "cost": {"potato": 1}},
 	{"out": "water_clean", "n": 1, "cost": {"water_dirty": 1}},
-	{"out": "coffee", "n": 1, "cost": {"coffee_beans": 1, "water_clean": 1}},
-	{"out": "stew", "n": 1, "cost": {"raw_meat": 1, "potato": 1, "tomato": 1, "water_clean": 1}},
 ]
+
+## What a drink leaves behind in your hand.
+const LEAVES := {"water_clean": "bottle_empty", "water_dirty": "bottle_empty", "fuel_can": "fuel_can_empty"}
+
+## Van module slots. Each slot takes one item. "needs": slots that must be fitted first.
+## "toolkit": a Toolkit must be in hand or within reach. "drive": required to drive.
+const VAN_SLOTS := {
+	"engine": {"item": "engine_block", "name": "Engine", "toolkit": true, "drive": true},
+	"steering": {"item": "steering_wheel", "name": "Steering wheel", "toolkit": true, "drive": true},
+	"seat_driver": {"item": "car_seat", "name": "Driver's seat", "drive": true},
+	"seat_passenger": {"item": "car_seat", "name": "Passenger seat"},
+	"door": {"item": "van_door", "name": "Side door", "toolkit": true},
+	"headlight_l": {"item": "headlight", "name": "Left headlight"},
+	"headlight_r": {"item": "headlight", "name": "Right headlight"},
+	"radio": {"item": "radio", "name": "Radio", "needs": ["steering"]},
+	"floor": {"item": "floor_kit", "name": "Flooring"},
+	"walls": {"item": "wall_panels", "name": "Wall panels"},
+	"kitchen": {"item": "kitchen_unit", "name": "Kitchen counter"},
+	"stove": {"item": "stove_unit", "name": "Stove", "needs": ["kitchen"]},
+	"sink": {"item": "sink_unit", "name": "Sink", "needs": ["kitchen"]},
+	"coffee": {"item": "coffee_maker", "name": "Coffee maker", "needs": ["kitchen"]},
+	"overhead": {"item": "overhead_unit", "name": "Overhead cabinet", "needs": ["walls"]},
+	"fridge": {"item": "fridge_unit", "name": "Fridge"},
+	"cupboard": {"item": "cupboard_unit", "name": "Cupboard"},
+	"dinette": {"item": "dinette_kit", "name": "Dinette"},
+	"toilet": {"item": "toilet_unit", "name": "Toilet"},
+	"bed": {"item": "bed_frame", "name": "Bed frame"},
+	"mattress": {"item": "mattress", "name": "Mattress", "needs": ["bed"]},
+	"light": {"item": "ceiling_light", "name": "Ceiling light"},
+	"water_tank": {"item": "water_tank", "name": "Water tank", "toolkit": true},
+	"solar": {"item": "solar_panel", "name": "Solar panel", "toolkit": true},
+	"bullbar": {"item": "bull_bar", "name": "Bull bar", "toolkit": true},
+	"heater": {"item": "heater_unit", "name": "Heater"},
+	"big_tank": {"item": "fuel_tank_xl", "name": "Long-range tank", "toolkit": true},
+	"engine_tune": {"item": "tune_kit", "name": "Engine tune", "toolkit": true, "needs": ["engine"]},
+}
+
+## Upgrades that cars accept at the hood (carry the part there and press [E]).
+const CAR_UPGRADE_ITEMS := {"tune_kit": "engine_tune", "bull_bar": "bullbar", "fuel_tank_xl": "big_tank"}
 
 ## Buildable pieces. "snap": grid snapping mode.
 const PIECES := {
@@ -145,23 +262,24 @@ const PIECE_ORDER := ["foundation", "floor", "wall", "doorway", "window", "roof"
 ## Vehicle parts (condition 0..100). Parts are replaced physically: carry the part in your hands
 ## to where it fits on the vehicle ("where") and install it there.
 const RV_PARTS := {
-	"engine": {"name": "Engine", "repair": {"engine_parts": 1}, "amount": 50, "needs_toolkit": true, "where": "Hold Engine Parts at the open hood (toolkit nearby)"},
+	"engine": {"name": "Engine", "repair": {"engine_parts": 1}, "amount": 50, "needs_toolkit": true, "where": "Fit an Engine Block at the hood, then hold Engine Parts there to rebuild it (toolkit nearby)"},
 	"tires": {"name": "Tires", "repair": {"tire": 1}, "amount": 25, "needs_toolkit": true, "where": "Pull a worn tire off a wheel, then fit a Spare Tire there (toolkit nearby)"},
 	"battery": {"name": "Battery", "repair": {"car_battery": 1}, "amount": 100, "needs_toolkit": false, "where": "Pull the old battery out of the battery box, then fit a Car Battery"},
 	"body": {"name": "Body & Chassis", "repair": {"scrap": 1}, "amount": 12, "needs_toolkit": true, "where": "Hold Scrap Metal at the hood to weld patches (toolkit nearby)"},
 }
 
 const RV_UPGRADES := {
-	"engine_tune": {"name": "Engine Tune-Up (+35% power)", "cost": {"engine_parts": 2, "scrap": 4}},
-	"offroad_tires": {"name": "Off-Road Tires (+grip, less wear)", "cost": {"tire": 4, "scrap": 2}},
-	"big_tank": {"name": "Extended Fuel Tank (140L)", "cost": {"scrap": 10, "rope": 1}},
-	"solar": {"name": "Roof Solar Panel (charges battery)", "cost": {"scrap": 6, "car_battery": 1}},
-	"bullbar": {"name": "Bull Bar (-60% crash damage)", "cost": {"scrap": 8}},
-	"heater": {"name": "Cabin Heater", "cost": {"scrap": 5, "engine_parts": 1}},
-	"water_tank": {"name": "Large Water Tank (80L)", "cost": {"scrap": 5, "rope": 1}},
+	"engine_tune": {"name": "Engine Tune-Up (+35% power)"},
+	"offroad_tires": {"name": "Off-Road Tires (+grip, less wear)"},
+	"big_tank": {"name": "Long-Range Fuel Tank (140 L)"},
+	"solar": {"name": "Roof Solar Panel (charges battery)"},
+	"bullbar": {"name": "Bull Bar (-60% crash damage)"},
+	"heater": {"name": "Cabin Heater"},
+	"water_tank": {"name": "Water Tank (60 L)"},
 }
 
-const RV_PAINTS := [Color("e9e2cf"), Color("7d9a6a"), Color("c26b3c"), Color("4f6f8f"), Color("d9b44a"), Color("8f3b3b"), Color("3d3d3d")]
+const RV_PAINTS := [Color("e9e2cf"), Color("7d9a6a"), Color("c26b3c"), Color("4f6f8f"), Color("d9b44a"), Color("8f3b3b"), Color("3d3d3d"), Color("9a9c98")]
+const PRIMER := 7 # the bare primer-and-rust look the van starts with
 
 const ANIMALS := {
 	"deer": {"hp": 60, "walk": 1.6, "run": 9.5, "flee": 26.0, "aggro": 0.0, "dmg": 0, "drops": {"raw_meat": 4, "hide": 2}, "color": Color("8a6440"), "size": 1.0},

@@ -516,6 +516,95 @@ def carpet():
     save_normal("carpet", fine, 3)
 
 
-for fn in [brick, siding, wallpaper, tiles, carpet]:
+# --- 1.4: stripped van shell and fit-out materials ---------------------------
+def ribbed_metal():
+    """Bare van wall/floor sheet: pressed ribs, scuffs and grime."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    ribs = 0.5 + 0.5 * np.cos(2 * np.pi * xx * 8)
+    ribs = ribs ** 3
+    large = spectral(N, 1.8, 400)
+    fine = band(N, 200, 512, 401)
+    scuff = band(N, 20, 120, 402, aniso=(1.0, 10.0))
+    base = ramp(0.55 * large + 0.25 * fine + 0.2 * ribs, [(0, rgb("5d6064")), (0.6, rgb("8d9196")), (1, rgb("b4b8bc"))])
+    base = lerp(base, np.array(rgb("4a3a2a")), np.clip((spectral(N, 1.5, 403) - 0.62) * 2.4, 0, 0.8))
+    base = lerp(base, np.array(rgb("d0d3d6")), np.clip((scuff - 0.75) * 3, 0, 0.5))
+    save_rgb("ribbed_metal", base)
+    save_normal("ribbed_metal", ribs * 1.0 + fine * 0.1, 6)
+
+
+def primer():
+    """Patchy grey primer over old paint with rust bleeding through."""
+    large = spectral(N, 1.9, 410)
+    patches = np.clip((spectral(N, 1.4, 411) - 0.45) * 3, 0, 1)
+    fine = band(N, 250, 512, 412)
+    base = ramp(0.7 * large + 0.3 * fine, [(0, rgb("6f716f")), (1, rgb("9a9c98"))])
+    base = lerp(base, np.array(rgb("c9c2ae")), patches * 0.55)
+    rust = np.clip((spectral(N, 1.2, 413) - 0.74) * 5, 0, 1)
+    drips = band(N, 3, 40, 414, aniso=(1.0, 20.0))
+    rust = np.maximum(rust, np.clip((drips - 0.8) * 4, 0, 1) * 0.6)
+    base = lerp(base, ramp(fine, [(0, rgb("5a2a12")), (1, rgb("a2582a"))]), rust)
+    save_rgb("primer", base)
+    save_normal("primer", large * 0.3 + rust * 0.4, 3)
+
+
+def insulation():
+    """Foil-backed foam insulation board."""
+    fine = band(N, 120, 512, 420)
+    wrinkle = band(N, 10, 60, 421)
+    base = ramp(0.6 * wrinkle + 0.4 * fine, [(0, rgb("8a8c8e")), (0.5, rgb("c8cacc")), (1, rgb("eef0f2"))])
+    yy, xx = np.mgrid[0:N, 0:N]
+    tape = (np.abs((xx % (N // 2)) - N // 4) < 18)
+    base[tape] = base[tape] * 0.85 + np.array(rgb("b0b2b4")) * 0.15
+    save_rgb("insulation", base)
+    save_normal("insulation", wrinkle, 4)
+
+
+def laminate():
+    """Light oak-effect cabinet laminate: fine straight grain, no knots."""
+    grain = band(N, 2, 30, 430, aniso=(1.0, 40.0))
+    fine = band(N, 60, 300, 431, aniso=(1.0, 25.0))
+    t = 0.6 * grain + 0.4 * fine
+    col = ramp(t, [(0, rgb("b89a72")), (0.5, rgb("d2b68e")), (1, rgb("e4cfaa"))])
+    save_rgb("laminate", col)
+    save_normal("laminate", fine, 1.5)
+
+
+def upholstery():
+    """Quilted seat upholstery with stitching."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    q = 8
+    cx = np.abs(((xx * q) % 1.0) - 0.5) * 2
+    cy = np.abs(((yy * q) % 1.0) - 0.5) * 2
+    puff = 1.0 - np.maximum(cx, cy) ** 4
+    weave = band(N, 300, 512, 440)
+    large = spectral(N, 1.9, 441)
+    col = ramp(0.5 * puff + 0.3 * weave + 0.2 * large, [(0, rgb("3a3e48")), (1, rgb("6a7080"))])
+    seam = (np.maximum(cx, cy) > 0.965)
+    col[seam] = np.array(rgb("2a2c32"))
+    save_rgb("upholstery", col)
+    save_normal("upholstery", puff * 0.8 + weave * 0.1, 4)
+
+
+def vinyl():
+    """Vinyl plank floor: staggered boards of a pale wood print."""
+    yy, xx = np.mgrid[0:N, 0:N]
+    bw = N // 6
+    row = xx // bw
+    off = (row * 389) % N
+    yb = (yy + off) % N
+    seg = yb // (N // 2)
+    seam_x = (xx % bw) < 3
+    seam_y = (yb % (N // 2)) < 3
+    grain = band(N, 2, 40, 450, aniso=(40.0, 1.0)).T
+    tone = (np.sin(row * 2.1 + seg * 4.7) * 0.5 + 0.5)
+    col = ramp(0.6 * grain + 0.4 * tone, [(0, rgb("8f7a62")), (0.5, rgb("b09a7e")), (1, rgb("c9b598"))])
+    col[seam_x | seam_y] = np.array(rgb("5a4c3c"))
+    save_rgb("vinyl", col)
+    h = np.zeros((N, N))
+    h[seam_x | seam_y] = -0.6
+    save_normal("vinyl", h + grain * 0.05, 3)
+
+
+for fn in [ribbed_metal, primer, insulation, laminate, upholstery, vinyl]:
     fn()
     print("generated", fn.__name__)

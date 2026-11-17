@@ -1,35 +1,36 @@
-## No Man's Drive 1.3.0: hands-on items
+## No Man's Drive 1.4.0: build your van from nothing
 
-**You carry things in your hands now. There is no inventory screen.**
-- You have **two hands**. A **backpack** (craft it, or find one) adds two more slots. Each slot holds one object, or a small stack of little things (arrows, ammo, seeds, berries, a bundle of logs).
-- **E** picks up the item you're looking at. The item you're aiming at is highlighted and its name floats above it, so small things are easy to spot.
-- **G (PLACE)** sets the item down exactly where the green preview shows: on the floor, the counter, the dinette table, the dashboard, the over-cab shelf, fridge and cupboard shelves, or the bed. **R** rotates it. **Q (THROW)** tosses it.
-- **Items you place in the RV, a car, a truck bed or a trailer are glued in place and stay exactly where you put them while you drive.**
-- Things you harvest drop as physical items: logs from trees, stones from rocks, meat and hide from carcasses, berries and fiber from bushes. Go pick them up.
-- Crafting, cooking, building and upgrades use what you hold **plus anything lying within 3 m**. Stack materials beside your workbench or campfire and craft from the pile.
-- Items lying in the world are drawn larger so you can actually see them.
+**You no longer start with a motorhome.** You start with a stripped, rusty panel-van shell on an empty lot: no engine, no battery, no wheels, no seats, no steering wheel, no door, and a bare ribbed-metal interior. The parts you need to get it running lie around the lot, next to a workbench.
 
-**Boxes hold real things**
-- Cardboard boxes at gas stations, houses, farms, camps and wrecks open up when you search them, and the items are inside the box. Searched cupboards and shelves put what you find on top of them or on the floor in front of them.
-- The **storage crate** is an open-top box. Put things inside with G, and pick up the whole crate with G (empty hand) to carry everything in it at once.
-- The RV **fridge, cupboard and overhead cupboard** have doors you open and shelves you put food and supplies on.
+**Fit every part by hand**
+- Pick a part up (E), carry it to the van and press E where it goes. **While you hold a part, the empty spot it fits glows green.**
+- To take a part back out, look at it with empty hands and press G. It lands in your hands.
+- Getting it to drive takes an Engine Block (lowered in at the hood), a battery, four tires, a driver's seat and a steering wheel. Bolting in the engine, steering wheel, door and tanks needs a Toolkit in hand or lying within reach.
+- Look at the hood with empty hands to see what the van still needs.
 
-**Replace parts by hand**
-- **Battery:** pull the old battery out of its tray with an empty hand (it lands in your hand), then carry a Car Battery over and fit it.
-- **Tires:** pull a worn tire off a wheel (the bare hub shows), then fit a Spare Tire there. You need a toolkit in hand or nearby.
-- **Engine and body:** hold Engine Parts or Scrap Metal at the open hood to rebuild or weld (toolkit nearby).
-- Worn tires and dead batteries can be broken down for scrap at a workbench.
+**28 van modules, all physical items**
+Engine, steering wheel, driver and passenger seats, side door, two headlights, radio, vinyl flooring, insulated wall panels, kitchen counter, gas stove, sink and tap, coffee maker, fridge, storage cupboard (with plant pots), overhead cabinet, dinette, cassette toilet, bed frame, mattress, ceiling light, water tank, solar panel, bull bar, cabin heater, long-range fuel tank and an engine tune kit. Off-road tires fit on the wheels. Spray paint goes on at the hood.
+- Some modules depend on others: the stove, sink and coffee maker sit on the kitchen counter, the mattress goes on the bed frame, and the overhead cabinet hangs on the wall panels.
+- Fitted parts do things: no door and no wall panels means a cold van; no water tank means a dry sink; no headlights means no lights; no ceiling light means a dark van.
+- The radio plays three road-trip tunes. E switches it on and changes station.
 
-**Interiors**
-- The RV interior is no longer bare wood. It has off-white wall board, vinyl plank flooring, laminate cabinets with trim and handles, a solid-surface counter with a tiled backsplash, fabric captain's chairs and benches, a moulded dashboard with gauges, and a made bed.
-- Every car and truck has a real cab: carpet, door panels, armrests, pillars, a headliner, a rear wall with its window, a gauge cluster and a centre console. You no longer see straight out through every panel.
-- The camper trailer interior uses the same RV finishes and has an open shelf unit.
-- Furniture inside the RV is solid now, so you can't walk through it.
+**No more crafting menu: use the workbench**
+- Set ingredients on top of a workbench (G), look at the bench and press E. The result appears on the bench (big things are set down in front of it). If more than one thing fits, R picks which.
+- Over 50 recipes, including every van module, plus new materials: copper wire, nuts and bolts, metal pipe, foam padding and glass panes.
+- Tab opens a **notebook**: what you carry and wear, the van checklist, and the full recipe book. You can't craft from it.
 
-**Starting out**
-- You start with a knife in your hand and a flashlight clipped on. Your water, food, rope, bandage, seeds and toolkit are inside the RV. Go get them.
-- Saves from earlier versions still load. Your old inventory is laid out in piles beside the RV door, and old fridge, cupboard, camper and crate contents appear on their shelves.
+**Cooking, drinking and fuel are hands-on too**
+- Set food or dirty water on a burning campfire's new grill, or on a lit van stove, and it cooks by itself. Hearty stew and coffee cook when all their ingredients sit on the heat together.
+- Drink a bottle and you keep the **empty bottle**. Fill it at the van's sink, a well, a rain collector, or at a lake (use it at the water's edge). Pour bottles into the van's tank at the sink.
+- Pouring a fuel can into the tank leaves an **empty fuel can**. Fill it at a gas pump.
 
-Controls: E pick up / use · G place · Q throw · R rotate · 1–4 or mouse wheel switches hands · Tab crafting. On touch: PLACE, THROW and CRAFT buttons.
+**Textures and models**
+- New textures: ribbed bare van metal, patchy primer with rust, foil insulation board, oak-look laminate, quilted upholstery and vinyl plank flooring.
+- New 3D models for every new part and material, and knobbly off-road tires.
+- The van is now a high-roof panel van with a raked windshield. It starts in rusty primer and sits on its brake drums until it has wheels.
+
+**Saves:** saves from earlier versions load with the motorhome fully fitted out, including any upgrades you had installed.
+
+Controls: E pick up / fit / use · G place, or take a part out with empty hands · R rotate, or pick a recipe at the bench · Q throw · Tab notebook. On touch: PLACE, THROW and BOOK buttons.
 
 If the install fails over an older version, uninstall the older version first.

@@ -32,10 +32,10 @@ static func prompt(v: Node, action: String) -> String:
 		return ""
 	if action.begins_with("wheel"):
 		if v.missing.has(action):
-			if held == "tire":
-				return "[E] Fit the Spare Tire%s" % _tk_hint()
-			return "Bare wheel hub — carry a Spare Tire here"
-		if held == "tire":
+			if held in ["tire", "offroad_tire"]:
+				return "[E] Fit the %s%s" % [Data.item_name(held), _tk_hint()]
+			return "Bare wheel hub — carry a Spare Tire or Off-Road Tire here"
+		if held in ["tire", "offroad_tire"]:
 			return "Tires %d%% — pull this one off first with an empty hand" % int(parts["tires"])
 		return "[E] Pull off this tire (tires %d%%)%s" % [int(parts["tires"]), _tk_hint()]
 	return ""
@@ -90,20 +90,28 @@ static func act(v: Node, action: String) -> bool:
 		if not _toolkit():
 			Game.notify("You need a Toolkit in hand or lying within reach to work on wheels")
 			return true
+		var kinds = v.get("wheel_kind")
 		if v.missing.has(action):
-			if held != "tire":
+			if held not in ["tire", "offroad_tire"]:
 				Game.notify("Carry a Spare Tire in your hands to fit it here")
 				return true
-			Game.remove_item("tire", 1)
+			Game.remove_item(held, 1)
 			v.missing.erase(action)
-			parts["tires"] = minf(parts["tires"] + 25.0, 100.0)
+			if kinds != null:
+				if held == "offroad_tire":
+					kinds[action] = "offroad_tire"
+				else:
+					kinds.erase(action)
+			parts["tires"] = minf(parts["tires"] + 15.0, 100.0)
 			Audio.play_at("hammer", v.global_position, -2.0, 0.9)
-			Game.notify("Tire fitted — tires now %d%%" % int(parts["tires"]))
+			Game.notify("%s fitted — tires now %d%%" % [Data.item_name(held), int(parts["tires"])])
 		else:
 			if held != "":
 				Game.notify("You need an empty hand to pull the tire off")
 				return true
 			var item := "tire" if parts["tires"] >= 90.0 else "worn_tire"
+			if kinds != null and kinds.get(action, "") == "offroad_tire" and parts["tires"] >= 50.0:
+				item = "offroad_tire"
 			Game.add_item(item, 1, true)
 			parts["tires"] = maxf(parts["tires"] - parts["tires"] * 0.25, 0.0)
 			v.missing[action] = true
@@ -119,9 +127,18 @@ static func apply_wheels(v: Node, grip: float) -> void:
 		var w: VehicleWheel3D = v.wheels[i]
 		var gone: bool = v.missing.has("wheel%d" % i)
 		w.wheel_friction_slip = grip * (0.25 if gone else 1.0)
+		# on a bare hub the vehicle sits down on its brake drums
+		if not w.has_meta("radius"):
+			w.set_meta("radius", w.wheel_radius)
+		w.wheel_radius = float(w.get_meta("radius")) * (0.45 if gone else 1.0)
+		var kinds = v.get("wheel_kind")
+		var knob: bool = kinds != null and kinds.get("wheel%d" % i, "") == "offroad_tire"
 		var tm = w.get_meta("tire_mesh") if w.has_meta("tire_mesh") else null
 		if tm:
-			tm.visible = not gone
+			tm.visible = not gone and not knob
+		var km = w.get_meta("knobby_mesh") if w.has_meta("knobby_mesh") else null
+		if km:
+			km.visible = not gone and knob
 		var hub = w.get_meta("hub_mesh") if w.has_meta("hub_mesh") else null
 		if hub:
 			hub.visible = gone
@@ -144,3 +161,38 @@ static func hub(holder: Node3D) -> MeshInstance3D:
 	mi.visible = false
 	holder.add_child(mi)
 	return mi
+
+## Car hoods: fit upgrade parts, spray paint, or check the car over.
+static func car_hood(v: Node) -> bool:
+	var held := Game.equipped()
+	if Data.CAR_UPGRADE_ITEMS.has(held):
+		var up: String = Data.CAR_UPGRADE_ITEMS[held]
+		if v.upgrades.has(up):
+			Game.notify("Already fitted")
+			return true
+		if not _toolkit():
+			Game.notify("You need a Toolkit in hand or lying within reach")
+			return true
+		Game.remove_item(held, 1)
+		v.upgrades[up] = true
+		Audio.play_at("hammer", v.global_position)
+		Game.notify("Fitted: %s" % Data.RV_UPGRADES[up]["name"])
+		v._apply_visuals()
+		return true
+	if held == "paint_can":
+		Game.remove_item("paint_can", 1)
+		v.set_paint((int(v.paint) + 1) % v.paint_palette().size())
+		Audio.play_at("splash", v.global_position, -6.0, 1.8)
+		Game.notify("Fresh paint!")
+		return true
+	var p: Dictionary = v.parts
+	Game.notify("%s: engine %d%% · tires %d%% · body %d%% · battery %d%% · fuel %d L" % [v.display_name(), int(p["engine"]), int(p["tires"]), int(p["body"]), int(v.battery), int(v.fuel)])
+	return true
+
+static func car_hood_prompt(v: Node) -> String:
+	var held := Game.equipped()
+	if Data.CAR_UPGRADE_ITEMS.has(held):
+		return "[E] Fit the %s%s" % [Data.item_name(held), _tk_hint()]
+	if held == "paint_can":
+		return "[E] Spray-paint the %s" % v.display_name()
+	return "[E] Check the %s over (hold Engine Parts or Scrap to repair, or an upgrade part to fit it)" % v.display_name()

@@ -45,6 +45,13 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ **The RV interior should not look like wood**: wall board, vinyl floor, laminate cabinets, fabric seats.
 - Keep imitating Nomad Drive as closely as possible, plus our added features. Sound and driving are approved as-is.
 
+### Requests after 1.3 (addressed in 1.4)
+
+- ✅ **Assemble the whole vehicle from the start, Nomad Drive style.** Start with a very broken, unassembled van, not an RV. The doors, seats, radio, engine, steering wheel, wheels and battery all have to be fitted by hand. The interior starts empty: bed, fridge, kitchen and the rest are fitted manually.
+- ✅ **More items, modules and textures**: 28 fittable van modules, new materials (wire, bolts, pipe, foam, glass), empty bottles and fuel cans, spray paint, and six new textures.
+- ✅ **Avoid little crafting menus.** Crafting happens on a workbench: lay the items on it and put them together. Cooking happens on a campfire grill or the van stove. Drinking, refilling, refuelling and fitting parts are all done with items in your hands. The old crafting, cooking, sink and RV workshop menus are gone. Tab is now a read-only notebook.
+- Posting directly to `main` and publishing a new APK release are approved.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.

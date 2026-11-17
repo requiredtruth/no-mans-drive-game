@@ -237,6 +237,14 @@ func _build_campfire() -> void:
 		var a := TAU * i / 4.0 + 0.3
 		Lib.cyl(self, Vector3(cos(a) * 0.15, 0.15, sin(a) * 0.15), 0.06, 0.07, 0.75, log_mat, Vector3(0.9, a, 0))
 	Lib.box(self, Vector3(0, 0.02, 0), Vector3(0.8, 0.03, 0.8), Lib.color_mat(Color(0.08, 0.07, 0.06)))
+	# a cooking grate over the flames: whatever sits on it cooks while the fire burns
+	var grate := Lib.color_mat(Color(0.18, 0.18, 0.19), 0.5, 0.8)
+	for k in range(7):
+		Lib.cyl(self, Vector3(-0.3 + k * 0.1, 0.41, 0), 0.008, 0.008, 0.7, grate, Vector3(PI * 0.5, 0, 0), 6)
+	for z in [-0.33, 0.33]:
+		Lib.cyl(self, Vector3(0, 0.41, z), 0.012, 0.012, 0.7, grate, Vector3(0, 0, PI * 0.5), 6)
+	for x in [-0.36, 0.36]:
+		Lib.cyl(self, Vector3(x, 0.22, 0), 0.012, 0.012, 0.4, grate)
 	_col(Vector3(0, 0.2, 0), Vector3(1.3, 0.4, 1.3))
 	_fire = Node3D.new()
 	add_child(_fire)
@@ -400,8 +408,13 @@ func _prompt() -> String:
 	match type:
 		"campfire":
 			var fuel: float = float(data.get("fuel", 0.0))
+			var held := Game.equipped()
 			if fuel > 0.0:
-				return "[E] Cook at campfire  (%d min of fuel)" % int(fuel / 60.0 + 1)
+				if held == "wood":
+					return "[E] Add wood  (%d min of fuel)" % int(fuel / 60.0 + 1)
+				if _cookable(held):
+					return "[E] Set the %s on the grill" % Data.item_name(held)
+				return "Campfire (%d min of fuel) — hold food or dirty water and [E] to set it on the grill" % int(fuel / 60.0 + 1)
 			return "[E] Light campfire (1 Wood)"
 		"doorway":
 			return "[E] %s door" % ("Close" if data.get("open", false) else "Open")
@@ -417,9 +430,11 @@ func _prompt() -> String:
 				return "[E] Harvest %s" % Data.item_name(crop)
 			return "[E] Water plants  (%s %d%%, water %d%%)" % [Data.item_name(crop), int(float(data.get("growth", 0.0)) * 100), int(float(data.get("water", 0.0)) * 100)]
 		"workbench":
-			return "[E] Use workbench"
+			return _bench_prompt()
 		"rain_collector":
-			return "[E] Collect water (%d)" % int(data.get("water", 0))
+			if Game.equipped() == "bottle_empty":
+				return "[E] Fill the bottle (%d L collected)" % int(data.get("water", 0))
+			return "Rain collector (%d L) — hold an Empty Bottle to fill it" % int(data.get("water", 0))
 		"chair":
 			return "[E] Sit and rest   [G] Pick up"
 		"table":
@@ -437,8 +452,13 @@ func interact(player: Node) -> void:
 					Audio.play_at("chop", global_position)
 				else:
 					Game.notify("You need wood to light the fire")
+			elif Game.equipped() == "wood":
+				add_fuel()
+				Audio.play_at("chop", global_position, -6.0, 1.3)
+			elif _cookable(Game.equipped()):
+				_set_on_grill()
 			else:
-				Game.world.hud.open_cooking(self)
+				Game.notify("Hold food (raw meat, fish, potatoes, mushrooms) or dirty water and press [E] to set it on the grill. It cooks by itself.")
 		"doorway":
 			data["open"] = not data.get("open", false)
 			Audio.play_at("door", global_position)
@@ -451,16 +471,20 @@ func interact(player: Node) -> void:
 		"planter":
 			_planter_interact()
 		"workbench":
-			Game.world.hud.open_crafting("workbench")
+			assemble()
 		"chair":
 			Game.stats["energy"] = minf(Game.stats["energy"] + 5.0, 100.0)
 			Game.notify("You rest for a moment")
 		"rain_collector":
 			var w := int(data.get("water", 0))
-			if w > 0:
-				Game.add_item("water_clean", w)
-				data["water"] = 0
+			if Game.equipped() != "bottle_empty":
+				Game.notify("Hold an Empty Bottle to fill it here")
+			elif w > 0:
+				Game.remove_item("bottle_empty", 1)
+				Game.add_item("water_clean", 1, true)
+				data["water"] = w - 1
 				_save_data()
+				Audio.play_at("splash", global_position, -10.0, 1.4)
 			else:
 				Game.notify("The collector is empty. Wait for rain.")
 
@@ -517,7 +541,10 @@ func _planter_interact() -> void:
 		return
 	for w in ["water_clean", "water_dirty"]:
 		if Game.count(w) > 0:
+			var in_hand := Game.carried(w) > 0
 			Game.remove_item(w, 1)
+			if in_hand:
+				Game.add_item("bottle_empty", 1, true)
 			data["water"] = 1.0
 			Audio.play_at("splash", global_position, -8.0)
 			Game.notify("Watered the planter")
@@ -530,3 +557,142 @@ func warmth_radius() -> float:
 	if type == "campfire" and float(data.get("fuel", 0.0)) > 0.0:
 		return 7.0
 	return 0.0
+
+# ------------------------------------------------------------------ cooking on the campfire
+func _cookable(id: String) -> bool:
+	if id == "":
+		return false
+	for r in Data.COOKING:
+		if r["cost"].has(id):
+			return true
+	return false
+
+## Grill spots on top of the fire (local).
+const GRILL := [Vector3(-0.2, 0.42, -0.2), Vector3(0.2, 0.42, -0.2), Vector3(-0.2, 0.42, 0.2), Vector3(0.2, 0.42, 0.2), Vector3(0.0, 0.42, 0.0)]
+
+func _set_on_grill() -> void:
+	for lp in GRILL:
+		var gp: Vector3 = to_global(lp)
+		var busy := false
+		for it in get_tree().get_nodes_in_group("world_item"):
+			if is_instance_valid(it) and Vector2(it.global_position.x - gp.x, it.global_position.z - gp.z).length() < 0.12 and absf(it.global_position.y - gp.y) < 0.4:
+				busy = true
+				break
+		if busy:
+			continue
+		var s := Game.take_held()
+		var bb: AABB = Items.display_bounds(s["id"])
+		Game.place_item(s["id"], int(s["n"]), Transform3D(global_transform.basis, gp - Vector3(0, bb.position.y, 0)), get_meta("host") if has_meta("host") else null)
+		Audio.play_at("pickup", gp, -8.0, 0.8)
+		return
+	Game.notify("The grill is full")
+
+## World positions that cook what sits on them while the fire burns.
+func heat_spots() -> Array:
+	if type != "campfire" or float(data.get("fuel", 0.0)) <= 0.0:
+		return []
+	return [to_global(Vector3(0, 0.42, 0))]
+
+# ------------------------------------------------------------------ workbench: assemble what lies on it
+var _choice := 0
+
+## Items lying on the bench top.
+func bench_items() -> Array:
+	var out := []
+	var inv := global_transform.affine_inverse()
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if not is_instance_valid(it) or it.is_queued_for_deletion():
+			continue
+		var l: Vector3 = inv * it.global_position
+		if absf(l.x) < 1.08 and absf(l.z) < 0.52 and l.y > 0.8 and l.y < 1.7:
+			out.append(it)
+	return out
+
+func _bench_counts(items: Array) -> Dictionary:
+	var d := {}
+	for it in items:
+		d[it.id] = int(d.get(it.id, 0)) + int(it.amount)
+	return d
+
+## Recipes whose ingredients all lie on the bench, most specific first.
+func bench_matches() -> Array:
+	var have := _bench_counts(bench_items())
+	var out := []
+	for r in Data.RECIPES:
+		var ok := true
+		for k in r["cost"]:
+			if int(have.get(k, 0)) < int(r["cost"][k]):
+				ok = false
+				break
+		if ok:
+			out.append(r)
+	out.sort_custom(func(a, b):
+		if a["cost"].size() != b["cost"].size():
+			return a["cost"].size() > b["cost"].size()
+		var ta := 0
+		var tb := 0
+		for k in a["cost"]:
+			ta += int(a["cost"][k])
+		for k in b["cost"]:
+			tb += int(b["cost"][k])
+		return ta > tb)
+	return out
+
+func _bench_prompt() -> String:
+	var m := bench_matches()
+	if m.is_empty():
+		var n := bench_items().size()
+		if n == 0:
+			return "Workbench — set materials on top [G], then [E] to put them together   (Tab: recipe book)"
+		return "Workbench — nothing to make from what's on it yet   (Tab: recipe book)"
+	_choice = wrapi(_choice, 0, m.size())
+	var r: Dictionary = m[_choice]
+	var more := ("\n[R] %d other thing%s you could make" % [m.size() - 1, "s" if m.size() > 2 else ""]) if m.size() > 1 else ""
+	return "[E] Make %s%s  (uses %s)%s" % [Data.item_name(r["out"]), (" ×%d" % r["n"]) if int(r["n"]) > 1 else "", Data.cost_text(r["cost"]), more]
+
+func cycle_recipe() -> void:
+	_choice += 1
+	Audio.play("click", -8.0)
+
+func assemble() -> void:
+	var m := bench_matches()
+	if m.is_empty():
+		Game.notify("Lay the ingredients on the bench first. Press Tab for the recipe book.")
+		return
+	_choice = wrapi(_choice, 0, m.size())
+	var r: Dictionary = m[_choice]
+	var items := bench_items()
+	var inv := global_transform.affine_inverse()
+	items.sort_custom(func(a, b): return absf((inv * a.global_position).x) > absf((inv * b.global_position).x))
+	for k in r["cost"]:
+		var left := int(r["cost"][k])
+		for it in items:
+			if left <= 0:
+				break
+			if it.id != k or it.amount <= 0:
+				continue
+			var take := mini(int(it.amount), left)
+			it.amount -= take
+			left -= take
+			if it.amount <= 0:
+				it.queue_free()
+			else:
+				it.refresh_label()
+	var out: String = r["out"]
+	var n := int(r["n"])
+	var bb: AABB = Items.display_bounds(out)
+	var host = get_meta("host") if has_meta("host") else null
+	if maxf(bb.size.x, bb.size.z) < 0.9 and bb.size.y < 0.8:
+		var lp := Vector3(randf_range(-0.25, 0.25), 0.94 - bb.position.y + 0.005, randf_range(-0.12, 0.12))
+		while n > 0:
+			var k := mini(n, Data.stack(out))
+			Game.place_item(out, k, global_transform * Transform3D(Basis(Vector3.UP, randf() * TAU), lp), host)
+			n -= k
+			lp.x += 0.2
+	else:
+		var front: Vector3 = to_global(Vector3(0, 0, 1.25))
+		if host == null and Game.world:
+			front.y = Game.world.gen.height(front.x, front.z) - bb.position.y + 0.02
+		Game.place_item(out, n, Transform3D(global_transform.basis, front), host)
+	Audio.play_at("hammer", global_position, -3.0)
+	Game.notify("You made %s%s" % [Data.item_name(out), (" ×%d" % int(r["n"])) if int(r["n"]) > 1 else ""])

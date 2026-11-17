@@ -132,7 +132,7 @@ func start(loaded: Dictionary) -> void:
 			Game.drop_pile(k, int(Game.legacy_inventory[k]), at)
 		Game.legacy_inventory = {}
 	if not loaded.has("player"):
-		rv.stock_starter_supplies()
+		_starter_lot()
 	Game.playing = true
 	apply_settings()
 	if loaded.get("in_rv", false):
@@ -278,6 +278,7 @@ func _process(delta: float) -> void:
 	if _fire_scan <= 0.0:
 		_fire_scan = 1.0
 		_fires = get_tree().get_nodes_in_group("structure").filter(func(s): return s.type == "campfire")
+		_cook_tick(1.0)
 	_ambience(delta)
 	# keep physics bodies frozen until ground exists below them
 	if rv and rv.is_authority():
@@ -784,6 +785,112 @@ func temperature_at(p: Vector3) -> float:
 		t -= 5.0
 	t -= maxf(p.y - 12.0, 0.0) * 0.05
 	return t
+
+# ------------------------------------------------------------------ cooking on heat
+## Food and water set on a burning campfire or a lit stove cook by themselves.
+func _cook_tick(dt: float) -> void:
+	var spots := []
+	for f in _fires:
+		if is_instance_valid(f):
+			for hp in f.heat_spots():
+				spots.append([hp, 0.42])
+	for f in get_tree().get_nodes_in_group("placeable"):
+		if is_instance_valid(f) and f.get("type") == "campfire" and f.has_meta("host"):
+			for hp in f.heat_spots():
+				spots.append([hp, 0.42])
+	if rv:
+		for hp in rv.heat_spots():
+			spots.append([hp, 0.15])
+	if spots.is_empty():
+		return
+	var items := get_tree().get_nodes_in_group("world_item")
+	for sp in spots:
+		var here := []
+		for it in items:
+			if not is_instance_valid(it) or it.is_queued_for_deletion():
+				continue
+			var d: Vector3 = it.global_position - sp[0]
+			if Vector2(d.x, d.z).length() < sp[1] and d.y > -0.15 and d.y < 0.45:
+				here.append(it)
+		if here.is_empty():
+			continue
+		for it in here:
+			it.set_meta("cook", float(it.get_meta("cook", 0.0)) + dt)
+		_cook_here(here)
+
+func _cook_here(here: Array) -> void:
+	for r in Data.COOKING:
+		var used := []
+		var ok := true
+		for k in r["cost"]:
+			var found = null
+			for it in here:
+				if it.id == k and not used.has(it) and int(it.amount) >= int(r["cost"][k]) and float(it.get_meta("cook", 0.0)) >= Data.COOK_TIME:
+					found = it
+					break
+			if found == null:
+				ok = false
+				break
+			used.append(found)
+		if not ok:
+			continue
+		var first: Node = used[0]
+		var n := 1
+		if r["cost"].size() == 1:
+			n = int(first.amount) / int(r["cost"][first.id]) * int(r["n"])
+		var xf: Transform3D = first.global_transform
+		xf.origin.y += Items.display_bounds(first.id).position.y - Items.display_bounds(r["out"]).position.y
+		var par: Node = first.get_parent()
+		var host: Node = par.get_parent() if par and par.name == "Cargo" else null
+		var k0 := 0
+		for it in used:
+			var need := int(r["cost"][it.id]) * (n if r["cost"].size() == 1 else 1)
+			it.amount -= need
+			if it.amount <= 0:
+				it.queue_free()
+			else:
+				it.set_meta("cook", 0.0)
+				it.refresh_label()
+			k0 += 1
+		Game.place_item(r["out"], n, xf, host)
+		Audio.play_at("pickup", xf.origin, -6.0, 1.4)
+		if player and player.global_position.distance_to(xf.origin) < 15.0:
+			Game.notify("%s is ready" % Data.item_name(r["out"]))
+		return
+
+## A new game: the stripped van sits on a rough lot with the parts to get it running lying
+## around it, a workbench, and a few supplies. Everything else has to be found on the road.
+func _starter_lot() -> void:
+	var lot := [
+		["engine_block", 1, Vector3(4.0, 0, 3.8), 0.4],
+		["car_battery", 1, Vector3(3.1, 0, 2.6), 1.2],
+		["tire", 1, Vector3(5.6, 0, 1.6), 0.0],
+		["tire", 1, Vector3(6.4, 0, 0.9), 0.7],
+		["tire", 1, Vector3(5.5, 0, 0.2), 1.9],
+		["tire", 1, Vector3(6.3, 0, -0.5), 2.6],
+		["steering_wheel", 1, Vector3(3.0, 0, 0.6), 0.3],
+		["car_seat", 1, Vector3(4.3, 0, 1.0), -1.4],
+		["van_door", 1, Vector3(2.8, 0, -1.2), PI * 0.5],
+		["toolkit", 1, Vector3(3.4, 0, -0.4), 0.9],
+		["fuel_can", 1, Vector3(2.4, 0, -3.1), 0.2],
+		["headlight", 1, Vector3(3.9, 0, 2.0), 0.5],
+		["scrap", 4, Vector3(5.6, 0, -2.0), 0.0],
+		["bolts", 6, Vector3(5.2, 0, -3.6), 0.4],
+		["wood", 3, Vector3(6.2, 0, -3.0), 1.1],
+		["water_clean", 2, Vector3(2.6, 0, -2.2), 0.0],
+		["canned_food", 1, Vector3(2.9, 0, -2.4), 0.0],
+		["bandage", 1, Vector3(2.5, 0, -2.6), 0.6],
+		["seeds_tomato", 1, Vector3(2.9, 0, -2.75), 0.3],
+		["rope", 1, Vector3(3.3, 0, -2.6), 0.0],
+	]
+	for e in lot:
+		var gp: Vector3 = rv.to_global(e[2])
+		var bb: AABB = Items.display_bounds(e[0])
+		gp.y = gen.height(gp.x, gp.z) - bb.position.y + 0.01
+		Game.place_item(e[0], e[1], Transform3D(Basis(Vector3.UP, rv.rotation.y + e[3]), gp))
+	var bp: Vector3 = rv.to_global(Vector3(4.9, 0, -2.9))
+	bp.y = gen.height(bp.x, bp.z)
+	Net.place_structure(Game.new_struct_id(), {"type": "workbench", "pos": Game.arr(bp), "rot": rv.rotation.y - PI * 0.5, "data": {}})
 
 func fire_heat(p: Vector3) -> float:
 	var best := 0.0

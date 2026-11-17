@@ -4,17 +4,28 @@ extends StaticBody3D
 const Data = preload("res://scripts/data.gd")
 
 const TABLES := {
-	"medical": [["bandage", 1, 3], ["medkit", 1, 1], ["water_clean", 1, 1], ["soda", 1, 1]],
-	"living": [["canned_food", 1, 2], ["cloth", 1, 3], ["rope", 1, 1], ["ammo", 2, 6], ["coffee_beans", 1, 2], ["flashlight", 1, 1]],
-	"shelf": [["canned_food", 1, 3], ["soda", 1, 2], ["water_clean", 1, 3], ["coffee_beans", 1, 2], ["bandage", 1, 2], ["seeds_tomato", 1, 2]],
-	"backroom": [["toolkit", 1, 1], ["engine_parts", 1, 2], ["car_battery", 1, 1], ["scrap", 2, 5], ["rope", 1, 3], ["fuel_can", 1, 1]],
-	"kitchen": [["canned_food", 1, 3], ["water_clean", 1, 2], ["coffee_beans", 1, 3], ["seeds_potato", 1, 2], ["seeds_tomato", 1, 2], ["soda", 1, 2]],
-	"wardrobe": [["cloth", 2, 5], ["rope", 1, 2], ["bandage", 1, 2], ["jacket", 1, 1], ["medkit", 1, 1]],
-	"garage": [["scrap", 2, 6], ["toolkit", 1, 1], ["ammo", 3, 8], ["engine_parts", 1, 1], ["fuel_can", 1, 1], ["rifle", 1, 1], ["arrow", 4, 8]],
-	"trunk": [["scrap", 2, 5], ["tire", 1, 1], ["fuel_can", 1, 1], ["car_battery", 1, 1], ["engine_parts", 1, 1], ["cloth", 1, 2]],
-	"camp": [["rope", 1, 3], ["cloth", 1, 3], ["arrow", 3, 8], ["bow", 1, 1], ["canned_food", 1, 2], ["fishing_rod", 1, 1], ["feather", 2, 4]],
-	"farm": [["seeds_potato", 1, 3], ["seeds_tomato", 1, 3], ["seeds_coffee", 1, 1], ["potato", 1, 4], ["fiber", 2, 6], ["rope", 1, 2], ["hide", 1, 2]],
-	"scrap_pile": [["scrap", 3, 7], ["engine_parts", 1, 1], ["tire", 1, 1], ["cloth", 1, 2]],
+	"medical": [["bandage", 1, 3], ["medkit", 1, 1], ["water_clean", 1, 1], ["soda", 1, 1], ["bottle_empty", 1, 2]],
+	"living": [["canned_food", 1, 2], ["cloth", 1, 3], ["rope", 1, 1], ["ammo", 2, 6], ["coffee_beans", 1, 2], ["flashlight", 1, 1],
+		["radio", 1, 1], ["ceiling_light", 1, 1], ["foam", 1, 2], ["glass", 1, 1], ["dinette_kit", 1, 1], ["mattress", 1, 1]],
+	"shelf": [["canned_food", 1, 3], ["soda", 1, 2], ["water_clean", 1, 3], ["coffee_beans", 1, 2], ["bandage", 1, 2], ["seeds_tomato", 1, 2],
+		["bottle_empty", 1, 2], ["paint_can", 1, 1]],
+	"backroom": [["toolkit", 1, 1], ["engine_parts", 1, 2], ["car_battery", 1, 1], ["scrap", 2, 5], ["rope", 1, 3], ["fuel_can", 1, 1],
+		["wire", 1, 3], ["bolts", 3, 8], ["pipe", 1, 2], ["fuel_can_empty", 1, 1], ["headlight", 1, 1], ["water_tank", 1, 1], ["tune_kit", 1, 1]],
+	"kitchen": [["canned_food", 1, 3], ["water_clean", 1, 2], ["coffee_beans", 1, 3], ["seeds_potato", 1, 2], ["seeds_tomato", 1, 2], ["soda", 1, 2],
+		["stove_unit", 1, 1], ["sink_unit", 1, 1], ["coffee_maker", 1, 1], ["fridge_unit", 1, 1], ["kitchen_unit", 1, 1], ["bottle_empty", 1, 2], ["glass", 1, 1]],
+	"wardrobe": [["cloth", 2, 5], ["rope", 1, 2], ["bandage", 1, 2], ["jacket", 1, 1], ["medkit", 1, 1], ["foam", 1, 3], ["mattress", 1, 1],
+		["cupboard_unit", 1, 1], ["overhead_unit", 1, 1]],
+	"garage": [["scrap", 2, 6], ["toolkit", 1, 1], ["ammo", 3, 8], ["engine_parts", 1, 1], ["fuel_can", 1, 1], ["rifle", 1, 1], ["arrow", 4, 8],
+		["bolts", 4, 8], ["wire", 1, 3], ["pipe", 1, 2], ["engine_block", 1, 1], ["car_seat", 1, 1], ["heater_unit", 1, 1], ["solar_panel", 1, 1],
+		["bull_bar", 1, 1], ["fuel_tank_xl", 1, 1], ["paint_can", 1, 1], ["offroad_tire", 1, 1], ["wall_panels", 1, 1], ["floor_kit", 1, 1]],
+	"trunk": [["scrap", 2, 5], ["tire", 1, 1], ["fuel_can", 1, 1], ["car_battery", 1, 1], ["engine_parts", 1, 1], ["cloth", 1, 2],
+		["car_seat", 1, 1], ["steering_wheel", 1, 1], ["headlight", 1, 1], ["radio", 1, 1], ["wire", 1, 2], ["glass", 1, 1], ["fuel_can_empty", 1, 1]],
+	"camp": [["rope", 1, 3], ["cloth", 1, 3], ["arrow", 3, 8], ["bow", 1, 1], ["canned_food", 1, 2], ["fishing_rod", 1, 1], ["feather", 2, 4],
+		["bottle_empty", 1, 2], ["foam", 1, 2], ["toilet_unit", 1, 1]],
+	"farm": [["seeds_potato", 1, 3], ["seeds_tomato", 1, 3], ["seeds_coffee", 1, 1], ["potato", 1, 4], ["fiber", 2, 6], ["rope", 1, 2], ["hide", 1, 2],
+		["pipe", 1, 2], ["water_tank", 1, 1], ["bed_frame", 1, 1], ["wood", 2, 3], ["bolts", 2, 6]],
+	"scrap_pile": [["scrap", 3, 7], ["engine_parts", 1, 1], ["tire", 1, 1], ["cloth", 1, 2], ["wire", 1, 2], ["bolts", 2, 6], ["pipe", 1, 1], ["glass", 1, 1],
+		["worn_battery", 1, 1]],
 }
 
 var key := ""
@@ -38,7 +49,7 @@ func get_prompt() -> String:
 				return "Fuel pump (dry)"
 			return "[E] Use fuel pump (%d L left)" % int(left)
 		"well":
-			return "[E] Draw water from well"
+			return "[E] Fill the bottle from the well" if Game.equipped() == "bottle_empty" else "Well — hold an Empty Bottle to draw water"
 		"bed":
 			return "[E] Sleep in old bed"
 	if Game.removed.has(key):
@@ -56,7 +67,12 @@ func interact(_player: Node) -> void:
 			_pump()
 			return
 		"well":
-			Game.add_item("water_dirty", 2)
+			if Game.equipped() != "bottle_empty":
+				Game.notify("Hold an Empty Bottle to draw water")
+				return
+			var k: int = mini(int(Game.held()["n"]), 3)
+			Game.remove_item("bottle_empty", k)
+			Game.add_item("water_dirty", k, true)
 			Audio.play_at("splash", global_position, -6.0)
 			return
 		"bed":
@@ -74,6 +90,8 @@ func interact(_player: Node) -> void:
 		var e: Array = entries[rng.randi() % entries.size()]
 		var id: String = e[0]
 		if Data.ITEMS[id]["kind"] == "tool" and (Game.count(id) > 0 or rng.randf() < 0.5):
+			continue
+		if Data.ITEMS[id]["kind"] == "module" and rng.randf() < 0.45:
 			continue
 		found.append([id, rng.randi_range(e[1], e[2])])
 	_reveal(found, rng)
@@ -107,7 +125,12 @@ func _reveal(found: Array, rng: RandomNumberGenerator) -> void:
 		var bb: AABB = Items.display_bounds(id)
 		var lp: Vector3
 		var spread := (i - (found.size() - 1) * 0.5)
-		if mode == "box":
+		var big := maxf(bb.size.x, bb.size.z) > 0.5 or bb.size.y > 0.6
+		if big:
+			# furniture and van parts are too big for a box or shelf: they stand in front of it
+			var across0 := Vector3(front.z, 0, front.x)
+			lp = front * ((size.x if front.x != 0.0 else size.z) * 0.5 + maxf(bb.size.x, bb.size.z) * 0.5 + 0.25) + across0 * spread * 0.6
+		elif mode == "box":
 			lp = Vector3(spread * 0.14, 0.04, rng.randf_range(-0.06, 0.06))
 		elif size.y < 1.3:
 			var across := Vector3(front.z, 0, front.x)
@@ -136,18 +159,22 @@ func _pump() -> void:
 		var need: float = rv.fuel_capacity() - rv.fuel
 		var amount := minf(need, left)
 		if amount < 0.5:
-			Game.notify("The RV tank is already full")
+			Game.notify("The van's tank is already full")
 			return
 		rv.fuel += amount
 		left -= amount
-		Game.notify("Pumped %.0f L into the RV" % amount)
-	else:
-		var cans := mini(int(left / 10.0), 2)
+		Game.notify("Pumped %.0f L into the van" % amount)
+	elif Game.equipped() == "fuel_can_empty":
+		var cans := mini(int(left / 10.0), int(Game.held()["n"]))
 		if cans <= 0:
 			Game.notify("Not enough fuel left for a can")
 			return
-		Game.add_item("fuel_can", cans)
+		Game.remove_item("fuel_can_empty", cans)
+		Game.add_item("fuel_can", cans, true)
 		left -= cans * 10.0
-		Game.notify("Park the RV next to the pump to fill it directly")
+		Game.notify("Filled the fuel can. Park the van next to the pump to fill it directly.")
+	else:
+		Game.notify("Hold an Empty Fuel Can to fill it, or park the van next to the pump")
+		return
 	Audio.play_at("splash", global_position, -10.0, 0.6)
 	Net.mark_removed(key, left)

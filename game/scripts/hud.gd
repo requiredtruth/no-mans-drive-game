@@ -203,7 +203,7 @@ func _refresh_hotbar() -> void:
 
 func _on_inventory() -> void:
 	_refresh_hotbar()
-	if modal and _modal_kind in ["inventory", "cooking", "rv", "crafting"]:
+	if modal and _modal_kind == "inventory":
 		_reopen()
 
 func _build_notes() -> void:
@@ -330,7 +330,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			open_pause()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("inventory"):
-		if modal and _modal_kind in ["inventory", "cooking", "crafting", "rv", "build", "sink"]:
+		if modal and _modal_kind in ["inventory", "build"]:
 			close_modal()
 		elif not modal and Game.player and not Game.player.dead:
 			open_inventory()
@@ -345,7 +345,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if Game.count("hammer") > 0:
 				open_build_menu()
 			else:
-				Game.notify("Craft a Builder's Hammer first (2 Wood, 1 Stone, 1 Rope)")
+				Game.notify("You need a Builder's Hammer (workbench: 2 Wood, 1 Stone, 1 Rope)")
 		get_viewport().set_input_as_handled()
 
 func flash_damage() -> void:
@@ -408,23 +408,23 @@ func close_modal() -> void:
 
 func _reopen() -> void:
 	match _modal_kind:
-		"inventory": open_inventory()
-		"crafting": open_crafting(_modal_ctx)
-		"cooking": open_cooking(_modal_ctx)
-		"rv": open_rv_menu(_modal_ctx)
+		"inventory": open_book()
 
-# ------------------------------------------------------------------ inventory & crafting
+# ------------------------------------------------------------------ notebook (no crafting menu)
 func open_inventory() -> void:
-	open_crafting("")
+	open_book()
 
-func open_crafting(station) -> void:
-	var st: String = station if station != null else ""
-	var body := _open_modal("inventory" if st == "" else "crafting", "Crafting" if st == "" else "Workbench", st, 1100.0)
+## A read-only notebook: what you carry and wear, what lies within reach, what the van still
+## needs, and the recipe book. Nothing is crafted here: lay ingredients on a workbench, set food
+## on a fire or stove, and carry modules to the van.
+func open_book() -> void:
+	var body := _open_modal("inventory", "Notebook", null, 1150.0)
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", 20)
 	body.add_child(cols)
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.custom_minimum_size = Vector2(440, 0)
 	cols.add_child(left)
 	left.add_child(UI.label("In your hands", 18, Color(1.0, 0.8, 0.5)))
 	var hands := HBoxContainer.new()
@@ -445,183 +445,54 @@ func open_crafting(station) -> void:
 			var l := UI.label(Data.item_name(k), 15)
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(l)
-			row.add_child(UI.button("Take off", func() -> void: Game.take_off(k), 100))
+			row.add_child(UI.button("Take off", func() -> void:
+				Game.take_off(k)
+				open_book(), 100))
 			left.add_child(row)
-	var near := {}
-	for it in Game.nearby_items():
-		near[it.id] = int(near.get(it.id, 0)) + int(it.amount)
-	left.add_child(UI.label("Within reach (%.0f m)" % Game.NEAR, 16, Color(1.0, 0.8, 0.5)))
-	if near.is_empty():
-		var none := UI.label("Nothing. Gather materials into a pile next to you or your workbench.", 14, Color(0.7, 0.7, 0.66))
-		none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		none.custom_minimum_size = Vector2(420, 0)
-		left.add_child(none)
-	else:
-		var grid := GridContainer.new()
-		grid.columns = 6
-		grid.add_theme_constant_override("h_separation", 4)
-		grid.add_theme_constant_override("v_separation", 4)
-		left.add_child(grid)
-		var keys := near.keys()
-		keys.sort()
-		for id in keys:
-			grid.add_child(UI.item_tile(id, int(near[id]), 60))
-	var help := UI.label("You carry only what fits in your hands%s. Recipes use what you hold plus everything lying within reach, so stockpile materials beside your workbench or campfire. Crafted items go into a free hand or are set down at your feet." % (" and backpack" if Game.worn.has("backpack") else " — craft a Backpack for 2 more slots"), 14, Color(0.75, 0.75, 0.7))
+	var rv = Game.rv
+	if rv and rv.has_method("missing_for_drive"):
+		left.add_child(UI.label("Your van", 18, Color(1.0, 0.8, 0.5)))
+		var need: Array = rv.missing_for_drive()
+		var vl := UI.label(("Ready to drive." if need.is_empty() else "Still needs to drive: " + ", ".join(need)) + "\nFuel %d/%d L · Water %d/%d L · Battery %d%% · Engine %d%% · Tires %d%% · Body %d%%" % [int(rv.fuel), int(rv.fuel_capacity()), int(rv.water), int(rv.water_capacity()), int(rv.battery), int(rv.parts["engine"]), int(rv.parts["tires"]), int(rv.parts["body"])], 14, Color(0.9, 0.88, 0.82))
+		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		left.add_child(vl)
+		var fitted := []
+		var empty := []
+		for slot in Data.VAN_SLOTS:
+			(fitted if rv.modules.has(slot) else empty).append(Data.VAN_SLOTS[slot]["name"])
+		var ml := UI.label("Fitted (%d): %s\nEmpty (%d): %s" % [fitted.size(), ", ".join(fitted) if not fitted.is_empty() else "nothing yet", empty.size(), ", ".join(empty)], 13, Color(0.78, 0.78, 0.72))
+		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		left.add_child(ml)
+	var help := UI.label("Carry a module to the van and press E to fit it; while you hold one, the spot it goes in glows green. G with empty hands takes a module back out. You carry only what fits in your hands%s." % (" and backpack" if Game.worn.has("backpack") else " (a Backpack adds 2 slots)"), 14, Color(0.75, 0.75, 0.7))
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help.custom_minimum_size = Vector2(420, 0)
 	left.add_child(help)
 	var right := VBoxContainer.new()
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cols.add_child(right)
-	right.add_child(UI.label("Recipes" + (" (workbench recipes unlocked)" if st == "workbench" else " — build a Workbench for advanced recipes"), 18, Color(1.0, 0.8, 0.5)))
+	right.add_child(UI.label("Workbench recipes", 18, Color(1.0, 0.8, 0.5)))
+	var how := UI.label("Set the ingredients on a workbench [G], look at the bench and press E. If more than one thing fits, R picks which.", 13, Color(0.75, 0.75, 0.7))
+	how.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	right.add_child(how)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(560, 430)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	right.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
 	for r in Data.RECIPES:
-		if r["station"] == "workbench" and st != "workbench":
-			continue
 		var row := HBoxContainer.new()
-		var can := Game.has_cost(r["cost"])
-		var l := UI.label("%s ×%d\n%s" % [Data.item_name(r["out"]), r["n"], Data.cost_text(r["cost"])], 15, Color(0.95, 0.93, 0.88) if can else Color(0.6, 0.6, 0.58))
+		row.add_theme_constant_override("separation", 8)
+		row.add_child(UI.item_tile(r["out"], int(r["n"]), 44))
+		var l := UI.label("%s%s  ←  %s" % [Data.item_name(r["out"]), (" ×%d" % r["n"]) if int(r["n"]) > 1 else "", Data.cost_text(r["cost"])], 14, Color(0.95, 0.93, 0.88))
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row.add_child(l)
-		var btn := UI.button("Craft", func() -> void:
-			if Game.pay(r["cost"]):
-				Game.add_item(r["out"], r["n"])
-				Audio.play("hammer", -4.0), 90)
-		btn.disabled = not can
-		row.add_child(btn)
-		right.add_child(row)
-
-# ------------------------------------------------------------------ cooking
-func open_cooking(fire) -> void:
-	var body := _open_modal("cooking", "Campfire" if fire else "RV Stove", fire, 760.0)
-	if fire:
-		var row := HBoxContainer.new()
-		row.add_child(UI.label("Fuel: %d min    " % int(float(fire.data.get("fuel", 0.0)) / 60.0), 18))
-		row.add_child(UI.button("Add wood (+3 min)", func() -> void:
-			fire.add_fuel()
-			_reopen()))
-		body.add_child(row)
-	elif Game.rv and Game.rv.battery < 1.0:
-		body.add_child(UI.label("The stove igniter needs battery power.", 18, Color(1, 0.6, 0.5)))
-		return
+		list.add_child(row)
+	list.add_child(UI.label("On a campfire grill or a lit stove", 16, Color(1.0, 0.8, 0.5)))
 	for r in Data.COOKING:
-		var row := HBoxContainer.new()
-		var can := Game.has_cost(r["cost"])
-		var l := UI.label("%s\n%s" % [Data.item_name(r["out"]), Data.cost_text(r["cost"])], 16, Color.WHITE if can else Color(0.6, 0.6, 0.6))
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(l)
-		var cook_one := UI.button("Cook", func() -> void:
-			if Game.pay(r["cost"]):
-				Game.add_item(r["out"], r["n"])
-				Audio.play("pickup"), 90)
-		cook_one.disabled = not can
-		row.add_child(cook_one)
-		var cook_all := UI.button("Cook all", func() -> void:
-			var n := 0
-			while Game.pay(r["cost"]) and n < 50:
-				n += 1
-			if n > 0:
-				Game.add_item(r["out"], r["n"] * n)
-				Audio.play("pickup"), 90)
-		cook_all.disabled = not can
-		row.add_child(cook_all)
-		body.add_child(row)
-
-# ------------------------------------------------------------------ RV
-func open_rv_menu(rv) -> void:
-	var body := _open_modal("rv", "%s Workshop" % rv.display_name(), rv, 1000.0)
-	body.add_child(UI.label("%s · Odometer %.1f km · Fuel %d/%d L%s · Battery charge %d%%" % [rv.display_name(), rv.odometer / 1000.0, int(rv.fuel), int(rv.fuel_capacity()), (" · Water %d/%d L" % [int(rv.water), int(rv.water_capacity())]) if rv.water_capacity() > 0.0 else "", int(rv.battery)], 16, Color(0.85, 0.85, 0.8)))
-	body.add_child(UI.label("Parts", 20, Color(1.0, 0.8, 0.5)))
-	for part in Data.RV_PARTS:
-		var spec: Dictionary = Data.RV_PARTS[part]
-		var row := HBoxContainer.new()
-		var l := UI.label(spec["name"], 17)
-		l.custom_minimum_size = Vector2(170, 0)
-		row.add_child(l)
-		var b := UI.bar(Color("6ab04c") if rv.parts[part] > 50 else (Color("e0a030") if rv.parts[part] > 20 else Color("d04030")))
-		b.value = rv.parts[part]
-		b.custom_minimum_size = Vector2(200, 16)
-		row.add_child(b)
-		var state := ""
-		if part == "battery" and rv.missing.has("battery"):
-			state = "  NO BATTERY  "
-		elif part == "tires":
-			var gone := 0
-			for k in rv.missing:
-				if str(k).begins_with("wheel"):
-					gone += 1
-			state = ("  %d%% · %d wheel(s) bare  " % [int(rv.parts[part]), gone]) if gone > 0 else ""
-		row.add_child(UI.label(state if state != "" else "  %d%%  " % int(rv.parts[part]), 16))
-		var hint := UI.label(spec["where"], 14, Color(0.78, 0.78, 0.72))
-		hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		row.add_child(hint)
-		body.add_child(row)
-	body.add_child(UI.label("Upgrades (toolkit and materials in hand or within reach)", 20, Color(1.0, 0.8, 0.5)))
-	for up in rv.upgrade_list():
-		var spec: Dictionary = Data.RV_UPGRADES[up]
-		var row := HBoxContainer.new()
-		var have: bool = rv.upgrades.has(up)
-		var l := UI.label(spec["name"] + ("  ✔ installed" if have else "\n" + Data.cost_text(spec["cost"])), 16, Color(0.6, 1.0, 0.6) if have else Color.WHITE)
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(l)
-		if not have:
-			var ib := UI.button("Install", func() -> void: rv.install(up), 100)
-			ib.disabled = not Game.has_cost(spec["cost"])
-			row.add_child(ib)
-		body.add_child(row)
-	body.add_child(UI.label("Paint job", 20, Color(1.0, 0.8, 0.5)))
-	var prow := HBoxContainer.new()
-	var palette: Array = rv.paint_palette()
-	for i in range(palette.size()):
-		var b := Button.new()
-		b.custom_minimum_size = Vector2(56, 44)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = palette[i]
-		sb.set_corner_radius_all(6)
-		sb.border_color = Color.WHITE if rv.paint == i else Color(0, 0, 0, 0.5)
-		sb.set_border_width_all(3)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_stylebox_override("hover", sb)
-		var idx := i
-		b.pressed.connect(func() -> void:
-			rv.set_paint(idx)
-			_reopen())
-		prow.add_child(b)
-	body.add_child(prow)
-
-func open_sink(rv) -> void:
-	var body := _open_modal("sink", "Sink & Water Tank", rv, 640.0)
-	body.add_child(UI.label("Tank: %d / %d L" % [int(rv.water), int(rv.water_capacity())], 18))
-	var refresh := func() -> void: open_sink(rv)
-	body.add_child(UI.button("Drink from tap (1 L)", func() -> void:
-		if rv.water >= 1.0:
-			rv.water -= 1.0
-			Game.stats["water"] = minf(Game.stats["water"] + 30.0, 100.0)
-			Audio.play("eat")
-		else:
-			Game.notify("The tank is empty")
-		refresh.call()))
-	body.add_child(UI.button("Fill a bottle (1 L → Clean Water)", func() -> void:
-		if rv.water >= 1.0:
-			rv.water -= 1.0
-			Game.add_item("water_clean", 1)
-		else:
-			Game.notify("The tank is empty")
-		refresh.call()))
-	body.add_child(UI.button("Pour clean water into tank (+1 L)", func() -> void:
-		if rv.water <= rv.water_capacity() - 1.0 and Game.remove_item("water_clean", 1):
-			rv.water += 1.0
-		refresh.call()))
-	body.add_child(UI.button("Filter dirty water into tank (+1 L)", func() -> void:
-		if rv.water <= rv.water_capacity() - 1.0 and Game.remove_item("water_dirty", 1):
-			rv.water += 1.0
-		refresh.call()))
-	body.add_child(UI.button("Wash up (+5 warmth, +5 energy)", func() -> void:
-		if rv.water >= 2.0:
-			rv.water -= 2.0
-			Game.stats["energy"] = minf(Game.stats["energy"] + 5.0, 100.0)
-			Game.stats["warmth"] = minf(Game.stats["warmth"] + 5.0, 100.0)
-		refresh.call()))
+		var l := UI.label("%s  ←  %s" % [Data.item_name(r["out"]), Data.cost_text(r["cost"])], 14, Color(0.9, 0.88, 0.82))
+		list.add_child(l)
 
 # ------------------------------------------------------------------ building
 func open_build_menu() -> void:
@@ -703,19 +574,35 @@ func open_cheats() -> void:
 	add.call("God mode " + ("OFF" if Game.god_mode else "ON"), func() -> void:
 		Game.god_mode = not Game.god_mode
 		open_cheats())
-	add.call("Repair RV fully", func() -> void:
+	add.call("Repair van fully", func() -> void:
 		var rv = Game.rv
 		for k in rv.parts:
 			rv.parts[k] = 100.0
 		rv.missing = {}
 		rv.battery = 100.0
 		rv._apply_visuals())
+	add.call("Fit every van module", func() -> void:
+		for slot in Data_.VAN_SLOTS:
+			Game.rv.modules[slot] = true
+		Game.rv.missing = {}
+		Game.rv.parts["engine"] = maxf(Game.rv.parts["engine"], 60.0)
+		Game.rv.battery = maxf(Game.rv.battery, 80.0)
+		Game.rv.parts["battery"] = 100.0
+		Game.rv._apply_visuals())
+	add.call("Van parts kit here", func() -> void:
+		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 2.0 + Vector3(0, 0.8, 0)
+		var i := 0
+		for id in ["wire", "bolts", "pipe", "foam", "glass", "scrap", "wood", "cloth"]:
+			Game.drop_pile(id, 12, base + Vector3((i % 4) * 0.7 - 1.0, 0, (i / 4) * 0.7))
+			i += 1)
 	add.call("Fill fuel & water", func() -> void:
 		Game.rv.fuel = Game.rv.fuel_capacity()
 		Game.rv.water = Game.rv.water_capacity())
-	add.call("Install all RV upgrades", func() -> void:
-		for u in Data_.RV_UPGRADES:
-			Game.rv.upgrades[u] = true
+	add.call("Fit all van upgrades", func() -> void:
+		for u in ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank"]:
+			Game.rv.modules[u] = true
+		for i in range(4):
+			Game.rv.wheel_kind["wheel%d" % i] = "offroad_tire"
 		Game.rv._apply_visuals())
 	add.call("Skip 3 hours", func() -> void:
 		Game.time_of_day = fmod(Game.time_of_day + 3.0, 24.0))
@@ -740,7 +627,7 @@ func open_cheats() -> void:
 				road.y = gen.height(road.x, road.z) + 1.0
 				Game.player.teleport(road)
 				break)
-	add.call("Bring RV to me", func() -> void:
+	add.call("Bring the van to me", func() -> void:
 		var p: Vector3 = Game.player.global_position + Game.player.global_transform.basis.x * 5.0
 		p.y = Game.world.gen.height(p.x, p.z) + 1.0
 		Game.rv.global_position = p
@@ -756,28 +643,29 @@ func open_settings() -> void:
 func show_death(cause: String) -> void:
 	var body := _open_modal("death", "You died", null, 560.0)
 	body.add_child(UI.label("Cause: %s" % cause.capitalize(), 20, Color(1, 0.6, 0.5)))
-	body.add_child(UI.label("You will wake at your last bed or tent, or beside the RV.\nPerishable food is lost.", 16))
+	body.add_child(UI.label("You will wake at your last bed or tent, or beside the van.\nPerishable food is lost.", 16))
 	body.add_child(UI.button("Respawn", func() -> void:
 		Game.player.respawn()
 		close_modal()))
 
 func show_intro() -> void:
 	var body := _open_modal("intro", "The road goes on", null, 900.0)
-	body.add_child(UI.label("""The world went quiet. You have an old motorhome, a few tools and an endless highway.
+	body.add_child(UI.label("""The world went quiet. All you have is a stripped, rusty van shell on an empty lot,
+a pocket knife and an endless highway.
 
-• Keep your health, food, water, energy and warmth up. Nights are cold; tundra is colder.
-• Search gas stations, houses, farms and wrecks along the road for fuel, food and parts.
-• You carry only what fits in your two hands (a backpack adds two slots). Look at an item and
-  press E to pick it up, G to place it exactly where the preview shows, Q to throw it.
-  Things you set down inside the RV stay put while you drive. Your supplies are in the RV.
-• Replace worn parts by hand: pull the old battery or tire off with an empty hand, carry the
-  new one over and fit it. Weld scrap and fit engine parts at the open hood (toolkit nearby).
-• Hunt deer, boar, turkey and rabbits. Wolves and bears will hunt you back.
-• Build a camp: campfires for heat and cooking, tents and beds to sleep and save,
-  planters for crops, and full houses from foundations, walls, doors, windows and roofs.
-• Grow tomatoes, potatoes and coffee in the RV's plant pots or in garden planters.
+• The van has no engine, battery, wheels, seats, steering wheel or door. The parts are lying
+  around the lot. Pick one up (E), carry it to the van and press E where it goes; while you
+  hold a part, its spot glows green. G with empty hands takes a part back out.
+• Look at the hood with empty hands to see what the van still needs before it will drive.
+• Everything else (bed, kitchen, sink, fridge, stove, lights, radio, solar panel...) is found
+  on the road or built at a workbench: lay the ingredients on the bench and press E.
+• Food cooks when you set it on a burning campfire or a lit stove. Drink a bottle and you
+  keep the empty bottle: refill it at a sink, well, lake or rain collector.
+• You carry only what fits in your two hands (a backpack adds two). G places things exactly
+  where the preview shows; Q throws. Things set down in the van stay put while you drive.
+• Keep your health, food, water, energy and warmth up. Hunt, build camps and houses, grow food.
 
-Hold the Builder's Hammer and press B (or the BUILD button) to start building.""", 16))
+Tab opens your notebook with the van checklist and the recipe book.""", 16))
 	body.add_child(UI.button("Hit the road", close_modal))
 
 func fade_sleep(hours: float) -> void:

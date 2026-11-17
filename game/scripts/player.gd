@@ -117,8 +117,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		place_or_grab()
 	if event.is_action_pressed("drop") and not driving:
 		throw_held()
-	if event.is_action_pressed("rotate") and not driving and not builder.active and Game.equipped() != "":
-		_place_rot = wrapf(_place_rot + PI * 0.25, 0.0, TAU)
+	if event.is_action_pressed("rotate") and not driving and not builder.active:
+		if look_target and look_target.has_method("cycle_recipe") and look_target.get("type") == "workbench":
+			look_target.cycle_recipe()
+		elif Game.equipped() != "":
+			_place_rot = wrapf(_place_rot + PI * 0.25, 0.0, TAU)
 	if event.is_action_pressed("flashlight"):
 		toggle_flashlight()
 	if driving:
@@ -341,6 +344,12 @@ func place_or_grab() -> void:
 	var t := look_target as Node
 	if t.is_in_group("world_item"):
 		t.interact(self)
+		return
+	# take a fitted module back out of the van
+	if t.get_script() == RvPart and t.rv.has_method("slot_for"):
+		var slot: String = t.rv.slot_for(t)
+		if slot != "":
+			t.rv.remove_module(slot)
 		return
 	if t.get_script() == Builder.Structure and t.is_in_group("placeable"):
 		if Game.space_for(t.type) <= 0:
@@ -665,9 +674,9 @@ func use_primary() -> void:
 			elif it.get("kind", "") == "wear":
 				Game.wear(id)
 				_cooldown = 0.5
-			elif it.get("kind", "") == "fuel" and Game.rv.global_position.distance_to(global_position) < 6.0:
-				Game.rv.do_action("fuel", self)
-				_cooldown = 0.8
+			elif id == "bottle_empty":
+				_fill_bottle()
+				_cooldown = 0.6
 			else:
 				_cooldown = 0.3
 
@@ -798,6 +807,20 @@ func _end_fishing() -> void:
 	_fish_state = ""
 	_bobber.visible = false
 
+## Use an empty bottle while standing at a lake or river: it fills with dirty water.
+func _fill_bottle() -> void:
+	var gen = Game.world.gen
+	var fwd := -camera.global_transform.basis.z
+	for k in range(0, 5):
+		var t: Vector3 = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * float(k) * 0.8
+		if gen.is_water(t.x, t.z, 0.2):
+			Game.remove_item("bottle_empty", 1)
+			Game.add_item("water_dirty", 1, true)
+			Audio.play_at("splash", t, -6.0, 1.2)
+			Game.notify("Filled the bottle with lake water. Boil it on a fire or filter it into the van's tank.")
+			return
+	Game.notify("Stand at the water's edge to fill the bottle (or use a sink, well or rain collector)")
+
 # ------------------------------------------------------------------ survival
 func temperature() -> float:
 	return Game.world.temperature_at(global_position)
@@ -808,7 +831,7 @@ func effective_temp() -> float:
 	t += near_fire
 	var rv = Game.rv
 	if rv and (driving or rv.is_inside(global_position)):
-		t += 8.0
+		t += rv.shelter_bonus() if rv.has_method("shelter_bonus") else 8.0
 		if rv.heater_on():
 			t += 14.0
 	elif Game.world.is_sheltered(global_position):

@@ -369,19 +369,18 @@ func consume(id: String) -> bool:
 	var it: Dictionary = Data.ITEMS.get(id, {})
 	if it.is_empty() or not (it["kind"] in ["food", "medical"]):
 		return false
+	var in_hand := carried(id) > 0
 	if not remove_item(id, 1):
 		return false
+	if in_hand and Data.LEAVES.has(id):
+		add_item(Data.LEAVES[id], 1, true)
 	stats["food"] = clamp(stats["food"] + it.get("food", 0), 0, 100)
 	stats["water"] = clamp(stats["water"] + it.get("water", 0), 0, 100)
 	stats["health"] = clamp(stats["health"] + it.get("health", 0), 0, 100)
 	stats["energy"] = clamp(stats["energy"] + it.get("energy", 0), 0, 100)
 	stats["warmth"] = clamp(stats["warmth"] + it.get("warmth", 0), 0, 100)
-	if id in ["tomato", "berries", "water_clean", "water_dirty", "coffee", "soda", "canned_food"]:
-		pass
 	Audio.play("eat")
-	notify("Consumed %s" % Data.item_name(id))
-	if id == "canned_food" or id == "stew":
-		pass
+	notify("%s %s" % ["Drank" if id in ["water_clean", "water_dirty", "coffee", "soda"] else "Ate", Data.item_name(id)] if it["kind"] == "food" else "Used %s" % Data.item_name(id))
 	return true
 
 # ---------------------------------------------------------------- new / save / load
@@ -391,8 +390,8 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	time_of_day = 8.0
 	day = 1
 	weather = "clear"
-	# A rough start: a pocket knife in hand and a flashlight clipped on. The few supplies you
-	# own sit inside the RV (see world.gd); everything else is scavenged.
+	# A rough start: a pocket knife in hand and a flashlight clipped on. The stripped van and the
+	# parts to get it going lie around the starting lot (see world.gd); the rest is scavenged.
 	worn = {"flashlight": true}
 	slots = [{"id": "knife", "n": 1}, {"id": "", "n": 0}]
 	selected_slot = 0

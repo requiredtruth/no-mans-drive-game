@@ -202,16 +202,18 @@ static func _option(parent: Container, text: String, key: String, values: Array)
 
 const CONTROLS_TEXT := """KEYBOARD & MOUSE
 WASD move · Mouse look · Shift sprint · Ctrl crouch (sneak up on game) · Space jump / handbrake
-E pick up / interact / enter / exit · G place held item (or pick up furniture) · Q throw
-Left click use / eat / wear · Right click aim / demolish (build) · R rotate what you place
-1-4 or wheel switch hands · Tab crafting · B build menu
+E pick up / interact / fit the part you hold / use a workbench · G place held item, or with
+empty hands take a fitted van part back out (or pick up furniture) · Q throw
+Left click use / eat / drink / wear / fill a bottle at water · Right click aim / demolish (build)
+R rotate what you place, or pick a different recipe at a workbench
+1-4 or wheel switch hands · Tab notebook (van checklist, recipe book) · B build menu
 F flashlight · L headlights · C driving camera · Esc pause
 
 CONTROLLER
 Left stick move · Right stick look · RT use · LT aim / demolish · A jump · X interact
-B place · Y crafting · LB/RB switch hands · D-pad: up rotate, down build menu, left lights, right flashlight
+B place · Y notebook · LB/RB switch hands · D-pad: up rotate, down build menu, left lights, right flashlight
 Back camera · Start pause
 
 TOUCH
 Left joystick move / drive · Drag right side to look · Buttons for use, aim, interact, jump,
-sprint, place, throw, crafting, build, rotate, lights and camera. Tap a hand slot to switch."""
+sprint, place, throw, notebook (BOOK), build, rotate, lights and camera. Tap a hand slot to switch."""

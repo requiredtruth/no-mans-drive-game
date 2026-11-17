@@ -51,7 +51,7 @@ func _ready() -> void:
 		_btn("GAS", "move_forward", Color(0.35, 0.75, 0.35), 1.25),
 		_btn("REV", "move_back", Color(0.8, 0.45, 0.25), 1.0),
 	]
-	var bag := _btn("CRAFT", "inventory", Color(0.45, 0.45, 0.45), 0.75)
+	var bag := _btn("BOOK", "inventory", Color(0.45, 0.45, 0.45), 0.75)
 	var pause := _btn("II", "pause", Color(0.3, 0.3, 0.3), 0.6)
 	_foot_buttons.append(bag)
 	_drive_buttons.append(pause)

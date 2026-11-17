@@ -631,7 +631,7 @@ func prompt_for(action: String) -> String:
 	match action:
 		"drive": return "[E] Drive %s" % spec["name"] if driver == 0 else "Occupied"
 		"passenger": return "[E] Ride as passenger"
-		"hood": return "[E] Open hood — %s condition, upgrades & paint" % spec["name"]
+		"hood": return Mounts.car_hood_prompt(self)
 		"fuel": return "[E] Refuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
 	return ""
 
@@ -646,44 +646,17 @@ func do_action(action: String, player: Node) -> void:
 		"passenger":
 			player.enter_vehicle(self, false)
 		"hood":
-			Game.world.hud.open_rv_menu(self)
+			Mounts.car_hood(self)
 		"fuel":
-			if Game.count("fuel_can") <= 0:
-				Game.notify("You need a fuel can")
+			if Game.equipped() != "fuel_can":
+				Game.notify("Carry a full Fuel Can here to pour it in")
 			elif fuel > fuel_capacity() - 1.0:
 				Game.notify("The tank is full")
 			else:
 				Game.remove_item("fuel_can", 1)
+				Game.add_item("fuel_can_empty", 1, true)
 				fuel = minf(fuel + 10.0, fuel_capacity())
 				Audio.play_at("splash", global_position, -8.0, 0.7)
-
-func repair(part: String) -> void:
-	var s: Dictionary = Data.RV_PARTS[part]
-	if s["needs_toolkit"] and Game.count("toolkit") <= 0:
-		Game.notify("You need a toolkit")
-		return
-	if not Game.pay(s["repair"]):
-		Game.notify("Missing: %s" % Data.cost_text(s["repair"]))
-		return
-	parts[part] = minf(parts[part] + float(s["amount"]), 100.0)
-	if part == "battery":
-		battery = 100.0
-	Audio.play("hammer")
-	_apply_visuals()
-
-func install(upgrade: String) -> void:
-	if upgrades.has(upgrade):
-		return
-	var s: Dictionary = Data.RV_UPGRADES[upgrade]
-	if Game.count("toolkit") <= 0:
-		Game.notify("You need a toolkit")
-		return
-	if not Game.pay(s["cost"]):
-		Game.notify("Missing: %s" % Data.cost_text(s["cost"]))
-		return
-	upgrades[upgrade] = true
-	Audio.play("hammer")
-	_apply_visuals()
 
 func set_paint(i: int) -> void:
 	paint = i

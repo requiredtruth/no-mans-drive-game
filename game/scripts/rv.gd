@@ -1,5 +1,8 @@
 extends VehicleBody3D
-## The player's motorhome: drivable, enterable, repairable and upgradeable.
+## The player's van. A new game starts with a stripped, rusty shell: no engine, battery, wheels,
+## seats, steering wheel, door or furniture. Every part is a physical module: carry it to its
+## spot on the van and press [E] to fit it, or [G] with empty hands to take it out again.
+## While you hold a module, the empty spot it fits shows as a green outline.
 
 const Data = preload("res://scripts/data.gd")
 const Structure = preload("res://scripts/structure.gd")
@@ -13,14 +16,19 @@ const ROOF_Y := 3.25
 const DOOR_H := 2.05
 const REAR_Z := -3.4
 const FRONT_Z := 3.4
+const CAB_Z := FRONT_Z - 0.55 # where the full-height box ends and the sloped windshield begins
 const DOOR_Z0 := 0.55
 const DOOR_Z1 := 1.45
+## Slots that become part of the van for good once fitted.
+const FIXED := ["floor", "walls"]
 
 var fuel := 18.0
 var water := 6.0
 var battery := 45.0
 var parts := {"engine": 38.0, "tires": 52.0, "battery": 48.0, "body": 55.0}
 var upgrades := {}
+var modules := {} # fitted module slots (see Data.VAN_SLOTS)
+var wheel_kind := {} # "wheel0".."wheel3" -> "offroad_tire" when an off-road tire is fitted
 var paint := 0
 var fridge := {}
 var cabinet := {}
@@ -29,9 +37,12 @@ var pots := [{}, {}]
 var interior_lights := false
 var headlights := false
 var engine_on := false
+var stove_on := false
+var radio_on := false
+var radio_station := 0
 var driver := 0 # peer id of the driver (0 = nobody)
 var odometer := 0.0
-var attached: Array = [] # furniture placed inside / on top of the RV: {type, pos(local), rot(local), data}
+var attached: Array = [] # furniture placed inside / on top of the van: {type, pos(local), rot(local), data}
 
 var wheels: Array[VehicleWheel3D] = []
 var cam_fp: Camera3D
@@ -41,11 +52,13 @@ var fp_yaw := 0.0
 var fp_pitch := 0.0
 var tp_yaw := 0.0
 var _paint_mats: Array[StandardMaterial3D] = []
+var _body_mat: StandardMaterial3D
 var _head_spots: Array[SpotLight3D] = []
 var _head_mats: Array[StandardMaterial3D] = []
 var _tail_mat: StandardMaterial3D
 var _interior_light: OmniLight3D
 var _engine_audio: AudioStreamPlayer3D
+var _radio_audio: AudioStreamPlayer3D
 var _door_panel: Node3D
 var _prev_vel := Vector3.ZERO
 var _throttle := 0.0
@@ -54,6 +67,17 @@ var _remote_has := false
 var _solar: Node3D
 var _bullbar: Node3D
 var _steer := 0.0
+var _flames: Array[MeshInstance3D] = []
+
+# module bookkeeping
+var _grp := ""
+var _mod_vis := {} # slot -> Node3D holding its visuals
+var _mod_shapes := {} # slot -> Array of CollisionShape3D
+var _mod_parts := {} # slot -> Array of interaction hotspots
+var _mod_extra := {} # slot -> Array of other nodes to show/hide (pots)
+var _mounts := {} # slot -> mount hotspot
+var _ghosts := {} # slot -> translucent preview
+var _ghost_mat: StandardMaterial3D
 
 func _ready() -> void:
 	mass = 3200.0
@@ -69,6 +93,7 @@ func _ready() -> void:
 	_build_wheels()
 	_build_exterior()
 	_build_interior()
+	_build_mounts()
 	_build_cameras()
 	_engine_audio = Audio.looping_3d("engine_loop", self, -6.0, "Vehicle")
 	_engine_audio.position = Vector3(0, 1.0, 3.5)
@@ -79,22 +104,66 @@ func _ready() -> void:
 	add_child(cargo)
 	apply_state(Game.rv_state)
 	add_to_group("rv")
+	Game.hotbar_changed.connect(_update_ghosts)
 
-# ------------------------------------------------------------------ build
-func _shape(pos: Vector3, size: Vector3) -> void:
+# ------------------------------------------------------------------ build helpers
+func _shape(pos: Vector3, size: Vector3, rot := Vector3.ZERO) -> CollisionShape3D:
 	var cs := CollisionShape3D.new()
 	var sh := BoxShape3D.new()
 	sh.size = size
 	cs.shape = sh
 	cs.position = pos
+	cs.rotation = rot
 	add_child(cs)
+	if _grp != "":
+		_mod_shapes[_grp].append(cs)
+	return cs
 
+func _part(pos: Vector3, size: Vector3, action: String) -> StaticBody3D:
+	var b := StaticBody3D.new()
+	b.set_script(RvPart)
+	b.rv = self
+	b.action = action
+	b.collision_layer = 2
+	b.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = size
+	cs.shape = sh
+	b.add_child(cs)
+	b.position = pos
+	add_child(b)
+	if _grp != "":
+		b.set_meta("slot", _grp)
+		_mod_parts[_grp].append(b)
+	return b
+
+## Start building the visuals of one module slot under parent.
+func _begin(slot: String, parent: Node3D) -> Node3D:
+	var n := Node3D.new()
+	n.name = "Mod_" + slot
+	parent.add_child(n)
+	_grp = slot
+	_mod_vis[slot] = n
+	_mod_shapes[slot] = []
+	_mod_parts[slot] = []
+	_mod_extra[slot] = []
+	return n
+
+func _end() -> void:
+	_grp = ""
+
+func _mount(slot: String, pos: Vector3, size: Vector3) -> void:
+	var b := _part(pos, size, "mount:" + slot)
+	_mounts[slot] = b
+
+# ------------------------------------------------------------------ exterior
 func _build_collision() -> void:
 	var L := FRONT_Z - REAR_Z
 	var mid := (FRONT_Z + REAR_Z) * 0.5
 	var h := ROOF_Y - FLOOR_Y
 	_shape(Vector3(0, FLOOR_Y - 0.15, mid), Vector3(W, 0.3, L))
-	_shape(Vector3(0, ROOF_Y + 0.08, mid), Vector3(W, 0.16, L))
+	_shape(Vector3(0, ROOF_Y + 0.08, (CAB_Z + REAR_Z) * 0.5), Vector3(W, 0.16, CAB_Z - REAR_Z))
 	_shape(Vector3(-W * 0.5, FLOOR_Y + h * 0.5, mid), Vector3(0.12, h, L))
 	var rear_len := DOOR_Z0 - REAR_Z
 	_shape(Vector3(W * 0.5, FLOOR_Y + h * 0.5, REAR_Z + rear_len * 0.5), Vector3(0.12, h, rear_len))
@@ -102,10 +171,9 @@ func _build_collision() -> void:
 	_shape(Vector3(W * 0.5, FLOOR_Y + h * 0.5, DOOR_Z1 + front_len * 0.5), Vector3(0.12, h, front_len))
 	_shape(Vector3(W * 0.5, FLOOR_Y + DOOR_H + (h - DOOR_H) * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.12, h - DOOR_H, DOOR_Z1 - DOOR_Z0))
 	_shape(Vector3(0, FLOOR_Y + h * 0.5, REAR_Z), Vector3(W, h, 0.12))
-	_shape(Vector3(0, FLOOR_Y + h * 0.5, FRONT_Z + 0.05), Vector3(W, h, 0.12))
-	_shape(Vector3(0, 1.15, FRONT_Z + 0.6), Vector3(W - 0.1, 0.9, 1.2)) # hood/engine bay
-	# door slab when closed
-	_shape(Vector3(W * 0.5, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.1, DOOR_H, DOOR_Z1 - DOOR_Z0))
+	_shape(Vector3(0, 1.45, FRONT_Z + 0.45), Vector3(W, 0.9, 0.12)) # firewall below the windshield
+	_shape(Vector3(0, 2.33, FRONT_Z + 0.08), Vector3(W, 1.4, 0.1), Vector3(-0.61, 0, 0)) # windshield
+	_shape(Vector3(0, 1.15, FRONT_Z + 0.85), Vector3(W - 0.1, 0.9, 0.9)) # hood/engine bay
 
 func _build_wheels() -> void:
 	for spec in [[-1.08, 2.55, true], [1.08, 2.55, true], [-1.08, -2.35, false], [1.08, -2.35, false]]:
@@ -131,7 +199,13 @@ func _build_wheels() -> void:
 		tire.mesh = Items.mesh("tire")
 		tire.position.y = -0.12
 		holder.add_child(tire)
+		var knobby := MeshInstance3D.new()
+		knobby.mesh = Items.mesh("offroad_tire")
+		knobby.position.y = -0.12
+		knobby.visible = false
+		holder.add_child(knobby)
 		w.set_meta("tire_mesh", tire)
+		w.set_meta("knobby_mesh", knobby)
 		w.set_meta("hub_mesh", Mounts.hub(holder))
 		_part(Vector3(spec[0] + signf(spec[0]) * 0.12, 0.62, spec[1]), Vector3(0.4, 1.0, 1.1), "wheel%d" % wheels.size())
 		wheels.append(w)
@@ -141,55 +215,70 @@ func _paint_mat() -> StandardMaterial3D:
 	_paint_mats.append(m)
 	return m
 
+## A high-roof panel van: sloped hood, raked windshield, flat sides and a tall box.
 func _build_exterior() -> void:
-	var white := Lib.mat("rv_paint", Color.WHITE, 0.35, false, 0.55)
+	_body_mat = Lib.mat("rv_paint", Color.WHITE, 0.35, false, 0.55).duplicate()
+	var white := _body_mat
 	var stripe := _paint_mat()
 	var dark := Lib.color_mat(Color(0.12, 0.12, 0.13), 0.6)
 	var chrome := Lib.color_mat(Color(0.8, 0.8, 0.8), 0.2, 0.9)
-	var L := FRONT_Z - REAR_Z
-	var mid := (FRONT_Z + REAR_Z) * 0.5
-	var h := ROOF_Y - FLOOR_Y
 	var vis := Node3D.new()
 	vis.name = "Exterior"
 	add_child(vis)
-	# Smooth Class-C motorhome shell: over-cab nose, sloped hood, wheel arches, rounded edges.
 	var body := Shapes.st()
 	var glass := Shapes.st()
 	var trim := Shapes.st()
 	var deco := Shapes.st()
 	var o := Shapes.arched_bottom(REAR_Z - 0.05, FRONT_Z + 1.25, 0.72, [[-2.35, 0.6], [2.55, 0.6]])
-	for pt in [Vector2(FRONT_Z + 1.32, 1.0), Vector2(FRONT_Z + 1.24, 1.6), Vector2(FRONT_Z + 0.22, 1.72), Vector2(FRONT_Z - 0.12, 2.5),
-			Vector2(FRONT_Z + 0.45, 2.58), Vector2(FRONT_Z + 0.62, 2.88), Vector2(FRONT_Z + 0.5, 3.25), Vector2(FRONT_Z + 0.05, ROOF_Y + 0.2),
-			Vector2(REAR_Z + 0.25, ROOF_Y + 0.2), Vector2(REAR_Z - 0.05, ROOF_Y - 0.1)]:
+	for pt in [Vector2(FRONT_Z + 1.32, 1.0), Vector2(FRONT_Z + 1.3, 1.45), Vector2(FRONT_Z + 1.12, 1.62), Vector2(FRONT_Z + 0.5, 1.76),
+			Vector2(FRONT_Z - 0.3, 2.9), Vector2(FRONT_Z - 0.55, ROOF_Y + 0.12), Vector2(FRONT_Z - 0.9, ROOF_Y + 0.2),
+			Vector2(REAR_Z + 0.2, ROOF_Y + 0.2), Vector2(REAR_Z - 0.05, ROOF_Y - 0.1)]:
 		o.append(pt)
-	var ws_edge := o.size() - 8
+	var ws_edge := o.size() - 6
 	Shapes.extrude(body, glass, o, W + 0.06, 0.16, [ws_edge])
 	var xo := W * 0.5 + 0.035
 	for side in [-1.0, 1.0]:
-		var wins: Array = [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.35, 3.25, 1.85, 2.5]] if side < 0.0 else [[-1.1, 0.1, 1.85, 2.55], [-3.1, -2.2, 2.2, 2.6], [2.35, 3.25, 1.85, 2.5]]
+		var wins: Array = [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.25, 2.8, 1.85, 2.55], [2.95, 3.55, 1.95, 2.45]] if side < 0.0 else [[-1.1, 0.1, 1.85, 2.55], [-3.1, -2.2, 2.2, 2.6], [2.25, 2.8, 1.85, 2.55], [2.95, 3.55, 1.95, 2.45]]
 		for wn in wins:
 			var poly := PackedVector2Array([Vector2(wn[0], wn[2]), Vector2(wn[1], wn[2]), Vector2(wn[1], wn[3]), Vector2(wn[0], wn[3])])
 			Shapes.side_panel(trim, Shapes.shrink(poly, -0.05), side * (xo + 0.002), side)
 			Shapes.side_panel(glass, poly, side * (xo + 0.006), side)
-		# swoosh decals in the customizable paint colour
-		Shapes.side_panel(deco, PackedVector2Array([Vector2(REAR_Z, 1.15), Vector2(FRONT_Z + 1.2, 1.15), Vector2(FRONT_Z + 1.2, 1.3), Vector2(REAR_Z, 1.3)]), side * (xo + 0.003), side)
-		Shapes.side_panel(deco, PackedVector2Array([Vector2(REAR_Z, 1.38), Vector2(-0.5, 1.38), Vector2(1.5, 1.62), Vector2(FRONT_Z + 0.6, 1.62), Vector2(FRONT_Z + 0.6, 1.68), Vector2(1.5, 1.68), Vector2(-0.5, 1.44), Vector2(REAR_Z, 1.44)]), side * (xo + 0.003), side)
+		# a single pinstripe in the paint colour, plus the rubbing strip
+		Shapes.side_panel(deco, PackedVector2Array([Vector2(REAR_Z, 1.32), Vector2(FRONT_Z + 1.15, 1.32), Vector2(FRONT_Z + 1.15, 1.42), Vector2(REAR_Z, 1.42)]), side * (xo + 0.003), side)
 		Shapes.side_panel(trim, PackedVector2Array([Vector2(REAR_Z, 0.72), Vector2(FRONT_Z + 1.25, 0.72), Vector2(FRONT_Z + 1.25, 0.82), Vector2(REAR_Z, 0.82)]), side * (xo + 0.002), side)
 	var shell := MeshInstance3D.new()
 	shell.mesh = Shapes.commit([[body, white], [glass, Lib.glass_mat()], [trim, Lib.mat("rubber", Color(0.5, 0.5, 0.5), 2.0, false, 0.8)], [deco, stripe]])
 	vis.add_child(shell)
-	# inner face of the entry door (so the closed door isn't see-through from inside)
-	Lib.box(vis, Vector3(W * 0.5 - 0.05, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.03, DOOR_H, DOOR_Z1 - DOOR_Z0), Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8))
-	Lib.box(vis, Vector3(0, 1.2, FRONT_Z + 1.26), Vector3(1.3, 0.45, 0.04), dark)
-	for k in range(5):
-		Lib.box(vis, Vector3(0, 1.02 + k * 0.09, FRONT_Z + 1.28), Vector3(1.25, 0.025, 0.02), chrome)
-	Lib.box(vis, Vector3(0, 0.75, FRONT_Z + 1.3), Vector3(W + 0.1, 0.22, 0.16), chrome)
-	Lib.box(vis, Vector3(0, 0.75, REAR_Z - 0.12), Vector3(W + 0.1, 0.22, 0.16), chrome)
-	# headlights + taillights
-	for x in [-0.85, 0.85]:
+	Lib.box(vis, Vector3(0, 1.22, FRONT_Z + 1.3), Vector3(1.1, 0.32, 0.04), dark)
+	for k in range(4):
+		Lib.box(vis, Vector3(0, 1.1 + k * 0.08, FRONT_Z + 1.32), Vector3(1.05, 0.025, 0.02), chrome)
+	Lib.box(vis, Vector3(0, 0.78, FRONT_Z + 1.32), Vector3(W + 0.1, 0.24, 0.16), dark)
+	Lib.box(vis, Vector3(0, 0.75, REAR_Z - 0.12), Vector3(W + 0.1, 0.22, 0.16), dark)
+	# rear barn-door seams and handles
+	Lib.box(vis, Vector3(0, 2.0, REAR_Z - 0.085), Vector3(0.015, 2.2, 0.01), dark)
+	Lib.box(vis, Vector3(0.12, 1.6, REAR_Z - 0.1), Vector3(0.16, 0.04, 0.03), chrome)
+	# taillights
+	_tail_mat = Lib.color_mat(Color(0.5, 0.05, 0.05), 0.3, 0.0, Color(1, 0.1, 0.05), 0.2).duplicate()
+	for x in [-1.08, 1.08]:
+		Lib.box(vis, Vector3(x, 1.4, REAR_Z - 0.07), Vector3(0.16, 0.55, 0.04), _tail_mat)
+	# mirrors on the A-pillars
+	for x in [-1.32, 1.32]:
+		Lib.box(vis, Vector3(x, 2.15, FRONT_Z + 0.28), Vector3(0.06, 0.32, 0.2), dark)
+		Lib.box(vis, Vector3(x * 0.95, 2.05, FRONT_Z + 0.3), Vector3(0.12, 0.03, 0.03), dark)
+	# roof vent, rear ladder
+	Lib.box(vis, Vector3(0, ROOF_Y + 0.25, 1.2), Vector3(0.55, 0.08, 0.55), Lib.glass_mat())
+	for x in [0.55, 0.95]:
+		Lib.box(vis, Vector3(x, 2.1, REAR_Z - 0.18), Vector3(0.04, 2.0, 0.04), chrome)
+	for k in range(6):
+		Lib.box(vis, Vector3(0.75, 1.3 + k * 0.32, REAR_Z - 0.18), Vector3(0.4, 0.03, 0.03), chrome)
+	# headlights (modules)
+	for i in range(2):
+		var x: float = [-0.85, 0.85][i]
+		var hv := _begin("headlight_l" if i == 0 else "headlight_r", vis)
 		var hm := Lib.color_mat(Color(0.95, 0.95, 0.9), 0.1, 0.0, Color(1.0, 0.95, 0.8), 0.0).duplicate()
 		_head_mats.append(hm)
-		Lib.box(vis, Vector3(x, 1.25, FRONT_Z + 1.27), Vector3(0.4, 0.22, 0.04), hm)
+		Lib.box(hv, Vector3(x, 1.25, FRONT_Z + 1.29), Vector3(0.4, 0.22, 0.05), hm)
+		Lib.box(hv, Vector3(x, 1.25, FRONT_Z + 1.27), Vector3(0.44, 0.26, 0.04), chrome)
 		var sp := SpotLight3D.new()
 		sp.position = Vector3(x, 1.25, FRONT_Z + 1.3)
 		sp.rotation.x = deg_to_rad(-5)
@@ -200,44 +289,57 @@ func _build_exterior() -> void:
 		sp.light_color = Color(1.0, 0.95, 0.85)
 		sp.shadow_enabled = false
 		sp.visible = false
-		vis.add_child(sp)
+		hv.add_child(sp)
 		_head_spots.append(sp)
-	_tail_mat = Lib.color_mat(Color(0.5, 0.05, 0.05), 0.3, 0.0, Color(1, 0.1, 0.05), 0.2).duplicate()
-	for x in [-1.0, 1.0]:
-		Lib.box(vis, Vector3(x, 1.3, REAR_Z - 0.07), Vector3(0.18, 0.5, 0.04), _tail_mat)
-	# mirrors
-	for x in [-1.35, 1.35]:
-		Lib.box(vis, Vector3(x, 2.2, FRONT_Z + 0.1), Vector3(0.06, 0.35, 0.2), dark)
-	# roof AC, vent, ladder, spare tire, awning
-	Lib.box(vis, Vector3(0, ROOF_Y + 0.38, -0.6), Vector3(0.9, 0.36, 1.1), white)
-	Lib.box(vis, Vector3(0, ROOF_Y + 0.22, 1.6), Vector3(0.55, 0.08, 0.55), Lib.glass_mat())
-	for x in [0.55, 0.95]:
-		Lib.box(vis, Vector3(x, 2.1, REAR_Z - 0.18), Vector3(0.04, 2.0, 0.04), chrome)
-	for k in range(6):
-		Lib.box(vis, Vector3(0.75, 1.3 + k * 0.32, REAR_Z - 0.18), Vector3(0.4, 0.03, 0.03), chrome)
-	var spare := Lib.cyl(vis, Vector3(-0.55, 1.5, REAR_Z - 0.28), 0.42, 0.42, 0.25, Lib.color_mat(Color(0.06, 0.06, 0.06), 0.95), Vector3(PI * 0.5, 0, 0))
-	spare.name = "Spare"
-	Lib.cyl(vis, Vector3(W * 0.5 + 0.12, 3.0, -1.2), 0.1, 0.1, 4.0, Lib.mat("canvas", Color(0.75, 0.5, 0.3), 0.6, false), Vector3(PI * 0.5, 0, 0))
-	# door panel (exterior)
+		_end()
+		# empty socket, shown when the headlight is missing
+		Lib.box(vis, Vector3(x, 1.25, FRONT_Z + 1.25), Vector3(0.38, 0.2, 0.02), Lib.color_mat(Color(0.03, 0.03, 0.03), 0.9))
+	# side door (module): when it's missing the doorway is open
+	var dv := _begin("door", vis)
 	_door_panel = Node3D.new()
 	_door_panel.position = Vector3(W * 0.5 + 0.04, FLOOR_Y, DOOR_Z1)
-	vis.add_child(_door_panel)
+	dv.add_child(_door_panel)
 	Lib.box(_door_panel, Vector3(0, DOOR_H * 0.5, -(DOOR_Z1 - DOOR_Z0) * 0.5), Vector3(0.05, DOOR_H - 0.02, DOOR_Z1 - DOOR_Z0), white)
-	Lib.box(_door_panel, Vector3(0.03, 1.6, -(DOOR_Z1 - DOOR_Z0) * 0.5), Vector3(0.02, 0.5, 0.5), Lib.glass_mat())
+	Lib.box(_door_panel, Vector3(0.03, 1.6, -(DOOR_Z1 - DOOR_Z0) * 0.5), Vector3(0.02, 0.5, 0.7), Lib.glass_mat())
 	Lib.box(_door_panel, Vector3(0.05, 1.0, -(DOOR_Z1 - DOOR_Z0) + 0.12), Vector3(0.04, 0.05, 0.14), chrome)
+	Lib.box(_door_panel, Vector3(-0.07, DOOR_H * 0.5, -(DOOR_Z1 - DOOR_Z0) * 0.5), Vector3(0.03, DOOR_H, DOOR_Z1 - DOOR_Z0), Lib.color_mat(Color(0.6, 0.62, 0.64), 0.6, 0.4))
+	_shape(Vector3(W * 0.5, FLOOR_Y + DOOR_H * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.1, DOOR_H, DOOR_Z1 - DOOR_Z0))
+	_end()
 	# entry step
 	Lib.box(vis, Vector3(W * 0.5 + 0.25, 0.55, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.45, 0.06, 0.8), Lib.color_mat(Color(0.3, 0.3, 0.3), 0.6, 0.6))
-	# solar panel & bull bar (upgrades)
-	_solar = Node3D.new()
-	vis.add_child(_solar)
-	Lib.box(_solar, Vector3(0, ROOF_Y + 0.28, -2.2), Vector3(1.6, 0.05, 1.6), Lib.color_mat(Color(0.08, 0.12, 0.25), 0.15, 0.6))
-	_bullbar = Node3D.new()
-	vis.add_child(_bullbar)
-	for x in [-0.9, 0.9]:
-		Lib.box(_bullbar, Vector3(x, 1.05, FRONT_Z + 1.45), Vector3(0.08, 0.8, 0.08), chrome)
-	Lib.box(_bullbar, Vector3(0, 1.45, FRONT_Z + 1.45), Vector3(1.9, 0.08, 0.08), chrome)
-	Lib.box(_bullbar, Vector3(0, 0.95, FRONT_Z + 1.45), Vector3(1.9, 0.08, 0.08), chrome)
-	# battery tray on the driver side, just behind the front wheel: the battery sits in plain view
+	# solar panel, bull bar, water tank, long-range tank (modules)
+	_solar = _begin("solar", vis)
+	var sm := MeshInstance3D.new()
+	sm.mesh = Items.mesh("solar_panel")
+	sm.scale = Vector3(1.6, 1.0, 2.4)
+	sm.position = Vector3(0, ROOF_Y + 0.2, -1.6)
+	sm.rotation.y = PI * 0.5
+	_solar.add_child(sm)
+	for x in [-0.45, 0.45]:
+		Lib.box(_solar, Vector3(x, ROOF_Y + 0.22, -1.6), Vector3(0.05, 0.06, 1.7), chrome)
+	_end()
+	_bullbar = _begin("bullbar", vis)
+	var bm2 := MeshInstance3D.new()
+	bm2.mesh = Items.mesh("bull_bar")
+	bm2.scale = Vector3(2.0, 1.1, 1.0)
+	bm2.position = Vector3(0, 0.62, FRONT_Z + 1.48)
+	_bullbar.add_child(bm2)
+	_end()
+	var wt := _begin("water_tank", vis)
+	var wtm := MeshInstance3D.new()
+	wtm.mesh = Items.mesh("water_tank")
+	wtm.position = Vector3(-0.35, 0.38, -1.2)
+	wtm.rotation.y = PI * 0.5
+	wt.add_child(wtm)
+	_end()
+	var bt := _begin("big_tank", vis)
+	var btm := MeshInstance3D.new()
+	btm.mesh = Items.mesh("fuel_tank_xl")
+	btm.position = Vector3(0.35, 0.42, -0.2)
+	btm.rotation.y = PI * 0.5
+	bt.add_child(btm)
+	_end()
+	# battery tray on the driver side, just behind the front wheel
 	var tray := Vector3(-W * 0.5 - 0.22, 0.78, 1.35)
 	Lib.box(vis, tray + Vector3(0, -0.04, 0), Vector3(0.42, 0.05, 0.56), dark)
 	Lib.box(vis, tray + Vector3(0.2, 0.12, 0), Vector3(0.03, 0.3, 0.56), dark)
@@ -253,17 +355,18 @@ func _build_exterior() -> void:
 	_battery_vis.add_child(bm)
 	_part(tray + Vector3(-0.02, 0.15, 0), Vector3(0.5, 0.42, 0.62), "battery")
 	# outside interactables
-	_part(Vector3(0, 1.75, FRONT_Z + 0.7), Vector3(W, 0.3, 1.1), "hood")
+	_part(Vector3(0, 1.68, FRONT_Z + 0.85), Vector3(W, 0.3, 0.9), "hood")
 	_part(Vector3(-W * 0.5 - 0.1, 1.2, -2.8), Vector3(0.25, 0.4, 0.4), "fuel")
 	Lib.box(vis, Vector3(-W * 0.5 - 0.06, 1.2, -2.8), Vector3(0.04, 0.22, 0.22), dark)
 	_part(Vector3(W * 0.5 + 0.12, FLOOR_Y + 1.0, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.14, 2.0, DOOR_Z1 - DOOR_Z0), "door")
 
-## Wall along Z at x with rectangular holes [z0, z1, y0, y1] (absolute y).
-func _wall_x(parent: Node3D, x: float, m: Material, holes: Array) -> void:
-	var z_edges: Array[float] = [REAR_Z, FRONT_Z]
+## Wall along Z at x with rectangular holes [z0, z1, y0, y1] (absolute y), from z_a to z_b.
+func _wall_x(parent: Node3D, x: float, m: Material, holes: Array, z_a := REAR_Z, z_b := CAB_Z, glass := true) -> void:
+	var z_edges: Array[float] = [z_a, z_b]
 	for hole in holes:
-		z_edges.append(hole[0])
-		z_edges.append(hole[1])
+		if hole[0] < z_b and hole[1] > z_a:
+			z_edges.append(clampf(hole[0], z_a, z_b))
+			z_edges.append(clampf(hole[1], z_a, z_b))
 	z_edges.sort()
 	for i in range(z_edges.size() - 1):
 		var z0 := z_edges[i]
@@ -271,11 +374,11 @@ func _wall_x(parent: Node3D, x: float, m: Material, holes: Array) -> void:
 		if z1 - z0 < 0.001:
 			continue
 		var zc := (z0 + z1) * 0.5
-		var ys: Array = [[FLOOR_Y - 0.0, ROOF_Y]]
+		var ys: Array = [[FLOOR_Y, ROOF_Y]]
 		for hole in holes:
 			if zc > hole[0] and zc < hole[1]:
 				ys = [[FLOOR_Y, maxf(hole[2], FLOOR_Y)], [hole[3], ROOF_Y]]
-				if hole[2] > FLOOR_Y + 0.1 and hole[3] - hole[2] < 2.0:
+				if glass and hole[2] > FLOOR_Y + 0.1 and hole[3] - hole[2] < 2.0:
 					var g := Lib.box(parent, Vector3(x, (hole[2] + hole[3]) * 0.5, zc), Vector3(0.03, hole[3] - hole[2], z1 - z0), Lib.glass_mat())
 					g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 					var trim := Lib.mat("rubber", Color(0.6, 0.6, 0.6), 2.0, false, 0.8)
@@ -287,36 +390,23 @@ func _wall_x(parent: Node3D, x: float, m: Material, holes: Array) -> void:
 			if yr[1] - yr[0] > 0.01:
 				Lib.box(parent, Vector3(x, (yr[0] + yr[1]) * 0.5, zc), Vector3(0.06, yr[1] - yr[0], z1 - z0), m)
 
-func _part(pos: Vector3, size: Vector3, action: String) -> StaticBody3D:
-	var b := StaticBody3D.new()
-	b.set_script(RvPart)
-	b.rv = self
-	b.action = action
-	b.collision_layer = 2
-	b.collision_mask = 0
-	var cs := CollisionShape3D.new()
-	var sh := BoxShape3D.new()
-	sh.size = size
-	cs.shape = sh
-	b.add_child(cs)
-	b.position = pos
-	add_child(b)
-	return b
-
-var _doors := {} # action -> {"pivot": Node3D, "open": bool, "angle": float}
+var _doors := {} # action -> {"pivot": Node3D, "open": bool}
 var _battery_vis: Node3D
 
-## Real RV materials: off-white wall board, vinyl plank floor, laminate cabinetry, fabric
-## upholstery and a plastic dash — no bare lumber.
+## Materials: the bare shell is ribbed sheet metal and primer; fitted panels bring off-white wall
+## board, vinyl planks, laminate cabinetry and quilted upholstery.
 func _interior_mats() -> Dictionary:
 	return {
+		"bare": Lib.mat("ribbed_metal", Color(0.85, 0.85, 0.85), 1.2, false, 0.6, 0.5),
+		"bare_floor": Lib.mat("ribbed_metal", Color(0.55, 0.55, 0.56), 1.0, false, 0.7, 0.5),
 		"wall": Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8),
+		"insul": Lib.mat("insulation", Color.WHITE, 1.5, false, 0.6, 0.5),
 		"ceiling": Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9),
-		"floor": Lib.mat("tiles", Color(0.62, 0.58, 0.52), 1.1, false, 0.55),
-		"cab": Lib.color_mat(Color(0.8, 0.78, 0.74), 0.4),
+		"floor": Lib.mat("vinyl", Color.WHITE, 0.9, false, 0.55),
+		"cab": Lib.mat("laminate", Color.WHITE, 1.4, false, 0.45),
 		"cab_trim": Lib.color_mat(Color(0.36, 0.35, 0.34), 0.5),
 		"counter": Lib.mat("concrete", Color(0.55, 0.55, 0.56), 1.0, false, 0.35),
-		"fabric": Lib.mat("denim", Color(0.62, 0.64, 0.68), 2.5, false, 0.95),
+		"fabric": Lib.mat("upholstery", Color.WHITE, 0.45, false, 0.95),
 		"fabric2": Lib.mat("plaid", Color(0.75, 0.75, 0.78), 2.0, false, 0.95),
 		"metal": Lib.color_mat(Color(0.72, 0.72, 0.74), 0.3, 0.8),
 		"plastic": Lib.color_mat(Color(0.14, 0.14, 0.15), 0.55),
@@ -324,7 +414,7 @@ func _interior_mats() -> Dictionary:
 	}
 
 ## A cupboard or fridge whose front faces +X, with shelves you can put things on and a
-## door you open and close. center/size are the outer box in RV space.
+## door you open and close. center/size are the outer box in van space.
 func _cupboard(vis: Node3D, action: String, center: Vector3, size: Vector3, shelves: Array, body_m: Material, door_m: Material, trim: Material) -> void:
 	var t := 0.03
 	var front := center.x + size.x * 0.5
@@ -345,7 +435,6 @@ func _cupboard(vis: Node3D, action: String, center: Vector3, size: Vector3, shel
 	for pc in pieces:
 		Lib.box(vis, pc[0], pc[1], body_m)
 		_shape(pc[0], pc[1])
-	# inside light colour for fridges, plain inside for cupboards
 	Lib.box(vis, Vector3(back + t + 0.005, center.y, center.z), Vector3(0.01, size.y - 2 * t, size.z - 2 * t), Lib.color_mat(Color(0.95, 0.96, 0.97), 0.3) if action == "fridge" else body_m)
 	var pivot := Node3D.new()
 	pivot.position = Vector3(front, center.y, z0)
@@ -366,6 +455,9 @@ func _cupboard(vis: Node3D, action: String, center: Vector3, size: Vector3, shel
 	cs.position = Vector3(0.03, 0, size.z * 0.5)
 	hs.add_child(cs)
 	pivot.add_child(hs)
+	if _grp != "":
+		hs.set_meta("slot", _grp)
+		_mod_parts[_grp].append(hs)
 	_doors[action] = {"pivot": pivot, "open": false}
 
 func _toggle_door(action: String) -> void:
@@ -375,6 +467,9 @@ func _toggle_door(action: String) -> void:
 	tw.tween_property(d["pivot"], "rotation:y", -1.75 if d["open"] else 0.0, 0.3).set_trans(Tween.TRANS_SINE)
 	Audio.play_at("door", d["pivot"].global_position, -10.0, 1.4)
 
+const WIN_L := [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.25, 2.8, 1.85, 2.55]]
+const WIN_R := [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6], [2.25, 2.8, 1.85, 2.55]]
+
 func _build_interior() -> void:
 	var M := _interior_mats()
 	var L := FRONT_Z - REAR_Z
@@ -383,70 +478,156 @@ func _build_interior() -> void:
 	var vis := Node3D.new()
 	vis.name = "Interior"
 	add_child(vis)
-	Lib.box(vis, Vector3(0, FLOOR_Y + 0.01, mid), Vector3(W - 0.14, 0.02, L - 0.1), M["floor"])
-	Lib.box(vis, Vector3(0, ROOF_Y - 0.03, mid), Vector3(W - 0.14, 0.04, L - 0.1), M["ceiling"])
-	_wall_x(vis, -W * 0.5 + 0.08, M["wall"], [[0.0, 1.6, 1.75, 2.6], [-2.6, -1.6, 1.85, 2.55], [2.35, 3.25, 1.85, 2.5]])
-	_wall_x(vis, W * 0.5 - 0.08, M["wall"], [[-1.1, 0.1, 1.85, 2.55], [DOOR_Z0, DOOR_Z1, 0.0, FLOOR_Y + DOOR_H], [-3.1, -2.2, 2.2, 2.6], [2.35, 3.25, 1.85, 2.5]])
-	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.08), Vector3(W - 0.14, h, 0.04), M["wall"])
-	# baseboards / trim lines along the walls
-	for x in [-W * 0.5 + 0.11, W * 0.5 - 0.11]:
-		Lib.box(vis, Vector3(x, FLOOR_Y + 0.05, mid), Vector3(0.02, 0.08, L - 0.2), M["cab_trim"])
-		Lib.box(vis, Vector3(x, ROOF_Y - 0.08, mid), Vector3(0.03, 0.05, L - 0.2), M["cab_trim"])
-	# ---- cab: moulded dashboard with gauges, centre console, captain's seats
-	var dash_c := Vector3(0, FLOOR_Y + 0.75, FRONT_Z - 0.05)
-	Lib.box(vis, dash_c, Vector3(W - 0.15, 0.5, 0.5), M["plastic"], false, Vector3.ZERO, 0.06)
-	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.05), Vector3(W - 0.2, 0.03, 0.45), Lib.color_mat(Color(0.2, 0.2, 0.21), 0.7))
-	_shape(dash_c, Vector3(W - 0.15, 0.5, 0.5))
+	# ---- the bare shell: ribbed sheet metal, exposed roof bows, a primer-grey dash
+	Lib.box(vis, Vector3(0, FLOOR_Y + 0.005, mid), Vector3(W - 0.12, 0.01, L - 0.05), M["bare_floor"])
+	Lib.box(vis, Vector3(0, ROOF_Y - 0.02, (CAB_Z + REAR_Z) * 0.5), Vector3(W - 0.12, 0.02, CAB_Z - REAR_Z), M["bare"])
+	var bow := Lib.mat("primer", Color(0.75, 0.75, 0.75), 2.0, false, 0.7, 0.3)
+	for z in [-2.6, -1.6, -0.6, 0.4, 1.4, 2.4]:
+		Lib.box(vis, Vector3(0, ROOF_Y - 0.06, z), Vector3(W - 0.14, 0.06, 0.06), bow)
+		for x in [-W * 0.5 + 0.1, W * 0.5 - 0.1]:
+			if z > DOOR_Z0 - 0.1 and z < DOOR_Z1 + 0.1 and x > 0.0:
+				continue
+			Lib.box(vis, Vector3(x, FLOOR_Y + h * 0.5, z), Vector3(0.05, h - 0.1, 0.06), bow)
+	_wall_x(vis, -W * 0.5 + 0.06, M["bare"], WIN_L)
+	_wall_x(vis, W * 0.5 - 0.06, M["bare"], WIN_R)
+	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.07), Vector3(W - 0.12, h, 0.03), M["bare"])
+	# cab: door cards below the cab windows, sloped header above the windshield
+	for sx in [-1.0, 1.0]:
+		Lib.box(vis, Vector3(sx * (W * 0.5 - 0.07), FLOOR_Y + 0.43, (CAB_Z + FRONT_Z + 0.35) * 0.5), Vector3(0.05, 0.86, FRONT_Z + 0.35 - CAB_Z), M["plastic"])
+		var g := Lib.box(vis, Vector3(sx * (W * 0.5 - 0.04), 2.2, (CAB_Z + FRONT_Z + 0.2) * 0.5), Vector3(0.02, 0.5, FRONT_Z + 0.2 - CAB_Z), Lib.glass_mat())
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	Lib.box(vis, Vector3(0, 3.05, FRONT_Z - 0.48), Vector3(W - 0.14, 0.03, 0.48), M["plastic"], false, Vector3(-2.19, 0, 0))
+	# moulded dashboard, gauges, centre console
+	var dash_c := Vector3(0, FLOOR_Y + 0.75, FRONT_Z + 0.02)
+	Lib.box(vis, dash_c, Vector3(W - 0.15, 0.5, 0.64), M["plastic"], false, Vector3.ZERO, 0.06)
+	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.03), Vector3(W - 0.2, 0.03, 0.58), Lib.color_mat(Color(0.2, 0.2, 0.21), 0.7))
+	_shape(dash_c, Vector3(W - 0.15, 0.5, 0.64))
 	var cluster := Lib.box(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.31), Vector3(0.5, 0.18, 0.04), Lib.color_mat(Color(0.05, 0.05, 0.06), 0.3))
 	cluster.rotation.x = -0.3
 	for gx in [-0.68, -0.42]:
-		var g := Lib.cyl(vis, Vector3(gx, FLOOR_Y + 0.92, FRONT_Z - 0.335), 0.06, 0.06, 0.01, Lib.color_mat(Color(0.9, 0.9, 0.85), 0.3, 0.0, Color(0.5, 0.9, 1.0), 0.5), Vector3(PI * 0.5 - 0.3, 0, 0))
-		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	Lib.box(vis, Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.31), Vector3(0.22, 0.14, 0.03), Lib.color_mat(Color(0.1, 0.15, 0.12), 0.3, 0.0, Color(0.4, 0.9, 0.5), 0.5))
+		var gg := Lib.cyl(vis, Vector3(gx, FLOOR_Y + 0.92, FRONT_Z - 0.335), 0.06, 0.06, 0.01, Lib.color_mat(Color(0.9, 0.9, 0.85), 0.3, 0.0, Color(0.5, 0.9, 1.0), 0.5), Vector3(PI * 0.5 - 0.3, 0, 0))
+		gg.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for vx in [-0.95, 0.35, 0.95]:
 		Lib.box(vis, Vector3(vx, FLOOR_Y + 0.85, FRONT_Z - 0.31), Vector3(0.16, 0.08, 0.02), M["black"])
-	var sw := Lib.cyl(vis, Vector3(-0.55, FLOOR_Y + 0.82, FRONT_Z - 0.42), 0.17, 0.17, 0.03, M["black"], Vector3(-1.1, 0, 0), 20)
-	sw.name = "SteeringWheel"
+	Lib.box(vis, Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.305), Vector3(0.2, 0.07, 0.02), M["black"]) # empty radio slot
 	Lib.box(vis, Vector3(0, FLOOR_Y + 0.25, FRONT_Z - 0.75), Vector3(0.3, 0.5, 0.6), M["plastic"], false, Vector3.ZERO, 0.04)
+	# bare seat pedestals (seats are modules)
 	for x in [-0.55, 0.55]:
-		Lib.box(vis, Vector3(x, FLOOR_Y + 0.45, FRONT_Z - 1.05), Vector3(0.58, 0.14, 0.58), M["fabric"], false, Vector3.ZERO, 0.05)
-		Lib.box(vis, Vector3(x, FLOOR_Y + 0.92, FRONT_Z - 1.35), Vector3(0.56, 0.85, 0.14), M["fabric"], false, Vector3(-0.15, 0, 0), 0.05)
-		Lib.box(vis, Vector3(x, FLOOR_Y + 1.42, FRONT_Z - 1.42), Vector3(0.3, 0.16, 0.1), M["fabric"], false, Vector3(-0.15, 0, 0), 0.04)
 		Lib.box(vis, Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4), M["black"])
-	_part(Vector3(-0.55, FLOOR_Y + 0.6, FRONT_Z - 1.1), Vector3(0.6, 0.9, 0.6), "drive")
-	_part(Vector3(0.55, FLOOR_Y + 0.6, FRONT_Z - 1.1), Vector3(0.6, 0.9, 0.6), "passenger")
-	# over-cab bunk shelf (you can store things up there)
-	Lib.box(vis, Vector3(0, ROOF_Y - 0.55, FRONT_Z + 0.25), Vector3(W - 0.2, 0.06, 0.9), M["cab"])
-	_shape(Vector3(0, ROOF_Y - 0.55, FRONT_Z + 0.25), Vector3(W - 0.2, 0.06, 0.9))
-	Lib.box(vis, Vector3(0, ROOF_Y - 0.47, FRONT_Z - 0.19), Vector3(W - 0.2, 0.12, 0.03), M["cab_trim"])
-	# ---- galley (left wall): counter, stove, sink, coffee maker
+		_shape(Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4))
+	# steering column stub
+	Lib.cyl(vis, Vector3(-0.55, FLOOR_Y + 0.78, FRONT_Z - 0.28), 0.035, 0.035, 0.3, M["black"], Vector3(-1.1, 0, 0), 10)
+	# light switch
+	Lib.box(vis, Vector3(W * 0.5 - 0.1, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.03, 0.12, 0.08), Lib.color_mat(Color(0.9, 0.9, 0.85)))
+	_part(Vector3(W * 0.5 - 0.12, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.1, 0.25, 0.2), "lights")
+	_part(Vector3(W * 0.5 - 0.15, FLOOR_Y + 1.0, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.12, 2.0, DOOR_Z1 - DOOR_Z0), "door")
+	_interior_light = Lib.light(vis, Vector3(0, ROOF_Y - 0.3, -0.5), Color(1.0, 0.86, 0.66), 1.4, 6.0, false)
+	_interior_light.visible = false
+	_build_modules(vis, M)
+
+## Every fittable module, built hidden; _apply_modules shows the fitted ones.
+func _build_modules(vis: Node3D, M: Dictionary) -> void:
+	var L := FRONT_Z - REAR_Z
+	var mid := (FRONT_Z + REAR_Z) * 0.5
+	var h := ROOF_Y - FLOOR_Y
+	# ---- flooring and wall panels
+	var fl := _begin("floor", vis)
+	Lib.box(fl, Vector3(0, FLOOR_Y + 0.02, (CAB_Z - 0.3 + REAR_Z) * 0.5), Vector3(W - 0.16, 0.02, CAB_Z - 0.3 - REAR_Z - 0.05), M["floor"])
+	Lib.box(fl, Vector3(0.0, FLOOR_Y + 0.035, -0.3), Vector3(0.7, 0.01, 1.8), Lib.mat("carpet", Color(0.45, 0.42, 0.4), 1.5, false))
+	_end()
+	var wl := _begin("walls", vis)
+	_wall_x(wl, -W * 0.5 + 0.11, M["wall"], WIN_L, REAR_Z, CAB_Z, false)
+	_wall_x(wl, W * 0.5 - 0.11, M["wall"], WIN_R, REAR_Z, CAB_Z, false)
+	Lib.box(wl, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.1), Vector3(W - 0.18, h, 0.03), M["wall"])
+	Lib.box(wl, Vector3(0, ROOF_Y - 0.1, (CAB_Z + REAR_Z) * 0.5), Vector3(W - 0.18, 0.03, CAB_Z - REAR_Z), M["ceiling"])
+	for x in [-W * 0.5 + 0.13, W * 0.5 - 0.13]:
+		Lib.box(wl, Vector3(x, FLOOR_Y + 0.05, (CAB_Z + REAR_Z) * 0.5), Vector3(0.02, 0.08, CAB_Z - REAR_Z - 0.1), M["cab_trim"])
+		Lib.box(wl, Vector3(x, ROOF_Y - 0.14, (CAB_Z + REAR_Z) * 0.5), Vector3(0.03, 0.05, CAB_Z - REAR_Z - 0.1), M["cab_trim"])
+	_end()
+	# ---- cab: steering wheel, seats, radio
+	var stv := _begin("steering", vis)
+	var sw := MeshInstance3D.new()
+	sw.mesh = Items.mesh("steering_wheel")
+	sw.name = "SteeringWheel"
+	sw.position = Vector3(-0.55, FLOOR_Y + 0.82, FRONT_Z - 0.42)
+	sw.rotation = Vector3(-1.1, 0, 0)
+	stv.add_child(sw)
+	_end()
+	for i in range(2):
+		var x: float = [-0.55, 0.55][i]
+		var sv := _begin("seat_driver" if i == 0 else "seat_passenger", vis)
+		var seat := MeshInstance3D.new()
+		seat.mesh = Items.mesh("car_seat")
+		seat.position = Vector3(x, FLOOR_Y + 0.38, FRONT_Z - 1.1)
+		seat.scale = Vector3(1.1, 1.0, 1.1)
+		sv.add_child(seat)
+		_part(Vector3(x, FLOOR_Y + 0.75, FRONT_Z - 1.1), Vector3(0.6, 0.8, 0.6), "drive" if i == 0 else "passenger")
+		_end()
+	var rd := _begin("radio", vis)
+	var rm := MeshInstance3D.new()
+	rm.mesh = Items.mesh("radio")
+	rm.position = Vector3(0.05, FLOOR_Y + 0.82, FRONT_Z - 0.29)
+	rm.rotation.y = PI
+	rd.add_child(rm)
+	_part(Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.33), Vector3(0.28, 0.16, 0.12), "radio")
+	_radio_audio = AudioStreamPlayer3D.new()
+	_radio_audio.bus = "Vehicle"
+	_radio_audio.unit_size = 4.0
+	_radio_audio.max_distance = 30.0
+	_radio_audio.volume_db = -8.0
+	_radio_audio.position = Vector3(0, FLOOR_Y + 0.9, FRONT_Z - 0.3)
+	rd.add_child(_radio_audio)
+	_end()
+	# ---- galley (left wall): counter, then stove, sink and coffee maker on it
 	var kz0 := -0.2
 	var kz1 := 1.5
-	var kx := -W * 0.5 + 0.38
-	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.45, (kz0 + kz1) * 0.5), Vector3(0.6, 0.9, kz1 - kz0), M["cab"])
+	var kx := -W * 0.5 + 0.42
+	var kt := _begin("kitchen", vis)
+	Lib.box(kt, Vector3(kx, FLOOR_Y + 0.45, (kz0 + kz1) * 0.5), Vector3(0.6, 0.9, kz1 - kz0), M["cab"])
 	for dz in [0.15, 0.55, 0.95, 1.3]:
-		Lib.box(vis, Vector3(kx + 0.305, FLOOR_Y + 0.45, kz0 + dz), Vector3(0.01, 0.8, 0.005), M["cab_trim"])
-		Lib.box(vis, Vector3(kx + 0.32, FLOOR_Y + 0.75, kz0 + dz - 0.12), Vector3(0.02, 0.02, 0.1), M["metal"])
-	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.92, (kz0 + kz1) * 0.5), Vector3(0.64, 0.05, kz1 - kz0 + 0.02), M["counter"])
+		Lib.box(kt, Vector3(kx + 0.305, FLOOR_Y + 0.45, kz0 + dz), Vector3(0.01, 0.8, 0.005), M["cab_trim"])
+		Lib.box(kt, Vector3(kx + 0.32, FLOOR_Y + 0.75, kz0 + dz - 0.12), Vector3(0.02, 0.02, 0.1), M["metal"])
+	Lib.box(kt, Vector3(kx, FLOOR_Y + 0.92, (kz0 + kz1) * 0.5), Vector3(0.64, 0.05, kz1 - kz0 + 0.02), M["counter"])
 	_shape(Vector3(kx, FLOOR_Y + 0.4725, (kz0 + kz1) * 0.5), Vector3(0.64, 0.945, kz1 - kz0 + 0.02))
-	Lib.box(vis, Vector3(-W * 0.5 + 0.1, FLOOR_Y + 1.15, (kz0 + kz1) * 0.5), Vector3(0.01, 0.4, kz1 - kz0), Lib.mat("tiles", Color(0.85, 0.85, 0.82), 2.5, false, 0.3))
-	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.95, 1.1), Vector3(0.5, 0.02, 0.55), M["black"])
+	Lib.box(kt, Vector3(-W * 0.5 + 0.13, FLOOR_Y + 1.15, (kz0 + kz1) * 0.5), Vector3(0.01, 0.4, kz1 - kz0), Lib.mat("tiles", Color(0.85, 0.85, 0.82), 2.5, false, 0.3))
+	_end()
+	var stove := _begin("stove", vis)
+	Lib.box(stove, Vector3(kx, FLOOR_Y + 0.955, 1.1), Vector3(0.5, 0.02, 0.55), M["black"])
 	for p in [Vector2(-0.12, 0.95), Vector2(0.12, 0.95), Vector2(-0.12, 1.25), Vector2(0.12, 1.25)]:
-		Lib.cyl(vis, Vector3(kx + p.x, FLOOR_Y + 0.965, p.y), 0.08, 0.08, 0.01, Lib.color_mat(Color(0.25, 0.25, 0.25), 0.4, 0.7))
-	_part(Vector3(kx, FLOOR_Y + 0.98, 1.1), Vector3(0.5, 0.06, 0.55), "stove")
-	Lib.box(vis, Vector3(kx, FLOOR_Y + 0.92, 0.35), Vector3(0.42, 0.06, 0.38), M["metal"])
-	Lib.cyl(vis, Vector3(-W * 0.5 + 0.18, FLOOR_Y + 1.12, 0.35), 0.015, 0.015, 0.35, M["metal"])
-	_part(Vector3(-W * 0.5 + 0.2, FLOOR_Y + 1.12, 0.35), Vector3(0.12, 0.35, 0.3), "sink")
-	Lib.box(vis, Vector3(-W * 0.5 + 0.3, FLOOR_Y + 1.08, -0.05), Vector3(0.2, 0.28, 0.2), M["black"])
-	Lib.cyl(vis, Vector3(-W * 0.5 + 0.34, FLOOR_Y + 1.0, -0.05), 0.06, 0.05, 0.12, Lib.glass_mat())
-	_part(Vector3(-W * 0.5 + 0.3, FLOOR_Y + 1.08, -0.05), Vector3(0.24, 0.3, 0.22), "coffee")
-	# overhead cupboard above the galley
-	_cupboard(vis, "overhead", Vector3(-W * 0.5 + 0.3, ROOF_Y - 0.33, 0.65), Vector3(0.44, 0.5, 1.6), [], M["cab"], M["cab"], M["cab_trim"])
-	# fridge
-	_cupboard(vis, "fridge", Vector3(-W * 0.5 + 0.42, FLOOR_Y + 0.86, -0.67), Vector3(0.62, 1.7, 0.68), [FLOOR_Y + 0.5, FLOOR_Y + 0.95, FLOOR_Y + 1.35],
+		Lib.cyl(stove, Vector3(kx + p.x, FLOOR_Y + 0.97, p.y), 0.08, 0.08, 0.01, Lib.color_mat(Color(0.25, 0.25, 0.25), 0.4, 0.7))
+		var fm := Lib.cyl(stove, Vector3(kx + p.x, FLOOR_Y + 0.985, p.y), 0.06, 0.07, 0.025, Lib.color_mat(Color(0.3, 0.5, 1.0), 0.2, 0.0, Color(0.35, 0.55, 1.0), 2.5))
+		fm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		fm.visible = false
+		_flames.append(fm)
+	for z in [0.92, 1.28]:
+		Lib.cyl(stove, Vector3(kx + 0.31, FLOOR_Y + 0.85, z), 0.02, 0.02, 0.03, M["metal"], Vector3(0, 0, PI * 0.5))
+	_part(Vector3(kx, FLOOR_Y + 1.0, 1.1), Vector3(0.52, 0.12, 0.57), "stove")
+	_end()
+	var sink := _begin("sink", vis)
+	Lib.box(sink, Vector3(kx, FLOOR_Y + 0.92, 0.35), Vector3(0.42, 0.06, 0.38), M["metal"])
+	Lib.box(sink, Vector3(kx, FLOOR_Y + 0.9, 0.35), Vector3(0.34, 0.06, 0.3), Lib.color_mat(Color(0.35, 0.36, 0.38), 0.2, 0.9))
+	Lib.cyl(sink, Vector3(-W * 0.5 + 0.2, FLOOR_Y + 1.12, 0.35), 0.015, 0.015, 0.35, M["metal"])
+	Lib.cyl(sink, Vector3(-W * 0.5 + 0.28, FLOOR_Y + 1.28, 0.35), 0.012, 0.012, 0.18, M["metal"], Vector3(0, 0, PI * 0.5))
+	_part(Vector3(kx, FLOOR_Y + 1.0, 0.35), Vector3(0.46, 0.14, 0.42), "sink")
+	_part(Vector3(-W * 0.5 + 0.24, FLOOR_Y + 1.2, 0.35), Vector3(0.14, 0.3, 0.14), "sink")
+	_end()
+	var cof := _begin("coffee", vis)
+	var cm := MeshInstance3D.new()
+	cm.mesh = Items.mesh("coffee_maker")
+	cm.position = Vector3(-W * 0.5 + 0.32, FLOOR_Y + 0.945, -0.05)
+	cm.rotation.y = PI * 0.5
+	cof.add_child(cm)
+	_part(Vector3(-W * 0.5 + 0.32, FLOOR_Y + 1.08, -0.05), Vector3(0.24, 0.3, 0.22), "coffee")
+	_end()
+	var ov := _begin("overhead", vis)
+	_cupboard(ov, "overhead", Vector3(-W * 0.5 + 0.34, ROOF_Y - 0.37, 0.65), Vector3(0.44, 0.5, 1.6), [], M["cab"], M["cab"], M["cab_trim"])
+	_end()
+	var fr := _begin("fridge", vis)
+	_cupboard(fr, "fridge", Vector3(-W * 0.5 + 0.44, FLOOR_Y + 0.86, -0.67), Vector3(0.62, 1.7, 0.68), [FLOOR_Y + 0.5, FLOOR_Y + 0.95, FLOOR_Y + 1.35],
 		Lib.color_mat(Color(0.93, 0.93, 0.91), 0.3), Lib.color_mat(Color(0.88, 0.88, 0.86), 0.25), Lib.color_mat(Color(0.8, 0.8, 0.78), 0.25))
-	# storage cupboard (plant pots on top)
-	_cupboard(vis, "cabinet", Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.5, -1.45), Vector3(0.56, 1.0, 0.8), [FLOOR_Y + 0.5], M["cab"], M["cab"], M["cab_trim"])
+	_end()
+	var cu := _begin("cupboard", vis)
+	_cupboard(cu, "cabinet", Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.5, -1.45), Vector3(0.56, 1.0, 0.8), [FLOOR_Y + 0.5], M["cab"], M["cab"], M["cab_trim"])
 	for i in range(2):
 		var pot := StaticBody3D.new()
 		pot.set_script(Structure)
@@ -454,79 +635,98 @@ func _build_interior() -> void:
 		var pot_index := i
 		pot.save_cb = func(d: Dictionary) -> void: pots[pot_index] = d
 		vis.add_child(pot)
-		pot.setup("", {"type": "planter", "pos": [-W * 0.5 + 0.35, FLOOR_Y + 1.0, -1.65 + i * 0.42], "rot": PI * 0.5, "data": pots[i]})
+		pot.setup("", {"type": "planter", "pos": [-W * 0.5 + 0.37, FLOOR_Y + 1.0, -1.65 + i * 0.42], "rot": PI * 0.5, "data": pots[i]})
 		pot.scale = Vector3(0.25, 0.6, 0.45)
 		pot.collision_layer = 2
 		pot.collision_mask = 0
 		pot.name = "Pot%d" % i
+		_mod_extra["cupboard"].append(pot)
+	_end()
 	# ---- dinette (right side): table and two benches
-	var tx := W * 0.5 - 0.45
-	Lib.box(vis, Vector3(tx, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.04, 0.9), M["counter"], false, Vector3.ZERO, 0.015)
-	Lib.box(vis, Vector3(tx, FLOOR_Y + 0.69, -0.5), Vector3(0.72, 0.02, 0.92), M["cab_trim"])
+	var tx := W * 0.5 - 0.47
+	var dn := _begin("dinette", vis)
+	Lib.box(dn, Vector3(tx, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.04, 0.9), M["counter"], false, Vector3.ZERO, 0.015)
+	Lib.box(dn, Vector3(tx, FLOOR_Y + 0.69, -0.5), Vector3(0.72, 0.02, 0.92), M["cab_trim"])
 	_shape(Vector3(tx, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.05, 0.9))
-	Lib.cyl(vis, Vector3(tx, FLOOR_Y + 0.36, -0.5), 0.04, 0.04, 0.72, M["metal"])
+	Lib.cyl(dn, Vector3(tx, FLOOR_Y + 0.36, -0.5), 0.04, 0.04, 0.72, M["metal"])
 	for z in [0.25, -1.25]:
-		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.22, z), Vector3(0.75, 0.44, 0.45), M["cab"])
-		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.5, z), Vector3(0.75, 0.12, 0.45), M["fabric"], false, Vector3.ZERO, 0.04)
-		Lib.box(vis, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.85, z + signf(z) * 0.17), Vector3(0.75, 0.6, 0.1), M["fabric"], false, Vector3.ZERO, 0.04)
-		_shape(Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.28, z), Vector3(0.75, 0.56, 0.45))
+		Lib.box(dn, Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.22, z), Vector3(0.75, 0.44, 0.45), M["cab"])
+		Lib.box(dn, Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.5, z), Vector3(0.75, 0.12, 0.45), M["fabric"], false, Vector3.ZERO, 0.04)
+		Lib.box(dn, Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.85, z + signf(z) * 0.17), Vector3(0.75, 0.6, 0.1), M["fabric"], false, Vector3.ZERO, 0.04)
+		_shape(Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.28, z), Vector3(0.75, 0.56, 0.45))
+	_end()
 	# ---- bathroom cubicle (right rear)
-	Lib.box(vis, Vector3(W * 0.5 - 0.5, FLOOR_Y + h * 0.5, -1.75), Vector3(0.9, h, 0.05), M["wall"])
-	Lib.box(vis, Vector3(0.18, FLOOR_Y + h * 0.5, -2.2), Vector3(0.05, h, 0.95), M["wall"])
-	var porcelain := Lib.color_mat(Color(0.95, 0.95, 0.95), 0.15)
-	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.22, -2.45), Vector3(0.38, 0.44, 0.45), porcelain, false, Vector3.ZERO, 0.08)
-	Lib.box(vis, Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.45, -2.45), Vector3(0.4, 0.04, 0.48), porcelain, false, Vector3.ZERO, 0.02)
-	Lib.box(vis, Vector3(W * 0.5 - 0.3, FLOOR_Y + 0.7, -2.45), Vector3(0.12, 0.45, 0.4), porcelain, false, Vector3.ZERO, 0.03)
+	var tl := _begin("toilet", vis)
+	Lib.box(tl, Vector3(W * 0.5 - 0.52, FLOOR_Y + h * 0.5, -1.75), Vector3(0.9, h, 0.05), M["wall"])
+	Lib.box(tl, Vector3(0.16, FLOOR_Y + h * 0.5, -2.2), Vector3(0.05, h, 0.95), M["wall"])
+	_shape(Vector3(W * 0.5 - 0.52, FLOOR_Y + h * 0.5, -1.75), Vector3(0.9, h, 0.05))
+	var toil := MeshInstance3D.new()
+	toil.mesh = Items.mesh("toilet_unit")
+	toil.position = Vector3(W * 0.5 - 0.45, FLOOR_Y, -2.45)
+	toil.rotation.y = -PI * 0.5
+	tl.add_child(toil)
 	_part(Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.4, -2.45), Vector3(0.5, 0.8, 0.5), "toilet")
-	# ---- rear bed: laminate platform, mattress, duvet, pillows
-	Lib.box(vis, Vector3(-0.25, FLOOR_Y + 0.3, -2.75), Vector3(1.85, 0.6, 1.2), M["cab"])
-	Lib.box(vis, Vector3(-0.25, FLOOR_Y + 0.68, -2.75), Vector3(1.8, 0.18, 1.15), Lib.color_mat(Color(0.92, 0.92, 0.9), 0.95), false, Vector3.ZERO, 0.06)
-	Lib.box(vis, Vector3(-0.85, FLOOR_Y + 0.82, -2.75), Vector3(0.35, 0.1, 0.8), Lib.color_mat(Color("eae6dd"), 0.95), false, Vector3.ZERO, 0.04)
-	Lib.box(vis, Vector3(0.1, FLOOR_Y + 0.79, -2.75), Vector3(1.1, 0.06, 1.17), M["fabric2"], false, Vector3.ZERO, 0.02)
-	_shape(Vector3(-0.25, FLOOR_Y + 0.385, -2.75), Vector3(1.85, 0.77, 1.2))
-	_part(Vector3(-0.85, FLOOR_Y + 0.9, -2.75), Vector3(0.4, 0.15, 0.85), "bed")
-	# light switch + interior lights
-	Lib.box(vis, Vector3(W * 0.5 - 0.1, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.03, 0.12, 0.08), Lib.color_mat(Color(0.9, 0.9, 0.85)))
-	_part(Vector3(W * 0.5 - 0.12, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.1, 0.25, 0.2), "lights")
-	_part(Vector3(W * 0.5 - 0.15, FLOOR_Y + 1.0, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.12, 2.0, DOOR_Z1 - DOOR_Z0), "door")
+	_end()
+	# ---- rear bed: laminate platform first, then a mattress, duvet and pillow on it
+	var bd := _begin("bed", vis)
+	Lib.box(bd, Vector3(-0.27, FLOOR_Y + 0.3, -2.75), Vector3(1.85, 0.6, 1.2), M["cab"])
+	Lib.box(bd, Vector3(-0.27, FLOOR_Y + 0.605, -2.75), Vector3(1.8, 0.02, 1.15), Lib.mat("planks", Color(1.0, 0.9, 0.75), 2.0, false))
+	_shape(Vector3(-0.27, FLOOR_Y + 0.31, -2.75), Vector3(1.85, 0.62, 1.2))
+	_end()
+	var mt := _begin("mattress", vis)
+	Lib.box(mt, Vector3(-0.27, FLOOR_Y + 0.7, -2.75), Vector3(1.8, 0.18, 1.15), Lib.mat("upholstery", Color(1.6, 1.6, 1.55), 1.5, false, 0.95), false, Vector3.ZERO, 0.06)
+	Lib.box(mt, Vector3(-0.87, FLOOR_Y + 0.84, -2.75), Vector3(0.35, 0.1, 0.8), Lib.color_mat(Color("eae6dd"), 0.95), false, Vector3.ZERO, 0.04)
+	Lib.box(mt, Vector3(0.08, FLOOR_Y + 0.81, -2.75), Vector3(1.1, 0.06, 1.17), M["fabric2"], false, Vector3.ZERO, 0.02)
+	_shape(Vector3(-0.27, FLOOR_Y + 0.7, -2.75), Vector3(1.85, 0.2, 1.2))
+	_part(Vector3(-0.87, FLOOR_Y + 0.92, -2.75), Vector3(0.4, 0.15, 0.85), "bed")
+	_end()
+	# ---- ceiling lights, heater
+	var lt := _begin("light", vis)
 	for z in [-1.8, 0.6]:
-		Lib.cyl(vis, Vector3(0, ROOF_Y - 0.06, z), 0.17, 0.17, 0.03, Lib.color_mat(Color(1, 0.95, 0.85), 0.5, 0.0, Color(1, 0.9, 0.7), 1.0))
-	_interior_light = Lib.light(vis, Vector3(0, ROOF_Y - 0.3, -0.5), Color(1.0, 0.86, 0.66), 1.4, 6.0, false)
-	_interior_light.visible = false
-	# runner rug
-	Lib.box(vis, Vector3(0.0, FLOOR_Y + 0.025, -0.3), Vector3(0.7, 0.01, 1.8), Lib.mat("carpet", Color(0.45, 0.42, 0.4), 1.5, false))
+		var lm := MeshInstance3D.new()
+		lm.mesh = Items.mesh("ceiling_light")
+		lm.position = Vector3(0, ROOF_Y - 0.03, z)
+		lm.rotation.x = PI
+		lt.add_child(lm)
+	_end()
+	var ht := _begin("heater", vis)
+	var hm := MeshInstance3D.new()
+	hm.mesh = Items.mesh("heater_unit")
+	hm.position = Vector3(W * 0.5 - 0.25, FLOOR_Y, DOOR_Z1 + 0.35)
+	hm.rotation.y = -PI * 0.5
+	ht.add_child(hm)
+	_shape(Vector3(W * 0.5 - 0.25, FLOOR_Y + 0.15, DOOR_Z1 + 0.35), Vector3(0.22, 0.3, 0.38))
+	_end()
 
-## Your few starting supplies sit in the RV — pick them up when you need them.
-func stock_starter_supplies() -> void:
-	_stock("water_clean", 1, Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.945, 0.7))
-	_stock("water_clean", 1, Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.945, 0.86))
-	_stock("canned_food", 1, Vector3(W * 0.5 - 0.5, FLOOR_Y + 0.745, -0.35))
-	_stock("rope", 1, Vector3(W * 0.5 - 0.42, FLOOR_Y + 0.745, -0.7))
-	_stock("bandage", 1, Vector3(-W * 0.5 + 0.32, FLOOR_Y + 1.01, -1.35))
-	_stock("seeds_tomato", 1, Vector3(-W * 0.5 + 0.32, FLOOR_Y + 0.52, -1.5))
-	_stock("toolkit", 1, Vector3(0.25, FLOOR_Y + 0.015, -1.9))
-
-func _stock(id: String, n: int, lp: Vector3, yaw := 0.0) -> void:
-	var bb: AABB = Items.display_bounds(id)
-	var xf := global_transform * Transform3D(Basis(Vector3.UP, yaw), lp - Vector3(0, bb.position.y, 0))
-	Game.place_item(id, n, xf, self)
-
-## Older saves kept the fridge/cabinet as item lists: put those items on the shelves.
-func _spill_legacy() -> void:
-	var spots := {"fridge": [Vector3(-W * 0.5 + 0.42, FLOOR_Y + 0.52, -0.67), Vector3(-W * 0.5 + 0.42, FLOOR_Y + 0.97, -0.67), Vector3(-W * 0.5 + 0.42, FLOOR_Y + 1.37, -0.67)],
-		"cabinet": [Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.04, -1.45), Vector3(-W * 0.5 + 0.36, FLOOR_Y + 0.52, -1.45)]}
-	for which in ["fridge", "cabinet"]:
-		var items: Dictionary = fridge if which == "fridge" else cabinet
-		var i := 0
-		for k in items:
-			var n := int(items[k])
-			while n > 0 and i < 18:
-				var take := mini(n, Data.stack(k))
-				var base: Vector3 = spots[which][i % spots[which].size()]
-				_stock(k, take, base + Vector3(0, 0, -0.22 + (i / spots[which].size()) % 3 * 0.22))
-				n -= take
-				i += 1
-		items.clear()
+## Mount hotspots: where each module goes. They show what's missing and take the module in.
+func _build_mounts() -> void:
+	var tx := W * 0.5 - 0.47
+	var kx := -W * 0.5 + 0.42
+	_mount("steering", Vector3(-0.55, FLOOR_Y + 0.85, FRONT_Z - 0.45), Vector3(0.45, 0.35, 0.2))
+	_mount("seat_driver", Vector3(-0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
+	_mount("seat_passenger", Vector3(0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
+	_mount("radio", Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.33), Vector3(0.28, 0.16, 0.12))
+	_mount("headlight_l", Vector3(-0.85, 1.25, FRONT_Z + 1.33), Vector3(0.46, 0.3, 0.12))
+	_mount("headlight_r", Vector3(0.85, 1.25, FRONT_Z + 1.33), Vector3(0.46, 0.3, 0.12))
+	_mount("bullbar", Vector3(0, 0.75, FRONT_Z + 1.5), Vector3(W, 0.4, 0.2))
+	_mount("solar", Vector3(0.75, 2.6, REAR_Z - 0.25), Vector3(0.6, 1.0, 0.2))
+	_mount("water_tank", Vector3(-W * 0.5 - 0.05, 0.65, -1.2), Vector3(0.3, 0.35, 0.8))
+	_mount("big_tank", Vector3(W * 0.5 + 0.05, 0.65, -0.2), Vector3(0.3, 0.35, 0.9))
+	_mount("floor", Vector3(0, FLOOR_Y + 0.03, -0.9), Vector3(W - 0.4, 0.04, 4.4))
+	_mount("walls", Vector3(-W * 0.5 + 0.2, FLOOR_Y + 1.2, -2.0), Vector3(0.08, 1.2, 1.3))
+	_mount("kitchen", Vector3(kx + 0.01, FLOOR_Y + 0.46, 0.65), Vector3(0.66, 0.92, 1.74))
+	_mount("stove", Vector3(kx, FLOOR_Y + 1.0, 1.1), Vector3(0.5, 0.08, 0.55))
+	_mount("sink", Vector3(kx, FLOOR_Y + 1.0, 0.35), Vector3(0.44, 0.08, 0.4))
+	_mount("coffee", Vector3(-W * 0.5 + 0.32, FLOOR_Y + 1.05, -0.05), Vector3(0.26, 0.2, 0.24))
+	_mount("overhead", Vector3(-W * 0.5 + 0.34, ROOF_Y - 0.37, 0.65), Vector3(0.46, 0.5, 1.6))
+	_mount("fridge", Vector3(-W * 0.5 + 0.44, FLOOR_Y + 0.86, -0.67), Vector3(0.64, 1.7, 0.7))
+	_mount("cupboard", Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.5, -1.45), Vector3(0.6, 1.0, 0.82))
+	_mount("dinette", Vector3(tx, FLOOR_Y + 0.75, -0.5), Vector3(0.78, 0.12, 0.95))
+	_mount("toilet", Vector3(W * 0.5 - 0.45, FLOOR_Y + 0.4, -2.45), Vector3(0.55, 0.8, 0.55))
+	_mount("bed", Vector3(-0.27, FLOOR_Y + 0.35, -2.75), Vector3(1.9, 0.7, 1.25))
+	_mount("mattress", Vector3(-0.27, FLOOR_Y + 0.66, -2.75), Vector3(1.85, 0.1, 1.2))
+	_mount("light", Vector3(0, ROOF_Y - 0.12, -0.6), Vector3(0.5, 0.1, 0.5))
+	_mount("heater", Vector3(W * 0.5 - 0.25, FLOOR_Y + 0.17, DOOR_Z1 + 0.35), Vector3(0.26, 0.34, 0.42))
 
 func _build_cameras() -> void:
 	cam_fp = Camera3D.new()
@@ -540,20 +740,277 @@ func _build_cameras() -> void:
 	cam_tp.far = 1500.0
 	add_child(cam_tp)
 
+# ------------------------------------------------------------------ modules
+func has_mod(slot: String) -> bool:
+	return modules.has(slot)
+
+func _needs_met(slot: String) -> String:
+	for n in Data.VAN_SLOTS[slot].get("needs", []):
+		if not modules.has(n):
+			return n
+	return ""
+
+## Show fitted modules, hide the rest, and switch their collisions and hotspots.
+func _apply_modules() -> void:
+	for slot in _mod_vis:
+		var on := modules.has(slot)
+		(_mod_vis[slot] as Node3D).visible = on
+		for cs in _mod_shapes[slot]:
+			(cs as CollisionShape3D).disabled = not on
+		for p in _mod_parts[slot]:
+			(p as CollisionObject3D).collision_layer = 2 if on else 0
+		for n in _mod_extra[slot]:
+			n.visible = on
+			n.collision_layer = 2 if on else 0
+	for slot in _mounts:
+		var on := modules.has(slot)
+		var own: bool = _mod_parts.has(slot) and not _mod_parts[slot].is_empty()
+		var active: bool = (not on and _needs_met(slot) == "") or (on and not own and slot not in FIXED)
+		_mounts[slot].collision_layer = 2 if active else 0
+	if _door_panel:
+		_door_panel.rotation.y = 0.0
+	upgrades = {}
+	for u in ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank"]:
+		if modules.has(u):
+			upgrades[u] = true
+	var off := 0
+	for i in range(4):
+		if wheel_kind.get("wheel%d" % i, "") == "offroad_tire" and not missing.has("wheel%d" % i):
+			off += 1
+	if off == 4:
+		upgrades["offroad_tires"] = true
+	if not modules.has("light"):
+		interior_lights = false
+	if not modules.has("stove"):
+		stove_on = false
+	if not modules.has("radio"):
+		_set_radio(false)
+	if not (modules.has("headlight_l") or modules.has("headlight_r")):
+		headlights = false
+	fuel = minf(fuel, fuel_capacity())
+	water = minf(water, water_capacity())
+	if _interior_light:
+		_update_lights()
+	_update_ghosts()
+
+## While you hold a module, outline the empty spots it fits in green.
+func _update_ghosts() -> void:
+	var held := Game.equipped()
+	for slot in _mod_vis:
+		var want: bool = Data.VAN_SLOTS.has(slot) and Data.VAN_SLOTS[slot]["item"] == held and not modules.has(slot) and _needs_met(slot) == ""
+		if want and not _ghosts.has(slot):
+			_ghosts[slot] = _make_ghost(slot)
+		if _ghosts.has(slot):
+			(_ghosts[slot] as Node3D).visible = want
+
+func _make_ghost(slot: String) -> Node3D:
+	if _ghost_mat == null:
+		_ghost_mat = StandardMaterial3D.new()
+		_ghost_mat.albedo_color = Color(0.4, 1.0, 0.5, 0.3)
+		_ghost_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_ghost_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_ghost_mat.no_depth_test = false
+	var src: Node3D = _mod_vis[slot]
+	var g: Node3D = src.duplicate(0)
+	g.name = "Ghost_" + slot
+	src.get_parent().add_child(g)
+	_ghostify(g)
+	return g
+
+func _ghostify(n: Node) -> void:
+	for ch in n.get_children():
+		if ch is CollisionObject3D or ch is Light3D or ch is AudioStreamPlayer3D:
+			ch.queue_free()
+			continue
+		if ch is GeometryInstance3D:
+			(ch as GeometryInstance3D).material_override = _ghost_mat
+			(ch as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_ghostify(ch)
+
+func _toolkit_ok(slot: String) -> bool:
+	return not Data.VAN_SLOTS[slot].get("toolkit", false) or Game.count("toolkit") > 0
+
+func mount_prompt(slot: String) -> String:
+	var spec: Dictionary = Data.VAN_SLOTS[slot]
+	var item: String = spec["item"]
+	var nm := Data.item_name(item)
+	if modules.has(slot):
+		return "%s  —  [G] Take it out" % nm
+	var need := _needs_met(slot)
+	if need != "":
+		return "%s — fit the %s first" % [spec["name"], Data.VAN_SLOTS[need]["name"].to_lower()]
+	if Game.equipped() == item:
+		return "[E] Fit the %s%s" % [nm, "" if _toolkit_ok(slot) else "  (needs a Toolkit in hand or within reach)"]
+	return "Empty: %s — carry a %s here" % [spec["name"].to_lower(), nm]
+
+func install_module(slot: String) -> bool:
+	var spec: Dictionary = Data.VAN_SLOTS[slot]
+	var item: String = spec["item"]
+	if modules.has(slot):
+		return false
+	var need := _needs_met(slot)
+	if need != "":
+		Game.notify("Fit the %s first" % Data.VAN_SLOTS[need]["name"].to_lower())
+		return false
+	if Game.equipped() != item:
+		Game.notify("Carry a %s in your hands to fit it here" % Data.item_name(item))
+		return false
+	if not _toolkit_ok(slot):
+		Game.notify("You need a Toolkit in hand or lying within reach")
+		return false
+	Game.remove_item(item, 1)
+	modules[slot] = true
+	match slot:
+		"engine":
+			parts["engine"] = maxf(parts["engine"], 45.0)
+		"water_tank":
+			water = minf(water, water_capacity())
+	Audio.play_at("hammer", global_position, -4.0, 1.1)
+	Game.notify("%s fitted" % Data.item_name(item))
+	_apply_modules()
+	Game._changed()
+	return true
+
+func remove_module(slot: String) -> bool:
+	if not modules.has(slot):
+		return false
+	var item: String = Data.VAN_SLOTS[slot]["item"]
+	if slot in FIXED:
+		Game.notify("The %s is part of the van now" % Data.VAN_SLOTS[slot]["name"].to_lower())
+		return false
+	for other in modules:
+		if slot in Data.VAN_SLOTS.get(other, {}).get("needs", []):
+			Game.notify("Take out the %s first" % Data.VAN_SLOTS[other]["name"].to_lower())
+			return false
+	if Game.space_for(item) <= 0:
+		Game.notify("You need a free hand")
+		return false
+	if driver != 0 and slot in ["seat_driver", "steering", "engine"]:
+		Game.notify("Not while someone is driving")
+		return false
+	modules.erase(slot)
+	if slot == "engine" and engine_on:
+		stop_engine()
+	Game.add_item(item, 1, true)
+	for i in range(Game.slots.size()):
+		if Game.slots[i]["id"] == item:
+			Game.select_slot(i)
+			break
+	Audio.play_at("click", global_position, -2.0, 0.7)
+	Game.notify("You took out the %s" % Data.item_name(item))
+	_apply_modules()
+	return true
+
+## The module slot a hotspot belongs to (for [G] removal), or "".
+func slot_for(part: Node) -> String:
+	var a: String = part.action
+	if a.begins_with("mount:"):
+		return a.substr(6)
+	if part.has_meta("slot"):
+		return str(part.get_meta("slot"))
+	if a == "door" and modules.has("door"):
+		return "door"
+	if a == "hood" and modules.has("engine"):
+		return "engine"
+	return ""
+
+## What still has to go in before the van will drive.
+func missing_for_drive() -> Array:
+	var out := []
+	for slot in Data.VAN_SLOTS:
+		if Data.VAN_SLOTS[slot].get("drive", false) and not modules.has(slot):
+			out.append(Data.VAN_SLOTS[slot]["name"])
+	if missing.has("battery"):
+		out.append("Battery")
+	var bare := Mounts.missing_count(self)
+	if bare > 0:
+		out.append("%d wheel%s" % [bare, "s" if bare > 1 else ""])
+	return out
+
+func _set_radio(on: bool) -> void:
+	radio_on = on
+	if _radio_audio == null:
+		return
+	if on:
+		_radio_audio.stream = Audio.stream("radio_%d" % radio_station, true)
+		_radio_audio.play(randf() * 20.0)
+	else:
+		_radio_audio.stop()
+
+## Burner spots (global) while the stove is lit: food set on them cooks.
+func heat_spots() -> Array:
+	var out := []
+	if stove_on and modules.has("stove"):
+		var kx := -W * 0.5 + 0.42
+		for p in [Vector2(-0.12, 0.95), Vector2(0.12, 0.95), Vector2(-0.12, 1.25), Vector2(0.12, 1.25)]:
+			out.append(to_global(Vector3(kx + p.x, FLOOR_Y + 0.97, p.y)))
+	return out
+
+func shelter_bonus() -> float:
+	return 2.0 + (3.0 if modules.has("door") else 0.0) + (4.0 if modules.has("walls") else 0.0)
+
+## The stripped van a new game starts with.
+func _starter_state() -> void:
+	modules = {}
+	wheel_kind = {}
+	missing = {"battery": true, "wheel0": true, "wheel1": true, "wheel2": true, "wheel3": true}
+	parts = {"engine": 0.0, "tires": 40.0, "battery": 0.0, "body": 45.0}
+	fuel = 6.0
+	water = 0.0
+	battery = 0.0
+	paint = Data.PRIMER
+
+## Older saves had a fully fitted motorhome: keep it that way.
+func _all_modules() -> Dictionary:
+	var d := {}
+	for slot in Data.VAN_SLOTS:
+		if slot in ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank"]:
+			continue
+		d[slot] = true
+	return d
+
+## Kept for older callers: a new game's supplies now lie around the van (see world.gd).
+func stock_starter_supplies() -> void:
+	pass
+
+func _stock(id: String, n: int, lp: Vector3, yaw := 0.0) -> void:
+	var bb: AABB = Items.display_bounds(id)
+	var xf := global_transform * Transform3D(Basis(Vector3.UP, yaw), lp - Vector3(0, bb.position.y, 0))
+	Game.place_item(id, n, xf, self)
+
+## Older saves kept the fridge/cabinet as item lists: put those items on the shelves.
+func _spill_legacy() -> void:
+	var spots := {"fridge": [Vector3(-W * 0.5 + 0.44, FLOOR_Y + 0.52, -0.67), Vector3(-W * 0.5 + 0.44, FLOOR_Y + 0.97, -0.67), Vector3(-W * 0.5 + 0.44, FLOOR_Y + 1.37, -0.67)],
+		"cabinet": [Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.04, -1.45), Vector3(-W * 0.5 + 0.38, FLOOR_Y + 0.52, -1.45)]}
+	for which in ["fridge", "cabinet"]:
+		var items: Dictionary = fridge if which == "fridge" else cabinet
+		var i := 0
+		for k in items:
+			var n := int(items[k])
+			while n > 0 and i < 18:
+				var take := mini(n, Data.stack(k))
+				var base: Vector3 = spots[which][i % spots[which].size()]
+				_stock(k, take, base + Vector3(0, 0, -0.22 + (i / spots[which].size()) % 3 * 0.22))
+				n -= take
+				i += 1
+		items.clear()
+
 # ------------------------------------------------------------------ state
 func fuel_capacity() -> float:
 	return 140.0 if upgrades.has("big_tank") else 80.0
 
 func water_capacity() -> float:
-	return 80.0 if upgrades.has("water_tank") else 40.0
+	return 60.0 if modules.has("water_tank") else 0.0
 
 func save_state() -> Dictionary:
 	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
-		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records()}
+		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records(),
+		"modules": modules, "wheel_kind": wheel_kind, "radio_station": radio_station}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
+		_starter_state()
 		_apply_visuals()
 		return
 	var xf: Array = s.get("xform", [])
@@ -566,8 +1023,21 @@ func apply_state(s: Dictionary) -> void:
 	var p: Dictionary = s.get("parts", {})
 	for k in p:
 		parts[k] = float(p[k])
-	upgrades = s.get("upgrades", {})
+	if s.has("modules"):
+		modules = s["modules"].duplicate()
+		wheel_kind = s.get("wheel_kind", {}).duplicate()
+	else:
+		modules = _all_modules()
+		var old: Dictionary = s.get("upgrades", {})
+		for u in old:
+			if Data.VAN_SLOTS.has(u):
+				modules[u] = true
+		if old.has("offroad_tires"):
+			for i in range(4):
+				wheel_kind["wheel%d" % i] = "offroad_tire"
+		modules["water_tank"] = true
 	paint = int(s.get("paint", 0))
+	radio_station = int(s.get("radio_station", 0))
 	fridge = s.get("fridge", fridge)
 	cabinet = s.get("cabinet", cabinet)
 	missing = s.get("missing", {})
@@ -594,8 +1064,12 @@ func _apply_visuals() -> void:
 	var c: Color = Data.RV_PAINTS[paint % Data.RV_PAINTS.size()]
 	for m in _paint_mats:
 		m.albedo_color = c
-	_solar.visible = upgrades.has("solar")
-	_bullbar.visible = upgrades.has("bullbar")
+	if _body_mat:
+		var primer := paint == Data.PRIMER
+		_body_mat.albedo_texture = Lib.tex("primer" if primer else "rv_paint")
+		_body_mat.albedo_color = Color.WHITE if primer else c.lerp(Color.WHITE, 0.55)
+		_body_mat.uv1_scale = Vector3.ONE * (0.6 if primer else 0.35)
+	_apply_modules()
 	var grip := 3.0 if not upgrades.has("offroad_tires") else 3.6
 	grip *= lerpf(0.55, 1.0, parts["tires"] / 100.0)
 	Mounts.apply_wheels(self, grip)
@@ -612,8 +1086,11 @@ func speed_kmh() -> float:
 func try_start_engine() -> void:
 	if engine_on:
 		return
+	if not modules.has("engine"):
+		Game.notify("There's no engine. Lower an Engine Block in at the hood.")
+		return
 	if fuel <= 0.1:
-		Game.notify("Out of fuel! Use a fuel can on the fuel cap.")
+		Game.notify("Out of fuel! Pour a fuel can in at the fuel cap.")
 		return
 	if missing.has("battery"):
 		Game.notify("There's no battery fitted. Carry a Car Battery to the battery tray.")
@@ -622,7 +1099,7 @@ func try_start_engine() -> void:
 		Game.notify("The battery is dead. Pull it out of its tray and fit a Car Battery (or wait for the solar panel).")
 		return
 	if parts["engine"] <= 1.0:
-		Game.notify("The engine is wrecked. Repair it at the hood.")
+		Game.notify("The engine is wrecked. Rebuild it with Engine Parts at the hood.")
 		return
 	if parts["engine"] < 25.0 and randf() < 0.35:
 		Audio.play_at("engine_start", global_position, 0.0, 0.8)
@@ -699,10 +1176,10 @@ func _physics_process(delta: float) -> void:
 			rotation = Vector3(0, rotation.y, 0)
 			global_position += Vector3(0, 1.0, 0)
 			angular_velocity = Vector3.ZERO
-			Game.notify("The RV was set back on its wheels")
+			Game.notify("The van was set back on its wheels")
 	steering = _steer
 	_throttle = throttle
-	var sw := get_node_or_null("Interior/SteeringWheel")
+	var sw := get_node_or_null("Interior/Mod_steering/SteeringWheel")
 	if sw:
 		sw.rotation = Vector3(-1.1, 0, -_steer * 4.0)
 	# consumption & wear
@@ -791,6 +1268,9 @@ func toggle_headlights() -> void:
 	if battery <= 0.0:
 		Game.notify("Battery is flat")
 		return
+	if not (modules.has("headlight_l") or modules.has("headlight_r")):
+		Game.notify("There are no headlights fitted")
+		return
 	headlights = not headlights
 	_update_lights()
 	Audio.play("click", -4.0)
@@ -798,6 +1278,8 @@ func toggle_headlights() -> void:
 func _update_lights() -> void:
 	for s in _head_spots:
 		s.visible = headlights
+	for f in _flames:
+		f.visible = stove_on
 	for m in _head_mats:
 		m.emission_energy_multiplier = 3.0 if headlights else 0.0
 	_interior_light.visible = interior_lights
@@ -814,51 +1296,112 @@ func door_open_anim() -> void:
 	Audio.play_at("door", global_position + global_transform.basis.x * 1.2)
 
 # ------------------------------------------------------------------ interaction
+const COOKABLE := ["raw_meat", "raw_fish", "mushroom", "potato", "water_dirty", "coffee_beans", "water_clean", "tomato"]
+
 func prompt_for(action: String) -> String:
+	var held := Game.equipped()
+	if action.begins_with("mount:"):
+		return mount_prompt(action.substr(6))
 	if action.begins_with("wheel"):
 		return Mounts.prompt(self, action)
+	var take := "   [G] Take it out" if held == "" else ""
 	match action:
-		"drive": return "[E] Drive" if driver == 0 else "Someone is driving"
-		"passenger": return "[E] Sit in passenger seat"
-		"stove": return "[E] Cook on stove"
-		"sink": return "[E] Use sink  (tank %d/%d L)" % [int(water), int(water_capacity())]
-		"coffee": return "[E] Brew coffee (beans + 1 L water)"
+		"drive":
+			if driver != 0:
+				return "Someone is driving"
+			if not modules.has("steering"):
+				return "Driver's seat — there's no steering wheel yet" + take
+			return "[E] Drive" + take
+		"passenger": return "[E] Sit in passenger seat" + take
+		"stove":
+			if held in COOKABLE:
+				return "[E] Set the %s on a burner" % Data.item_name(held)
+			return "[E] %s the stove%s" % ["Turn off" if stove_on else "Light", take]
+		"sink":
+			if water_capacity() <= 0.0:
+				return "Sink — no water tank fitted under the van" + take
+			if held == "bottle_empty":
+				return "[E] Fill the bottle (tank %d/%d L)" % [int(water), int(water_capacity())]
+			if held in ["water_clean", "water_dirty"]:
+				return "[E] Pour the water into the tank (%d/%d L)" % [int(water), int(water_capacity())]
+			return "[E] Drink from the tap (tank %d/%d L)%s" % [int(water), int(water_capacity()), take]
+		"coffee":
+			if held == "coffee_beans":
+				return "[E] Brew coffee (uses 1 L from the tank)"
+			return "Coffee maker — hold Coffee Beans to brew%s" % take
+		"radio":
+			return "[E] Radio %s%s" % ["next station / off" if radio_on else "on", take]
 		"fridge", "cabinet", "overhead":
-			var nm: String = {"fridge": "fridge", "cabinet": "cupboard", "overhead": "overhead cupboard"}[action]
-			return "[E] %s %s" % ["Close" if _doors[action]["open"] else "Open", nm]
+			var nm: String = {"fridge": "fridge", "cabinet": "cupboard", "overhead": "overhead cabinet"}[action]
+			return "[E] %s %s%s" % ["Close" if _doors[action]["open"] else "Open", nm, take]
 		"battery":
 			return Mounts.prompt(self, action)
-		"bed": return "[E] Sleep in bed"
-		"toilet": return "[E] Use toilet"
-		"lights": return "[E] Interior lights %s" % ("off" if interior_lights else "on")
+		"bed": return "[E] Sleep in bed" + take
+		"toilet": return "[E] Use toilet" + take
+		"lights":
+			if not modules.has("light"):
+				return "Light switch — no ceiling light fitted"
+			return "[E] Interior lights %s" % ("off" if interior_lights else "on")
 		"door":
+			if not modules.has("door"):
+				if held == "van_door":
+					return "[E] Hang the side door%s" % ("" if _toolkit_ok("door") else "  (needs a Toolkit in hand or within reach)")
+				var p0 := Game.player
+				return "Open doorway (no door fitted) — [E] %s" % ("Climb out" if p0 and is_inside(p0.global_position) else "Climb in")
 			var p := Game.player
 			if p and is_inside(p.global_position):
-				return "[E] Exit RV"
-			return "[E] Enter RV"
+				return "[E] Exit van" + take
+			return "[E] Enter van" + take
 		"hood":
+			if not modules.has("engine"):
+				if held == "engine_block":
+					return "[E] Lower the Engine Block in%s" % ("" if _toolkit_ok("engine") else "  (needs a Toolkit in hand or within reach)")
+				return "Empty engine bay — carry an Engine Block here.  [E] Check what the van still needs"
+			if held == "tune_kit":
+				return mount_prompt("engine_tune") if not modules.has("engine_tune") else "The engine is already tuned"
+			if held == "paint_can":
+				return "[E] Spray-paint the van"
 			var mp := Mounts.prompt(self, "hood")
-			return mp if mp != "" else "[E] Open hood — condition, upgrades & paint"
-		"fuel": return "[E] Refuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
+			return mp if mp != "" else "[E] Check the van over%s" % ("   [G] Hoist the engine out" if held == "" else "")
+		"fuel":
+			if held == "fuel_can":
+				return "[E] Pour in the fuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
+			return "Fuel cap (%d/%d L) — carry a full Fuel Can here" % [int(fuel), int(fuel_capacity())]
 	return ""
 
 func do_action(action: String, player: Node) -> void:
-	if action == "battery" or action.begins_with("wheel") or action == "hood":
+	var held := Game.equipped()
+	if action.begins_with("mount:"):
+		install_module(action.substr(6))
+		return
+	if action == "battery" or action.begins_with("wheel") or (action == "hood" and modules.has("engine") and held in ["engine_parts", "scrap"]):
 		if Mounts.act(self, action):
 			return
 	match action:
 		"drive":
 			if driver == 0:
+				if not modules.has("steering"):
+					Game.notify("There's no steering wheel. Fit one to the column first.")
+					return
 				player.enter_vehicle(self, true)
 		"passenger":
 			player.enter_vehicle(self, false)
 		"stove":
-			Game.world.hud.open_cooking(null)
+			if held in COOKABLE:
+				_set_on_burner(player)
+				return
+			if not stove_on and battery < 1.0:
+				Game.notify("The igniter needs battery power")
+				return
+			stove_on = not stove_on
+			_update_lights()
+			Audio.play_at("click", global_position, -4.0, 0.8)
+			Game.notify("Stove lit — set food on the burners and it cooks by itself" if stove_on else "Stove off")
 		"sink":
-			Game.world.hud.open_sink(self)
+			_use_sink()
 		"coffee":
-			if Game.count("coffee_beans") <= 0:
-				Game.notify("You need coffee beans")
+			if held != "coffee_beans":
+				Game.notify("Hold Coffee Beans to brew coffee")
 			elif water < 1.0:
 				Game.notify("The water tank is empty")
 			else:
@@ -866,6 +1409,16 @@ func do_action(action: String, player: Node) -> void:
 				water -= 1.0
 				Game.add_item("coffee", 1)
 				Audio.play("pickup")
+		"radio":
+			if not radio_on:
+				_set_radio(true)
+			elif radio_station < 2:
+				radio_station += 1
+				_set_radio(true)
+			else:
+				radio_station = 0
+				_set_radio(false)
+			Audio.play("click", -6.0)
 		"fridge", "cabinet", "overhead":
 			_toggle_door(action)
 		"bed":
@@ -875,57 +1428,128 @@ func do_action(action: String, player: Node) -> void:
 			Game.stats["water"] = maxf(Game.stats["water"] - 5.0, 0.0)
 			Audio.play_at("splash", global_position, -6.0)
 		"lights":
+			if not modules.has("light"):
+				Game.notify("There's no ceiling light to switch on")
+				return
 			interior_lights = not interior_lights and battery > 0.0
 			_update_lights()
 			Audio.play("click")
 		"door":
-			door_open_anim()
+			if not modules.has("door") and held == "van_door":
+				if not _toolkit_ok("door"):
+					Game.notify("You need a Toolkit in hand or lying within reach")
+					return
+				Game.remove_item("van_door", 1)
+				modules["door"] = true
+				Audio.play_at("hammer", global_position, -4.0, 1.1)
+				Game.notify("Side door hung")
+				_apply_modules()
+				return
+			if modules.has("door"):
+				door_open_anim()
 			if is_inside(player.global_position):
 				player.teleport(to_global(Vector3(W * 0.5 + 1.0, 0.4, (DOOR_Z0 + DOOR_Z1) * 0.5)))
 			else:
 				player.teleport(to_global(Vector3(0.05, FLOOR_Y + 0.1, (DOOR_Z0 + DOOR_Z1) * 0.5 - 0.1)))
 		"hood":
-			Game.world.hud.open_rv_menu(self)
+			if not modules.has("engine"):
+				if held == "engine_block":
+					install_module("engine")
+				else:
+					_report()
+				return
+			if held == "tune_kit":
+				install_module("engine_tune")
+				return
+			if held == "paint_can":
+				Game.remove_item("paint_can", 1)
+				paint = (paint + 1) % (Data.RV_PAINTS.size() - 1) if paint != Data.PRIMER else 0
+				_apply_visuals()
+				Audio.play_at("splash", global_position, -6.0, 1.8)
+				Game.notify("Fresh paint!")
+				return
+			_report()
 		"fuel":
-			if Game.count("fuel_can") <= 0:
-				Game.notify("You need a fuel can")
+			if held != "fuel_can":
+				Game.notify("Carry a full Fuel Can here to pour it in")
 			elif fuel > fuel_capacity() - 1.0:
 				Game.notify("The tank is full")
 			else:
 				Game.remove_item("fuel_can", 1)
+				Game.add_item("fuel_can_empty", 1, true)
 				fuel = minf(fuel + 10.0, fuel_capacity())
 				Audio.play_at("splash", global_position, -8.0, 0.7)
 				Game.notify("Refueled: %d L" % int(fuel))
 
-func repair(part: String) -> void:
-	var spec: Dictionary = Data.RV_PARTS[part]
-	if spec["needs_toolkit"] and Game.count("toolkit") <= 0:
-		Game.notify("You need a toolkit")
+## Hold a cookable item at the stove: it goes onto a free burner.
+func _set_on_burner(_player: Node) -> void:
+	var spots := []
+	var kx := -W * 0.5 + 0.42
+	for p in [Vector2(-0.12, 0.95), Vector2(0.12, 0.95), Vector2(-0.12, 1.25), Vector2(0.12, 1.25)]:
+		spots.append(Vector3(kx + p.x, FLOOR_Y + 0.98, p.y))
+	var cargo := get_node("Cargo")
+	for lp in spots:
+		var busy := false
+		for it in cargo.get_children():
+			if it.is_in_group("world_item") and Vector2(it.position.x - lp.x, it.position.z - lp.z).length() < 0.1:
+				busy = true
+				break
+		if busy:
+			continue
+		var s := Game.take_held()
+		var bb: AABB = Items.display_bounds(s["id"])
+		Game.place_item(s["id"], int(s["n"]), global_transform * Transform3D(Basis.IDENTITY, lp - Vector3(0, bb.position.y, 0)), self)
+		Audio.play_at("pickup", global_position, -8.0, 0.8)
+		if not stove_on:
+			Game.notify("Light the stove [E] with an empty hand to start cooking")
 		return
-	if not Game.pay(spec["repair"]):
-		Game.notify("Missing: %s" % Data.cost_text(spec["repair"]))
-		return
-	parts[part] = minf(parts[part] + float(spec["amount"]), 100.0)
-	if part == "battery":
-		battery = 100.0
-	Audio.play("hammer")
-	_apply_visuals()
-	Game.notify("%s repaired to %d%%" % [spec["name"], int(parts[part])])
+	Game.notify("All four burners are taken")
 
-func install(upgrade: String) -> void:
-	if upgrades.has(upgrade):
+func _use_sink() -> void:
+	var held := Game.equipped()
+	if water_capacity() <= 0.0:
+		Game.notify("No water tank is fitted under the van")
 		return
-	var spec: Dictionary = Data.RV_UPGRADES[upgrade]
-	if Game.count("toolkit") <= 0:
-		Game.notify("You need a toolkit")
-		return
-	if not Game.pay(spec["cost"]):
-		Game.notify("Missing: %s" % Data.cost_text(spec["cost"]))
-		return
-	upgrades[upgrade] = true
-	Audio.play("hammer")
-	_apply_visuals()
-	Game.notify("Installed: %s" % spec["name"])
+	if held == "bottle_empty":
+		if water < 1.0:
+			Game.notify("The tank is empty")
+			return
+		water -= 1.0
+		Game.remove_item("bottle_empty", 1)
+		Game.add_item("water_clean", 1, true)
+		Audio.play_at("splash", global_position, -10.0, 1.4)
+		Game.notify("Filled a bottle with clean water")
+	elif held in ["water_clean", "water_dirty"]:
+		if water > water_capacity() - 1.0:
+			Game.notify("The tank is full")
+			return
+		Game.remove_item(held, 1)
+		Game.add_item("bottle_empty", 1, true)
+		water += 1.0
+		Audio.play_at("splash", global_position, -10.0, 0.9)
+		Game.notify("Poured into the tank%s (%d L)" % [" through the filter" if held == "water_dirty" else "", int(water)])
+	else:
+		if water < 1.0:
+			Game.notify("The tank is empty")
+			return
+		water -= 1.0
+		Game.stats["water"] = minf(Game.stats["water"] + 30.0, 100.0)
+		Audio.play("eat")
+
+func _report() -> void:
+	var need := missing_for_drive()
+	var lines: Array[String] = []
+	if need.is_empty():
+		lines.append("Ready to drive. Engine %d%% · Tires %d%% · Body %d%% · Battery %d%% · Fuel %d L" % [int(parts["engine"]), int(parts["tires"]), int(parts["body"]), int(battery), int(fuel)])
+	else:
+		lines.append("To drive, the van still needs: " + ", ".join(need))
+	var interior := 0
+	for slot in Data.VAN_SLOTS:
+		if modules.has(slot):
+			interior += 1
+	lines.append("%d of %d modules fitted. Hold a module to see where it goes." % [interior, Data.VAN_SLOTS.size()])
+	for l in lines:
+		Game.notify(l)
 
 ## Bounding test used for items and furniture riding inside or on the roof.
 func contains_point(p: Vector3) -> bool:
@@ -981,7 +1605,7 @@ func _spawn_cargo(r: Dictionary) -> void:
 var trailer: Node = null
 
 func display_name() -> String:
-	return "Motorhome"
+	return "Van"
 
 func seat_global(as_driver: bool) -> Vector3:
 	return to_global(Vector3(-0.55 if as_driver else 0.55, 1.0, 2.3))

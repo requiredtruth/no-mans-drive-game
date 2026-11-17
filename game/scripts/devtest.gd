@@ -382,18 +382,389 @@ func _hands() -> void:
 		v.queue_free()
 		await _wait(0.2)
 	# HUD screens
-	w.hud.open_inventory()
+	w.hud.open_book()
 	await _wait(0.4)
-	await _shot("h16_crafting")
-	w.hud.open_rv_menu(rv)
-	await _wait(0.4)
-	await _shot("h17_rv_workshop")
+	await _shot("h16_notebook")
 	w.hud.close_modal()
 	var ok_save := Game.save_game()
 	var data := Game.load_game_data()
 	_log("save ok %s, slots %s, worn %s, loose items %d" % [ok_save, str(data.get("slots")), str(data.get("worn")), data.get("items", []).size()])
 
+func _find_item(id: String) -> Node:
+	var best: Node = null
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if is_instance_valid(it) and not it.is_queued_for_deletion() and it.id == id:
+			if best == null or it.global_position.distance_to(Game.player.global_position) < best.global_position.distance_to(Game.player.global_position):
+				best = it
+	return best
+
+## Walk to an item lying in the world and pick it up for real.
+func _fetch(id: String) -> bool:
+	var it := _find_item(id)
+	if it == null:
+		_log("FAIL: no %s lying around" % id)
+		return false
+	var p: Vector3 = it.global_position
+	_player_at(_ground(p.x + 0.9, p.z), 0.0)
+	await _wait(0.1)
+	_look_at_point(it.global_position)
+	var ok: bool = Game.pick_up(it)
+	await _wait(0.1)
+	return ok
+
+func _mount_node(slot: String) -> Node:
+	return Game.rv._mounts.get(slot)
+
+func _rv_part(action: String) -> Node:
+	for ch in Game.rv.get_children():
+		if ch.get_script() == load("res://scripts/rv_part.gd") and ch.action == action:
+			return ch
+	return null
+
+func _aim_prompt(target: Vector3) -> String:
+	_look_at_point(target)
+	await _wait(0.15)
+	Game.player._update_prompt()
+	var lt = Game.player.look_target
+	if lt == null:
+		_log("  (aim hit: %s)" % str(Game.player.ray.get_collider()))
+	return Game.player.prompt
+
+## 1.4: start with a stripped van and put it together by hand.
+func _assembly() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	w.hud.close_modal()
+	Game.time_of_day = 10.0
+	Game.god_mode = true
+	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
+	await _settle(pl.global_position)
+	await _wait(1.5)
+	_log("start modules %s missing %s" % [str(rv.modules), str(rv.missing)])
+	_log("needs to drive: %s" % str(rv.missing_for_drive()))
+	var lot := 0
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if it.global_position.distance_to(rv.global_position) < 12.0:
+			lot += 1
+	_log("items lying on the starter lot: %d" % lot)
+	var side: Vector3 = rv.to_global(Vector3(10.0, 0, 6.0))
+	_player_at(_ground(side.x, side.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(2.0, 1.0, 0.0)))
+	await _wait(0.6)
+	await _shot("a01_stripped_van_lot")
+	var front: Vector3 = rv.to_global(Vector3(3.5, 0, 8.5))
+	_player_at(_ground(front.x, front.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.4, 3.0)))
+	await _wait(0.4)
+	await _shot("a02_stripped_van_front")
+	rv.do_action("door", pl)
+	await _wait(0.3)
+	pl.rotation.y = rv.rotation.y + PI
+	pl.pitch = -0.15
+	pl.head.rotation.x = -0.15
+	await _wait(0.4)
+	await _shot("a03_bare_interior_cab")
+	pl.rotation.y = rv.rotation.y
+	await _wait(0.3)
+	await _shot("a04_bare_interior_rear")
+	rv.do_action("door", pl)
+	await _wait(0.2)
+	# put the knife down so both hands are free, carry the toolkit to the van
+	pl._place_valid = true
+	pl._place_xf = Transform3D(Basis.IDENTITY, _ground(pl.global_position.x + 0.5, pl.global_position.z) + Vector3(0, 0.02, 0))
+	pl._place_host = null
+	pl.place_held()
+	await _fetch("toolkit")
+	var hood: Vector3 = rv.to_global(Vector3(0.6, 0, 6.2))
+	_player_at(_ground(hood.x, hood.z), 0.0)
+	pl._place_xf = Transform3D(Basis.IDENTITY, _ground(hood.x + 0.3, hood.z))
+	pl._place_valid = true
+	pl.place_held()
+	_log("toolkit set down at the hood: count %d" % Game.count("toolkit"))
+	# engine
+	await _fetch("engine_block")
+	_player_at(_ground(hood.x, hood.z), 0.0)
+	var pr: String = await _aim_prompt(rv.to_global(Vector3(0, 1.68, rv.FRONT_Z + 0.85)))
+	_log("hood prompt holding engine: '%s'" % pr)
+	rv.do_action("hood", pl)
+	_log("engine fitted: %s (engine %d%%)" % [rv.modules.has("engine"), int(rv.parts["engine"])])
+	# battery
+	await _fetch("car_battery")
+	var bat := _rv_part("battery")
+	var bp: Vector3 = bat.global_position + rv.global_transform.basis.x * -1.4
+	_player_at(_ground(bp.x, bp.z), 0.0)
+	rv.do_action("battery", pl)
+	_log("battery fitted: missing %s battery %d" % [str(rv.missing), int(rv.battery)])
+	# carry the toolkit along to the wheels
+	await _fetch("toolkit")
+	Game.select_slot(0)
+	for i in range(4):
+		if Game.slots[0]["id"] != "" and Game.slots[1]["id"] != "":
+			pass
+		await _fetch("tire")
+		var wp: Vector3 = rv.wheels[i].global_position
+		var off: Vector3 = rv.global_transform.basis.x * (1.3 if i % 2 == 1 else -1.3)
+		_player_at(_ground(wp.x + off.x, wp.z + off.z), 0.0)
+		for k in range(Game.slots.size()):
+			if Game.slots[k]["id"] == "tire":
+				Game.select_slot(k)
+		pr = await _aim_prompt(wp)
+		if i == 0:
+			_log("wheel prompt: '%s'" % pr)
+		rv.do_action("wheel%d" % i, pl)
+	_log("after tires: missing %s tires %d%%" % [str(rv.missing), int(rv.parts["tires"])])
+	# set the toolkit down by the side door for the steering wheel and door
+	var dpos: Vector3 = rv.to_global(Vector3(rv.W * 0.5 + 1.2, 0, 1.0))
+	_player_at(_ground(dpos.x, dpos.z), 0.0)
+	for k in range(Game.slots.size()):
+		if Game.slots[k]["id"] == "toolkit":
+			Game.select_slot(k)
+	pl._place_xf = Transform3D(Basis.IDENTITY, _ground(dpos.x, dpos.z))
+	pl._place_valid = true
+	pl.place_held()
+	await _fetch("van_door")
+	_player_at(_ground(dpos.x, dpos.z), 0.0)
+	pr = await _aim_prompt(rv.to_global(Vector3(rv.W * 0.5 + 0.12, rv.FLOOR_Y + 1.0, 1.0)))
+	_log("door prompt holding door: '%s'" % pr)
+	rv.do_action("door", pl)
+	_log("door hung: %s" % rv.modules.has("door"))
+	# seat: inside, ghost outline shows where it goes
+	await _fetch("car_seat")
+	_player_at(_ground(dpos.x, dpos.z), 0.0)
+	rv.do_action("door", pl)
+	await _wait(0.3)
+	pl.rotation.y = rv.rotation.y + PI
+	pl.pitch = -0.3
+	pl.head.rotation.x = -0.3
+	await _wait(0.3)
+	_log("ghosts visible: %s" % str(rv._ghosts.keys()))
+	await _shot("a05_seat_ghost_outline")
+	pr = await _aim_prompt(_mount_node("seat_driver").global_position)
+	_log("seat mount prompt: '%s'" % pr)
+	if pl.look_target:
+		pl._interact()
+	_log("driver seat fitted: %s" % rv.modules.has("seat_driver"))
+	# steering wheel needs a toolkit within reach: bring it in
+	rv.do_action("door", pl)
+	await _wait(0.2)
+	await _fetch("steering_wheel")
+	await _fetch("toolkit")
+	rv.do_action("door", pl)
+	await _wait(0.2)
+	for k in range(Game.slots.size()):
+		if Game.slots[k]["id"] == "steering_wheel":
+			Game.select_slot(k)
+	rv.install_module("steering")
+	_log("steering fitted: %s" % rv.modules.has("steering"))
+	# headlight
+	await _fetch("headlight")
+	rv.install_module("headlight_l")
+	_log("needs to drive now: %s" % str(rv.missing_for_drive()))
+	# fuel
+	for k in range(Game.slots.size()):
+		if Game.slots[k]["id"] != "toolkit" and Game.slots[k]["id"] != "":
+			Game.slots[k] = {"id": "", "n": 0}
+	await _fetch("fuel_can")
+	rv.do_action("fuel", pl)
+	_log("fuel %d, holding %s" % [int(rv.fuel), str(Game.slots)])
+	# drive away
+	rv.do_action("drive", pl)
+	await _wait(0.3)
+	_log("driving %s" % pl.driving)
+	rv.try_start_engine()
+	if not rv.engine_on:
+		rv.try_start_engine()
+	if not rv.engine_on:
+		rv.try_start_engine()
+	_log("engine on %s" % rv.engine_on)
+	var z0: Vector3 = rv.global_position
+	Input.action_press("move_forward", 1.0)
+	await _wait(5.0)
+	Input.action_release("move_forward")
+	Input.action_press("jump")
+	await _wait(2.0)
+	Input.action_release("jump")
+	_log("drove %.1f m, speed now %.1f" % [rv.global_position.distance_to(z0), rv.speed_kmh()])
+	await _shot("a06_driving_assembled")
+	pl.exit_vehicle()
+	await _wait(0.5)
+	# workbench: bolts, then a kitchen counter
+	var bench: Node = null
+	for st in get_tree().get_nodes_in_group("structure"):
+		if st.type == "workbench":
+			bench = st
+	_log("workbench on the lot: %s" % (bench != null))
+	var bfront: Vector3 = bench.to_global(Vector3(0, 0, 1.6))
+	_player_at(_ground(bfront.x, bfront.z), 0.0)
+	Game.place_item("scrap", 2, bench.global_transform * Transform3D(Basis.IDENTITY, Vector3(-0.4, 0.95, 0)))
+	await _wait(0.2)
+	pr = await _aim_prompt(bench.to_global(Vector3(0, 0.95, 0)))
+	_log("bench prompt with scrap: '%s'" % pr)
+	bench.assemble()
+	await _wait(0.2)
+	var bolts := 0
+	for it in bench.bench_items():
+		if it.id == "bolts":
+			bolts += it.amount
+	_log("bolts on the bench after assembling: %d" % bolts)
+	Game.place_item("wood", 3, bench.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.5, 0.95, 0.1)))
+	Game.place_item("wood", 1, bench.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.8, 0.95, -0.1)))
+	await _wait(0.2)
+	pr = await _aim_prompt(bench.to_global(Vector3(0, 0.95, 0)))
+	_log("bench prompt with wood + bolts: '%s'" % pr)
+	var m: Array = bench.bench_matches()
+	for i in range(m.size()):
+		if m[0]["out"] != "kitchen_unit":
+			bench.cycle_recipe()
+	var names := []
+	for r in m:
+		names.append(r["out"])
+	_log("bench matches: %s" % str(names))
+	while bench.bench_matches()[wrapi(bench._choice, 0, bench.bench_matches().size())]["out"] != "kitchen_unit":
+		bench.cycle_recipe()
+	bench.assemble()
+	await _wait(0.3)
+	_log("kitchen counter made: %s" % (_find_item("kitchen_unit") != null))
+	_look_at_point(bench.to_global(Vector3(0, 0.6, 0.8)))
+	await _wait(0.3)
+	await _shot("a07_workbench_output")
+	# fit counter + stove, cook on the stove
+	Game.slots = [{"id": "", "n": 0}, {"id": "", "n": 0}]
+	Game._changed()
+	await _fetch("kitchen_unit")
+	rv.do_action("door", pl)
+	await _wait(0.2)
+	for k in range(Game.slots.size()):
+		if Game.slots[k]["id"] == "kitchen_unit":
+			Game.select_slot(k)
+	rv.install_module("kitchen")
+	Game.slots[Game.selected_slot] = {"id": "stove_unit", "n": 1}
+	Game._changed()
+	await _wait(0.2)
+	_log("stove ghost: %s" % str(rv._ghosts.get("stove") != null and rv._ghosts["stove"].visible))
+	rv.install_module("stove")
+	_log("kitchen %s stove %s" % [rv.modules.has("kitchen"), rv.modules.has("stove")])
+	Game.slots[Game.selected_slot] = {"id": "raw_meat", "n": 1}
+	Game._changed()
+	rv.do_action("stove", pl)
+	rv.do_action("stove", pl)
+	_log("stove on %s, heat spots %d" % [rv.stove_on, rv.heat_spots().size()])
+	pl.rotation.y = rv.rotation.y + PI * 0.6
+	pl.pitch = -0.6
+	pl.head.rotation.x = -0.6
+	await _wait(17.0)
+	var cooked := false
+	for it in rv.get_node("Cargo").get_children():
+		if it.is_in_group("world_item") and it.id == "cooked_meat":
+			cooked = true
+	_log("meat cooked on the stove: %s" % cooked)
+	await _shot("a08_stove_cooking")
+	rv.do_action("stove", pl)
+	# sink: water tank, fill a bottle, drink it, keep the bottle
+	rv.modules["water_tank"] = true
+	rv._apply_modules()
+	rv.water = 10.0
+	Game.slots[Game.selected_slot] = {"id": "sink_unit", "n": 1}
+	Game._changed()
+	rv.install_module("sink")
+	Game.slots[Game.selected_slot] = {"id": "bottle_empty", "n": 1}
+	Game._changed()
+	rv.do_action("sink", pl)
+	_log("after filling at sink: held %s, tank %d" % [Game.equipped(), int(rv.water)])
+	Game.consume(Game.equipped())
+	_log("after drinking: held %s" % Game.equipped())
+	# take the stove back out with G (empty hand)
+	rv.do_action("door", pl)
+	await _wait(0.2)
+	# campfire: boil dirty water on the grill
+	var cf: Vector3 = rv.to_global(Vector3(7.0, 0, -6.0))
+	cf.y = w.gen.height(cf.x, cf.z)
+	var cid := Game.new_struct_id()
+	Net.place_structure(cid, {"type": "campfire", "pos": Game.arr(cf), "rot": 0.0, "data": {"fuel": 600.0}})
+	await _wait(0.3)
+	var fire: Node = w.structures[cid]
+	_player_at(_ground(cf.x + 1.4, cf.z), 0.0)
+	Game.slots[Game.selected_slot] = {"id": "water_dirty", "n": 1}
+	Game._changed()
+	pr = await _aim_prompt(cf + Vector3(0, 0.3, 0))
+	_log("campfire prompt: '%s'" % pr)
+	fire.interact(pl)
+	Game.slots[Game.selected_slot] = {"id": "potato", "n": 2}
+	Game._changed()
+	fire.interact(pl)
+	_look_at_point(cf + Vector3(0, 0.3, 0))
+	await _wait(17.0)
+	var boiled: bool = _find_item("water_clean") != null and _find_item("water_clean").global_position.distance_to(cf) < 1.0
+	var baked := _find_item("baked_potato")
+	_log("boiled on the campfire: %s, baked potatoes: %s" % [boiled, str(baked.amount) if baked else "none"])
+	await _shot("a09_campfire_grill")
+	# fit everything (cheat) for the full fit-out look
+	for slot in Game.Data.VAN_SLOTS:
+		rv.modules[slot] = true
+	for i in range(4):
+		rv.wheel_kind["wheel%d" % i] = "offroad_tire"
+	rv.paint = 3
+	rv._apply_visuals()
+	rv.interior_lights = true
+	rv._update_lights()
+	var side2: Vector3 = rv.to_global(Vector3(7.5, 0, 4.5))
+	_player_at(_ground(side2.x, side2.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.4, 0.5)))
+	await _wait(0.6)
+	await _shot("a10_fitted_van_exterior")
+	rv.do_action("door", pl)
+	await _wait(0.3)
+	pl.rotation.y = rv.rotation.y + PI * 0.75
+	pl.pitch = -0.3
+	pl.head.rotation.x = -0.3
+	await _wait(0.4)
+	await _shot("a11_fitted_interior_galley")
+	pl.rotation.y = rv.rotation.y
+	pl.pitch = -0.2
+	pl.head.rotation.x = -0.2
+	await _wait(0.4)
+	await _shot("a12_fitted_interior_rear")
+	pl.rotation.y = rv.rotation.y + PI
+	await _wait(0.4)
+	await _shot("a13_fitted_interior_cab")
+	# remove a module with G
+	Game.slots = [{"id": "", "n": 0}, {"id": "", "n": 0}]
+	Game.select_slot(0)
+	Game._changed()
+	var rp := _rv_part("radio")
+	pr = await _aim_prompt(rp.global_position)
+	_log("radio prompt: '%s'" % pr)
+	if pl.look_target == rp:
+		pl.place_or_grab()
+	_log("radio removed: %s, holding %s" % [not rv.modules.has("radio"), Game.equipped()])
+	w.hud.open_book()
+	await _wait(0.5)
+	await _shot("a14_notebook")
+	w.hud.close_modal()
+	# save, reload state, old-save compatibility
+	var st: Dictionary = rv.save_state()
+	var ok_save := Game.save_game()
+	var data := Game.load_game_data()
+	_log("save ok %s, saved modules %d" % [ok_save, data["rv"].get("modules", {}).size()])
+	var legacy := st.duplicate(true)
+	legacy.erase("modules")
+	legacy.erase("wheel_kind")
+	rv.apply_state(legacy)
+	_log("old save without modules -> %d modules, can drive: %s" % [rv.modules.size(), str(rv.missing_for_drive())])
+
 func _run() -> void:
+	if "--assembly" in OS.get_cmdline_user_args():
+		var ma := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		ma._start_world({})
+		await _wait(1.5)
+		await _assembly()
+		var fa := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		fa.store_string("\n".join(log_lines))
+		fa.close()
+		get_tree().quit()
+		return
 	if "--hands" in OS.get_cmdline_user_args():
 		var mh := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
@@ -663,7 +1034,7 @@ func _run() -> void:
 	w.hud.open_inventory()
 	await _wait(0.4)
 	await _shot("14_inventory")
-	w.hud.open_rv_menu(rv)
+	w.hud.open_book()
 	await _wait(0.4)
 	await _shot("15_rv_workshop")
 	w.hud.open_build_menu()
