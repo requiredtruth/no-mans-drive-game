@@ -1,10 +1,11 @@
 # No Man's Drive — required features
 
-### Continued Nomad Drive-style survival expansion — v1.14.0
+### Continued Nomad Drive-style survival expansion — v1.14.1
 
 - ✅ Add a separate normal work truck (distinct from pickup and from semi tractor) with drivable controls, repairable parts, cargo and working tailgate.
 - ✅ Add a distinct drivable semi tractor, six wheels, rear service locker and trailer hitch. Keep the box truck as a separate class.
 - ✅ Add a double-long bare motorhome shell that can be furnished and used for hauling. Rear access, physical storage, vehicle repairs and save/load must work.
+- ✅ Make beds, chairs and other placed furniture attach to and save with any vehicle, including the bare motorhome.
 - ✅ Keep multiple furnished RV sizes as well as the large flagship RV, compact RV and touring RV.
 - ✅ Ensure beds sleep to 05:00 at night; bed frame in the flagship RV works even before a mattress is fitted.
 - ✅ Make the main RV dinette benches and smaller camper benches sit-able in first person, restoring energy with E/Jump stand-up.

@@ -6,6 +6,7 @@ const Data = preload("res://scripts/data.gd")
 const Shapes = preload("res://scripts/shapes.gd")
 const RvPart = preload("res://scripts/rv_part.gd")
 const Mounts = preload("res://scripts/mounts.gd")
+const Structure = preload("res://scripts/structure.gd")
 
 const SPECS := {
 	"pickup": {"name": "Pickup Truck", "mass": 2100.0, "power": 7200.0, "top": 33.0, "fuel": 75.0, "w": 1.95, "wr": 0.42, "wz": [-1.75, 1.6], "wx": 0.86, "awd": true, "grip": 3.2,
@@ -70,6 +71,9 @@ var _rear_gate_home := Vector3.ZERO
 var engine_kind := "engine_block"
 var wheel_kind := {}
 var _camper_seats := {} # local floor anchors for real sit-able camper benches
+var _camper_drawers := {} # individually usable drawers
+var _camper_drawer_state := {}
+var attached: Array = [] # furniture fixed to the vehicle in vehicle-local coordinates
 
 ## Cab interior: carpet, door cards, pillars, headliner, rear wall and a gauge cluster, so from
 ## the driver's seat you sit inside a real cab instead of looking out through a glass shell.
@@ -160,6 +164,7 @@ func _ready() -> void:
 	angular_damp = 0.8
 	add_to_group("vehicle")
 	_build()
+	_restore_camper_drawers()
 	set_rear_open(rear_open, false)
 	_engine_audio = Audio.looping_3d("engine_loop", self, -8.0, "Vehicle")
 	_engine_audio.stop()
@@ -183,11 +188,13 @@ func _apply_state(s: Dictionary) -> void:
 	wheel_kind = s.get("wheel_kind", {}).duplicate()
 	rear_open = bool(s.get("rear_open", false))
 	engine_kind = str(s.get("engine_kind", "engine_block"))
+	_camper_drawer_state = s.get("camper_drawers", {}).duplicate(true)
 
 func save_state() -> Dictionary:
 	return {"kind": kind, "xform": [Game.arr(global_position), Game.arr(rotation)], "fuel": fuel, "battery": battery,
 		"parts": parts, "upgrades": upgrades, "paint": paint, "odometer": odometer, "missing": missing,
 		"rear_open": rear_open, "engine_kind": engine_kind, "wheel_kind": wheel_kind,
+		"camper_drawers": _camper_drawer_saved(), "attached": attached.duplicate(true),
 		"trailer": trailer.vid if trailer and is_instance_valid(trailer) else "",
 		"cargo": Game.world.cargo_records(self) if Game.world else []}
 
@@ -409,7 +416,13 @@ func _build() -> void:
 					_part(Vector3(w * 0.5 - 0.83, floor_y + 0.49, sz), Vector3(0.16, 0.5, 0.48), "sit_bench:%d" % i)
 				for i in range(3):
 					var dz := -0.12 + float(i) * 0.27
-					_part(Vector3(-w * 0.5 + 0.58, floor_y + 0.53, dz), Vector3(0.15, 0.18, 0.22), "camper_drawer:%d" % i)
+					var slide := Node3D.new()
+					slide.position = Vector3(-w * 0.5 + 0.51, floor_y + 0.53, dz)
+					add_child(slide)
+					Lib.box(slide, Vector3.ZERO, Vector3(0.035, 0.21, 0.22), Items.steel())
+					Lib.box(slide, Vector3(0.03, 0.03, 0), Vector3(0.02, 0.028, 0.13), Items.dark_steel())
+					_camper_drawers[str(i)] = {"pivot": slide, "home": slide.position.x, "open": false, "items": []}
+					_part(Vector3(-w * 0.5 + 0.61, floor_y + 0.53, dz), Vector3(0.16, 0.22, 0.23), "camper_drawer:%d" % i)
 		"offroader":
 			var o := Shapes.arched_bottom(-2.0, 2.05, by, arches)
 			for p in [Vector2(2.12, 0.8), Vector2(2.05, 1.25), Vector2(1.05, 1.32), Vector2(0.75, 1.95), Vector2(-1.9, 1.98), Vector2(-2.05, 1.25)]:
@@ -792,6 +805,93 @@ func set_rear_open(open: bool, animate := true) -> void:
 		_rear_anim.tween_property(_rear_gate, "rotation:x", angle, 0.35)
 		Audio.play_at("door", global_position, -5.0, 0.9)
 
+## Camper drawers are physical pull-out compartments; stacks survive save and reload.
+func _camper_drawer_saved() -> Dictionary:
+	var out := {}
+	for key in _camper_drawers:
+		var drawer: Dictionary = _camper_drawers[key]
+		out[key] = {"open": bool(drawer["open"]), "items": (drawer["items"] as Array).duplicate(true)}
+	return out
+
+func _restore_camper_drawers() -> void:
+	for key in _camper_drawers:
+		var drawer: Dictionary = _camper_drawers[key]
+		var saved: Dictionary = _camper_drawer_state.get(key, {})
+		drawer["open"] = bool(saved.get("open", false))
+		drawer["items"] = (saved.get("items", []) as Array).duplicate(true)
+		(drawer["pivot"] as Node3D).position.x = float(drawer["home"]) + (0.28 if drawer["open"] else 0.0)
+
+func _camper_drawer_action(key: String) -> void:
+	if not _camper_drawers.has(key):
+		return
+	var drawer: Dictionary = _camper_drawers[key]
+	if not drawer["open"]:
+		drawer["open"] = true
+		create_tween().tween_property(drawer["pivot"], "position:x", float(drawer["home"]) + 0.28, 0.25)
+		Audio.play_at("door", global_position, -12.0)
+		return
+	if Game.equipped() != "":
+		var stack: Dictionary = Game.take_held()
+		if str(stack.get("id", "")) != "":
+			(drawer["items"] as Array).append(stack.duplicate(true))
+			Game.notify("Item stored in camper drawer")
+		return
+	var items: Array = drawer["items"]
+	if not items.is_empty():
+		var stack: Dictionary = items[items.size() - 1]
+		var item_id: String = str(stack["id"])
+		if Game.space_for(item_id) < int(stack["n"]):
+			Game.notify("Clear hand space to retrieve the stored item")
+			return
+		Game.add_item(item_id, int(stack["n"]), true)
+		items.pop_back()
+		if stack.has("c") or stack.has("sd"):
+			for sl in Game.slots:
+				if sl["id"] == item_id and not sl.has("c") and not sl.has("sd"):
+					if stack.has("c"):
+						sl["c"] = stack["c"]
+					if stack.has("sd"):
+						sl["sd"] = stack["sd"]
+					break
+		Game.notify("Item retrieved from camper drawer")
+		return
+	drawer["open"] = false
+	create_tween().tween_property(drawer["pivot"], "position:x", float(drawer["home"]), 0.25)
+	Audio.play_at("door", global_position, -12.0)
+
+## Attach furniture, chairs, beds and storage to ANY driveable vehicle.
+func attach_structure(world_rec: Dictionary) -> void:
+	var rec := world_rec.duplicate(true)
+	rec["pos"] = Game.arr(to_local(Game.v3(rec["pos"])))
+	rec["rot"] = float(rec["rot"]) - global_rotation.y
+	attached.append(rec)
+	_spawn_attached(rec)
+
+func _spawn_attached(rec: Dictionary) -> Node:
+	var s := StaticBody3D.new()
+	s.set_script(Structure)
+	s.persistent = false
+	get_node("Cargo").add_child(s)
+	s.setup("", rec)
+	s.collision_layer = 2
+	s.collision_mask = 0
+	s.remove_from_group("roof")
+	s.set_meta("rv_rec", rec)
+	s.set_meta("host", self)
+	s.save_cb = func(state: Dictionary) -> void: rec["data"] = state
+	return s
+
+func restore_attached(list: Array) -> void:
+	for rec in list:
+		var local_rec: Dictionary = rec.duplicate(true)
+		attached.append(local_rec)
+		_spawn_attached(local_rec)
+
+func detach_structure(s: Node) -> void:
+	var rec: Dictionary = s.get_meta("rv_rec")
+	attached.erase(rec)
+	s.queue_free()
+
 func cargo_store() -> void:
 	if not rear_open:
 		set_rear_open(true)
@@ -869,7 +969,15 @@ func prompt_for(action: String) -> String:
 		"cargo": return ("[E] Store held item in %s" % display_name() if Game.equipped() != "" else "[E] Take an item from vehicle cargo") if rear_open else "[E] Open rear cargo door"
 		"sleep": return "[E] Sleep in the camper bed"
 		"sit_bench:0", "sit_bench:1": return "[E] Sit in camper bench (recover energy)"
-		"camper_drawer:0", "camper_drawer:1", "camper_drawer:2": return "[E] Use camper storage drawer"
+		"camper_drawer:0", "camper_drawer:1", "camper_drawer:2":
+			var drawer: Dictionary = _camper_drawers[action.substr(14)]
+			if not drawer["open"]:
+				return "[E] Open camper drawer"
+			if Game.equipped() != "":
+				return "[E] Store held item in camper drawer"
+			if not (drawer["items"] as Array).is_empty():
+				return "[E] Take stored item from camper drawer"
+			return "[E] Close camper drawer"
 	return ""
 
 func do_action(action: String, player: Node) -> void:
@@ -895,7 +1003,7 @@ func do_action(action: String, player: Node) -> void:
 			if _camper_seats.has(action):
 				player.sit_in(_camper_seats[action])
 		"camper_drawer:0", "camper_drawer:1", "camper_drawer:2":
-			cargo_store()
+			_camper_drawer_action(action.substr(14))
 		"fuel":
 			if Game.equipped() != "fuel_can":
 				Game.notify("Carry a full Fuel Can here to pour it in")

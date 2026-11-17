@@ -2263,6 +2263,11 @@ func _v112() -> void:
 		_check_quality(v.rear_open, "cargo interaction opens rear access: " + kind)
 	var a = w.vehicle_nodes["quality_v112_box_truck"]
 	var long_rv = w.vehicle_nodes["quality_v112_long_rv"]
+	var local_chair := Vector3(0.0, 1.04, -5.5)
+	long_rv.attach_structure({"type": "chair", "pos": Game.arr(long_rv.to_global(local_chair)), "rot": long_rv.global_rotation.y, "data": {}})
+	_check_quality(long_rv.attached.size() == 1 and long_rv.save_state()["attached"].size() == 1, "long bare RV supports persistent placeable furniture")
+	var furniture = long_rv.get_node("Cargo").get_children().filter(func(node: Node) -> bool: return node.is_in_group("structure"))
+	_check_quality(not furniture.is_empty() and furniture[0].is_in_group("placeable"), "placed RV furniture can be sat on and moved")
 	_check_quality(long_rv.wheels.size() == 6 and long_rv._camper_seats.is_empty(), "bare double-length RV has six wheels and no installed furniture")
 	_check_quality(w.vehicle_nodes["quality_v112_semi"].wheels.size() == 6, "semi tractor has a pair of rear axles")
 	_check_quality(w.vehicle_nodes["quality_v112_work_truck"].display_name() != w.vehicle_nodes["quality_v112_semi"].display_name(), "normal work truck and semi are separate vehicle options")
@@ -2278,6 +2283,15 @@ func _v112() -> void:
 	_check_quality((van._drawers["0"]["items"] as Array).is_empty() and Game.carried("scrap") > 0, "drawer returns stored items")
 	van._drawer_action("0")
 	_check_quality(not van._drawers["0"]["open"], "drawer closes independently")
+	var compact = w.vehicle_nodes["quality_v112_mini_rv"]
+	_check_quality(compact._camper_drawers.size() == 3, "compact camper has three independent storage drawers")
+	Game.slots[0] = {"id": "scrap", "n": 1}
+	compact._camper_drawer_action("0")
+	compact._camper_drawer_action("0")
+	_check_quality(compact._camper_drawers["0"]["items"].size() == 1, "camper drawer stores a real item stack")
+	_check_quality(compact.save_state()["camper_drawers"]["0"]["items"].size() == 1, "camper drawer contents persist in the save")
+	compact._camper_drawer_action("0")
+	compact._camper_drawer_action("0")
 	var benchmark_bench: Node3D = van._bench_anchors["0"]
 	pl.sit_in(benchmark_bench)
 	_check_quality(pl.seated_at == benchmark_bench, "dinette bench seats player with first-person view")
