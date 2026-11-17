@@ -2,6 +2,19 @@
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.
 
+## Version 1.7.1: playtest fixes
+
+- [x] Steering wheel raised into the driver's view; driving readout moved to the top of the screen.
+- [x] Van barn doors open and close (E) and you can walk in at the back; two rear steps; ladder on the right door.
+- [x] Climb onto vehicles, trailers, crates and walls with Jump (up to 3.7 m).
+- [x] House roofs no longer upside down.
+- [x] Bookshelf moved away from the front door.
+- [x] House furniture (sofa, armchair, rug, table, chairs) is movable and stays where you put it.
+- [x] Sharper, smoother shadows (bigger shadow maps, 4 cascades, soft filtering).
+- [x] Sedan, pickup truck and box truck parked at the start.
+- [x] Test depot: every item laid out at the start of a new game (and on the cheats menu).
+- [x] No red placement ghost on walls.
+
 ## Version 1.7.0: item backlog batch 1
 
 ### Gameplay systems added for the new items

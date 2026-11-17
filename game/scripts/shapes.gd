@@ -23,7 +23,7 @@ static func _n3(n: Vector2, x: float) -> Vector3:
 ## glass_edges: indices of outline edges (i -> i+1) whose centre strip uses the second surface.
 ## caps = false leaves the two flat sides open so they can be built with real openings
 ## (side_with_holes on the polygon returned by inset_outline).
-static func extrude(body: SurfaceTool, glass: SurfaceTool, outline: PackedVector2Array, width: float, bevel: float, glass_edges: Array = [], x0 := 0.0, caps := true) -> void:
+static func extrude(body: SurfaceTool, glass: SurfaceTool, outline: PackedVector2Array, width: float, bevel: float, glass_edges: Array = [], x0 := 0.0, caps := true, open_edge := Callable()) -> void:
 	var poly := _ccw(outline)
 	var n := poly.size()
 	# outward edge normals (CCW polygon: outward = rotate edge direction clockwise)
@@ -53,7 +53,10 @@ static func extrude(body: SurfaceTool, glass: SurfaceTool, outline: PackedVector
 		var rings_j := [_p3(inset[j], xs[0]), _p3(poly[j], xs[1]), _p3(poly[j], xs[2]), _p3(inset[j], xs[3])]
 		var norm_i := [(_n3(ni, 0.0) + Vector3(-1, 0, 0)).normalized(), _n3(ni, 0.0), _n3(ni, 0.0), (_n3(ni, 0.0) + Vector3(1, 0, 0)).normalized()]
 		var norm_j := [(_n3(nj, 0.0) + Vector3(-1, 0, 0)).normalized(), _n3(nj, 0.0), _n3(nj, 0.0), (_n3(nj, 0.0) + Vector3(1, 0, 0)).normalized()]
+		var open := open_edge.is_valid() and bool(open_edge.call(poly[i], poly[j]))
 		for r in range(3):
+			if open and r == 1:
+				continue # leave this face open (e.g. a doorway)
 			var st := glass if (r == 1 and glass_edges.has(i) and glass != null) else body
 			var a: Vector3 = rings_i[r]
 			var b: Vector3 = rings_i[r + 1]

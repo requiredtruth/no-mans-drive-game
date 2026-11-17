@@ -2,6 +2,11 @@
 
 What is still to be made. Finished work moves to `done.md`. Each item needs a real 3D model and texture, an entry in `game/scripts/data.gd`, a model in `game/scripts/items.gd` (or a structure in `structure.gd` for furniture), and a place in the loot tables, a recipe or a world drop. The full source lists are in `docs/item-backlog/`.
 
+## Testing phase
+
+- [ ] The test depot (every item at the start of a new game) stays on until everything has been checked; turn it off with `TEST_DEPOT` in `game/scripts/world.gd` for a normal start.
+- [ ] Make the built-in house cabinets, wardrobes and fridges movable too (they are searchable containers today).
+
 ## Next up (1.8)
 
 - [ ] Vehicle parts that change how the van drives: suspension kits, mud, sand and solid tires, radiators and coolant (engine heat), turbo, supercharger, nitrous, lithium battery, alternator and starter motor as fittable modules.

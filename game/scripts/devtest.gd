@@ -1302,7 +1302,141 @@ func _v17() -> void:
 	pl._cooldown = 0.0
 	pl.use_primary()
 
+func _v171() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	w.hud.close_modal()
+	Game.time_of_day = 11.0
+	Game.weather = "clear"
+	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
+	await _settle(pl.global_position)
+	await _wait(1.5)
+	var vk := []
+	for vid in w.vehicle_nodes:
+		vk.append("%s:%s %.0fm" % [vid, w.vehicle_nodes[vid].kind, w.vehicle_nodes[vid].global_position.distance_to(rv.global_position)])
+	_log("vehicles: %s" % str(vk))
+	_log("world items: %d" % get_tree().get_nodes_in_group("world_item").size())
+	var ov: Vector3 = rv.to_global(Vector3(-4.0, 0, -10.0))
+	_player_at(_ground(ov.x, ov.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(-9.0, 0.0, 0.0)))
+	await _wait(0.8)
+	await _shot("y01_depot")
+	_look_at_point(rv.to_global(Vector3(0.0, 1.0, 14.0)))
+	await _wait(0.5)
+	await _shot("y02_vehicles")
+	# --- shadows close up
+	var sp: Vector3 = rv.to_global(Vector3(RV_W() * 0.5 + 3.0, 0, -1.0))
+	_player_at(_ground(sp.x, sp.z), 0.0, -0.5)
+	_look_at_point(rv.to_global(Vector3(RV_W() * 0.5 + 0.5, 0.0, 0.5)))
+	await _wait(0.6)
+	await _shot("y03_shadows")
+	# --- rear doors and climbing
+	var back: Vector3 = rv.to_global(Vector3(0.0, 0, rv.REAR_Z - 3.0))
+	_player_at(_ground(back.x, back.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.8, rv.REAR_Z)))
+	await _wait(0.4)
+	await _shot("y04_rear_closed")
+	rv.do_action("rear_door", pl)
+	await _wait(1.2)
+	_log("rear open: %s" % rv.rear_open)
+	await _shot("y05_rear_open")
+	# walk in through the back
+	var p0: Vector3 = rv.to_global(Vector3(0.0, 0, rv.REAR_Z - 1.0))
+	_player_at(_ground(p0.x, p0.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.6, 0)))
+	Input.action_press("move_forward")
+	await _wait(2.5)
+	Input.action_release("move_forward")
+	_log("walked in the back: inside %s, local %s" % [rv.is_inside(pl.global_position), str(rv.to_local(pl.global_position))])
+	await _shot("y06_inside_from_back")
+	rv.set_rear(false)
+	await _wait(0.8)
+	# climb the ladder at the back
+	var lp: Vector3 = rv.to_global(Vector3(0.6, 0, rv.REAR_Z - 0.75))
+	_player_at(_ground(lp.x, lp.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0.6, 1.6, rv.REAR_Z)))
+	await _wait(0.3)
+	pl._update_prompt()
+	_log("prompt at the back: '%s'" % pl.prompt)
+	var climbed: bool = pl.try_climb()
+	await _wait(1.6)
+	_log("climb started %s; feet now %.2f m above van origin (roof at %.2f)" % [climbed, rv.to_local(pl.global_position).y, rv.ROOF_Y])
+	_look_at_point(rv.to_global(Vector3(0, rv.ROOF_Y, 3.0)))
+	await _wait(0.4)
+	await _shot("y07_on_roof")
+	# climb onto the pickup
+	var tr = w.vehicle_nodes.get("start_truck")
+	if tr:
+		var tp: Vector3 = tr.global_transform * Vector3(0, 0, -3.1)
+		_player_at(_ground(tp.x, tp.z), 0.0)
+		_look_at_point(tr.global_position + Vector3(0, 0.8, 0))
+		await _wait(0.3)
+		var c2: bool = pl.try_climb()
+		await _wait(1.5)
+		_log("climb onto the pickup: %s, feet %.2f above ground" % [c2, pl.global_position.y - w.gen.height(pl.global_position.x, pl.global_position.z)])
+	# --- steering wheel from the driver's seat (first person)
+	for slot in Game.Data.VAN_SLOTS:
+		rv.modules[slot] = true
+	rv._apply_visuals()
+	for k in rv.parts:
+		rv.parts[k] = 100.0
+	pl.enter_vehicle(rv, true)
+	rv.set_camera(false)
+	await _wait(0.8)
+	await _shot("y08_driver_view")
+	pl.exit_vehicle()
+	await _wait(0.5)
+	# --- the house up the road
+	var poi: Dictionary = w.gen.poi_for_row(1)
+	var hp: Vector3 = poi["pos"]
+	var bs := Basis(Vector3.UP, float(poi["yaw"]))
+	var view: Vector3 = hp + bs * Vector3(-6.0, 0, 15.0)
+	_player_at(_ground(view.x, view.z), 0.0)
+	await _settle(view)
+	_look_at_point(hp + Vector3(0, 2.5, 0))
+	await _wait(1.0)
+	await _shot("y09_house_roof")
+	var furn := []
+	for sid in w.structures:
+		if str(sid).begins_with("poi1_"):
+			furn.append("%s:%s" % [sid, w.structures[sid].type])
+	_log("house furniture: %s" % str(furn))
+	var inside: Vector3 = hp + bs * Vector3(0, 0.7, 2.5)
+	_player_at(inside, 0.0)
+	_look_at_point(hp + bs * Vector3(-3.0, 0.8, 1.0))
+	await _wait(0.6)
+	await _shot("y10_house_living")
+	_look_at_point(hp + bs * Vector3(0.0, 1.0, 6.0))
+	await _wait(0.4)
+	await _shot("y11_house_door_from_inside")
+	var sofa = w.structures.get("poi1_f_sofa")
+	Game.select_slot(1)
+	if sofa:
+		_player_at(sofa.global_position + bs * Vector3(1.6, 0.1, 0.0), 0.0)
+		_look_at_point(sofa.global_position + Vector3(0, 0.4, 0))
+		await _wait(0.3)
+		pl._update_prompt()
+		_log("sofa prompt '%s'" % pl.prompt)
+		pl.place_or_grab()
+		await _wait(0.3)
+		_log("carrying the sofa: %s; removed flag %s" % [Game.carried("sofa") > 0, Game.removed.has("poi1_f_sofa")])
+
+func RV_W() -> float:
+	return Game.rv.W
+
 func _run() -> void:
+	if "--v171" in OS.get_cmdline_user_args():
+		var m171 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		m171._start_world({})
+		await _wait(1.5)
+		await _v171()
+		var f171 := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		f171.store_string("\n".join(log_lines))
+		f171.close()
+		get_tree().quit()
+		return
 	if "--v17" in OS.get_cmdline_user_args():
 		var m17 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")

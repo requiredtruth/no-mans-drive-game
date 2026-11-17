@@ -80,6 +80,10 @@ var _door_home := Vector3.ZERO
 var _door_shape: CollisionShape3D
 var _door_tween: Tween
 var door_open := false
+var rear_open := false
+var _rear_shape: CollisionShape3D
+var _rear_leaves: Array = [] # [left pivot, right pivot]
+var _rear_tween: Tween
 var _prev_vel := Vector3.ZERO
 var _throttle := 0.0
 var _remote_target: Transform3D
@@ -192,7 +196,11 @@ func _build_collision() -> void:
 	var front_len := FRONT_Z - DOOR_Z1
 	_shape(Vector3(W * 0.5, FLOOR_Y + h * 0.5, DOOR_Z1 + front_len * 0.5), Vector3(0.12, h, front_len))
 	_shape(Vector3(W * 0.5, FLOOR_Y + DOOR_H + (h - DOOR_H) * 0.5, (DOOR_Z0 + DOOR_Z1) * 0.5), Vector3(0.12, h - DOOR_H, DOOR_Z1 - DOOR_Z0))
-	_shape(Vector3(0, FLOOR_Y + h * 0.5, REAR_Z), Vector3(W, h, 0.12))
+	_rear_shape = _shape(Vector3(0, FLOOR_Y + h * 0.5, REAR_Z), Vector3(W, h, 0.12))
+	# rear bumper and a step below it, so you can climb in through the back doors
+	_shape(Vector3(0, 0.74, REAR_Z - 0.16), Vector3(W, 0.24, 0.24))
+	_shape(Vector3(0, 0.57, REAR_Z - 0.36), Vector3(1.0, 0.06, 0.18))
+	_shape(Vector3(0, 0.29, REAR_Z - 0.53), Vector3(1.0, 0.06, 0.18))
 	_shape(Vector3(0, 1.45, FRONT_Z + 0.45), Vector3(W, 0.9, 0.12)) # firewall below the windshield
 	_shape(Vector3(0, 2.33, FRONT_Z + 0.1), Vector3(W, 1.4, 0.1), Vector3(-0.61, 0, 0)) # windshield
 	_shape(Vector3(0, 1.15, FRONT_Z + 0.85), Vector3(W - 0.1, 0.9, 0.9)) # hood/engine bay
@@ -300,7 +308,9 @@ func _build_exterior() -> void:
 			Vector2(FRONT_Z - 1.1, ROOF_Y + 0.22), Vector2(REAR_Z + 0.3, ROOF_Y + 0.22), Vector2(REAR_Z + 0.04, ROOF_Y + 0.14), Vector2(REAR_Z - 0.05, ROOF_Y - 0.05)]:
 		o.append(pt)
 	var bevel := 0.14
-	Shapes.extrude(body, glass, o, SKIN * 2.0, bevel, [ws_edge], 0.0, false)
+	# the rear face is left open for the barn doors
+	var rz_face := REAR_Z - 0.05
+	Shapes.extrude(body, glass, o, SKIN * 2.0, bevel, [ws_edge], 0.0, false, func(a: Vector2, b: Vector2) -> bool: return absf(a.x - rz_face) < 0.01 and absf(b.x - rz_face) < 0.01)
 	var flat := Shapes.inset_outline(o, bevel)
 	for side in [-1.0, 1.0]:
 		var holes := _side_holes(side)
@@ -387,15 +397,12 @@ func _build_exterior() -> void:
 	for x in [-0.45, 0.4]:
 		Lib.box(vis, Vector3(x, 1.84, FRONT_Z + 0.44), Vector3(0.72, 0.02, 0.025), dark, false, Vector3(-0.6, 0, 0.18 * signf(x)))
 		Lib.box(vis, Vector3(x * 1.55, 1.79, FRONT_Z + 0.5), Vector3(0.05, 0.04, 0.06), dark)
-	# ---- rear: barn doors, hinges, handle, lights, bumper with step, plate
+	# ---- rear: barn doors that open, hinges, lights, bumper with step, plate
 	var rz := REAR_Z - 0.052
-	Lib.box(vis, Vector3(0, 1.95, rz), Vector3(0.012, 2.5, 0.01), dark)
+	_build_rear_doors(vis, paint_m, dark, steel)
 	for x in [-1.06, 1.06]:
-		Lib.box(vis, Vector3(x, 1.95, rz), Vector3(0.012, 2.5, 0.01), dark)
-		for y in [1.15, 2.1, 2.95]:
-			Lib.box(vis, Vector3(x * 1.08, y, rz - 0.02), Vector3(0.1, 0.12, 0.04), steel, false, Vector3.ZERO, 0.015)
-	Lib.box(vis, Vector3(0, 3.2, rz), Vector3(2.14, 0.012, 0.01), dark)
-	Lib.box(vis, Vector3(0.14, 1.65, rz - 0.03), Vector3(0.18, 0.05, 0.04), dark, false, Vector3.ZERO, 0.02)
+		for y in [1.15, 2.1, 2.85]:
+			Lib.box(vis, Vector3(x * 1.06, y, rz - 0.02), Vector3(0.07, 0.12, 0.04), steel, false, Vector3.ZERO, 0.015)
 	Lib.box(vis, Vector3(0, ROOF_Y + 0.02, rz - 0.01), Vector3(0.32, 0.05, 0.03), _tail_mat_get())
 	Lib.box(vis, Vector3(0, 0.74, REAR_Z - 0.16), Vector3(SKIN * 2.0 + 0.04, 0.24, 0.24), plastic, false, Vector3.ZERO, 0.06)
 	Lib.box(vis, Vector3(0, 0.865, REAR_Z - 0.2), Vector3(0.8, 0.012, 0.18), Lib.mat("rubber", Color(0.25, 0.25, 0.25), 6.0, false, 0.9))
@@ -413,10 +420,7 @@ func _build_exterior() -> void:
 	Lib.box(vis, Vector3(0, ROOF_Y + 0.26, 1.2), Vector3(0.6, 0.08, 0.6), dark, false, Vector3.ZERO, 0.03)
 	Lib.box(vis, Vector3(0, ROOF_Y + 0.33, 1.2), Vector3(0.5, 0.08, 0.5), Lib.color_mat(Color(0.85, 0.87, 0.9, 0.6), 0.1), false, Vector3(0.12, 0, 0), 0.04)
 	Lib.cyl(vis, Vector3(0.35, ROOF_Y + 0.45, FRONT_Z - 1.0), 0.004, 0.008, 0.5, dark, Vector3(-0.3, 0, 0), 6)
-	for x in [0.55, 0.95]:
-		Lib.box(vis, Vector3(x, 2.1, REAR_Z - 0.18), Vector3(0.04, 2.0, 0.04), steel)
-	for k in range(6):
-		Lib.box(vis, Vector3(0.75, 1.3 + k * 0.32, REAR_Z - 0.18), Vector3(0.4, 0.03, 0.03), steel)
+	# (the rear ladder is fitted to the right-hand barn door, see _build_rear_doors)
 	# ---- underneath: chassis rails, crossmembers, rear axle and diff, exhaust, spare wheel
 	for x in [-0.52, 0.52]:
 		Lib.box(vis, Vector3(x, 0.5, 0.35), Vector3(0.1, 0.18, 7.4), steel)
@@ -708,7 +712,7 @@ func _build_interior() -> void:
 			Lib.box(vis, Vector3(x, FLOOR_Y + h * 0.5, z), Vector3(0.05, h - 0.1, 0.06), bow)
 	_wall_x(vis, -W * 0.5 + 0.06, M["bare"], WIN_L, REAR_Z, CAB_Z, false)
 	_wall_x(vis, W * 0.5 - 0.06, M["bare"], WIN_R, REAR_Z, CAB_Z, false)
-	Lib.box(vis, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.07), Vector3(W - 0.12, h, 0.03), M["bare"])
+	# (the back wall is the inside of the barn doors)
 	# cab: door cards below the cab windows, sloped header above the windshield
 	for sx in [-1.0, 1.0]:
 		Lib.box(vis, Vector3(sx * (W * 0.5 - 0.07), FLOOR_Y + 0.43, (CAB_Z + FRONT_Z + 0.35) * 0.5), Vector3(0.05, 0.86, FRONT_Z + 0.35 - CAB_Z), M["plastic"])
@@ -732,7 +736,7 @@ func _build_interior() -> void:
 		Lib.box(vis, Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4), M["black"])
 		_shape(Vector3(x, FLOOR_Y + 0.2, FRONT_Z - 1.05), Vector3(0.4, 0.38, 0.4))
 	# steering column stub
-	Lib.cyl(vis, Vector3(-0.55, FLOOR_Y + 0.78, FRONT_Z - 0.28), 0.035, 0.035, 0.3, M["black"], Vector3(-1.1, 0, 0), 10)
+	Lib.cyl(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.38), 0.035, 0.035, 0.34, M["black"], Vector3(-1.1, 0, 0), 10)
 	# light switch
 	Lib.box(vis, Vector3(W * 0.5 - 0.1, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.03, 0.12, 0.08), Lib.color_mat(Color(0.9, 0.9, 0.85)))
 	_part(Vector3(W * 0.5 - 0.12, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.1, 0.25, 0.2), "lights")
@@ -753,7 +757,7 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 	var wl := _begin("walls", vis)
 	_wall_x(wl, -W * 0.5 + 0.11, M["wall"], WIN_L, REAR_Z, CAB_Z, false)
 	_wall_x(wl, W * 0.5 - 0.11, M["wall"], WIN_R, REAR_Z, CAB_Z, false)
-	Lib.box(wl, Vector3(0, FLOOR_Y + h * 0.5, REAR_Z + 0.1), Vector3(W - 0.18, h, 0.03), M["wall"])
+	# (the barn doors close off the back)
 	Lib.box(wl, Vector3(0, ROOF_Y - 0.1, (CAB_Z + REAR_Z) * 0.5), Vector3(W - 0.18, 0.03, CAB_Z - REAR_Z), M["ceiling"])
 	for x in [-W * 0.5 + 0.13, W * 0.5 - 0.13]:
 		Lib.box(wl, Vector3(x, FLOOR_Y + 0.05, (CAB_Z + REAR_Z) * 0.5), Vector3(0.02, 0.08, CAB_Z - REAR_Z - 0.1), M["cab_trim"])
@@ -764,7 +768,7 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 	var sw := MeshInstance3D.new()
 	sw.mesh = Items.mesh("steering_wheel")
 	sw.name = "SteeringWheel"
-	sw.position = Vector3(-0.55, FLOOR_Y + 0.82, FRONT_Z - 0.42)
+	sw.position = Vector3(-0.55, FLOOR_Y + 1.02, FRONT_Z - 0.56)
 	sw.rotation = Vector3(-1.1, 0, 0)
 	stv.add_child(sw)
 	_end()
@@ -917,7 +921,7 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 func _build_mounts() -> void:
 	var tx := W * 0.5 - 0.47
 	var kx := -W * 0.5 + 0.42
-	_mount("steering", Vector3(-0.55, FLOOR_Y + 0.85, FRONT_Z - 0.45), Vector3(0.45, 0.35, 0.2))
+	_mount("steering", Vector3(-0.55, FLOOR_Y + 1.0, FRONT_Z - 0.55), Vector3(0.45, 0.4, 0.25))
 	_mount("seat_driver", Vector3(-0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
 	_mount("seat_passenger", Vector3(0.55, FLOOR_Y + 0.55, FRONT_Z - 1.1), Vector3(0.62, 0.35, 0.62))
 	_mount("radio", Vector3(0.05, FLOOR_Y + 0.85, FRONT_Z - 0.33), Vector3(0.28, 0.16, 0.12))
@@ -1367,7 +1371,7 @@ func save_state() -> Dictionary:
 	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
 		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records(),
-		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open}
+		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open, "rear_open": rear_open}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
@@ -1401,6 +1405,8 @@ func apply_state(s: Dictionary) -> void:
 	paint = int(s.get("paint", 0))
 	radio_station = int(s.get("radio_station", 0))
 	door_open = bool(s.get("door_open", false))
+	rear_open = bool(s.get("rear_open", false))
+	set_rear(rear_open, false)
 	fridge = s.get("fridge", fridge)
 	cabinet = s.get("cabinet", cabinet)
 	missing = s.get("missing", {})
@@ -1653,6 +1659,67 @@ func is_inside(p: Vector3) -> bool:
 
 ## Slide the side door open (out and back along its rail) or shut. An open or missing door
 ## leaves the doorway clear to walk through.
+const REAR_HINGE := 1.09
+const REAR_TOP := 3.0
+const REAR_SWING := 1.75
+
+func _build_rear_doors(vis: Node3D, paint_m: Material, dark: Material, steel: Material) -> void:
+	var zf := REAR_Z - 0.05
+	# fixed body panels below and above the door opening
+	Lib.box(vis, Vector3(0, (0.62 + FLOOR_Y) * 0.5, zf + 0.01), Vector3(REAR_HINGE * 2.0 + 0.02, FLOOR_Y - 0.62, 0.03), paint_m)
+	Lib.box(vis, Vector3(0, (REAR_TOP + ROOF_Y - 0.05) * 0.5, zf + 0.01), Vector3(REAR_HINGE * 2.0 + 0.02, ROOF_Y - 0.05 - REAR_TOP, 0.03), paint_m)
+	var lining := Lib.mat("ribbed_metal", Color(0.85, 0.85, 0.85), 1.2, false, 0.6, 0.5)
+	var hgt := REAR_TOP - FLOOR_Y + 0.02
+	var cy := (REAR_TOP + FLOOR_Y) * 0.5
+	for side in [-1.0, 1.0]:
+		var piv := Node3D.new()
+		piv.name = "RearDoor%s" % ("L" if side < 0.0 else "R")
+		piv.position = Vector3(side * REAR_HINGE, 0, zf - 0.005)
+		vis.add_child(piv)
+		var cx: float = -side * (REAR_HINGE * 0.5 - 0.004)
+		Lib.box(piv, Vector3(cx, cy, 0.025), Vector3(REAR_HINGE - 0.012, hgt, 0.045), paint_m, false, Vector3.ZERO, 0.01)
+		Lib.box(piv, Vector3(cx, cy, 0.052), Vector3(REAR_HINGE - 0.08, hgt - 0.08, 0.012), lining)
+		# a small window high up in each door
+		Lib.box(piv, Vector3(cx, REAR_TOP - 0.45, -0.001), Vector3(REAR_HINGE - 0.3, 0.55, 0.004), Lib.glass_mat())
+		Lib.box(piv, Vector3(cx, REAR_TOP - 0.45, -0.002), Vector3(REAR_HINGE - 0.26, 0.59, 0.003), dark)
+		if side > 0.0:
+			# handle on the right door, and the roof ladder
+			Lib.box(piv, Vector3(-REAR_HINGE + 0.2, 1.65, -0.02), Vector3(0.18, 0.05, 0.04), dark, false, Vector3.ZERO, 0.02)
+			for x in [-0.55, -0.15]:
+				Lib.box(piv, Vector3(x, 2.1, -0.13), Vector3(0.04, 2.0, 0.04), steel)
+				for y in [1.3, 2.9]:
+					Lib.box(piv, Vector3(x, y, -0.07), Vector3(0.03, 0.03, 0.12), steel)
+			for k in range(6):
+				Lib.box(piv, Vector3(-0.35, 1.3 + k * 0.32, -0.13), Vector3(0.4, 0.03, 0.03), steel)
+		_rear_leaves.append(piv)
+	# step under the bumper
+	var tread := Lib.mat("ribbed_metal", Color(0.55, 0.56, 0.58), 4.0, false, 0.5, 0.7)
+	Lib.box(vis, Vector3(0, 0.57, REAR_Z - 0.36), Vector3(1.0, 0.06, 0.18), tread, false, Vector3.ZERO, 0.01)
+	Lib.box(vis, Vector3(0, 0.29, REAR_Z - 0.53), Vector3(1.0, 0.06, 0.18), tread, false, Vector3.ZERO, 0.01)
+	for x in [-0.47, 0.47]:
+		Lib.box(vis, Vector3(x, 0.45, REAR_Z - 0.42), Vector3(0.04, 0.4, 0.04), steel, false, Vector3(-0.5, 0, 0))
+	_part(Vector3(0, FLOOR_Y + 1.0, REAR_Z - 0.12), Vector3(W - 0.3, 1.9, 0.14), "rear_door")
+
+## Swing the barn doors open (outwards, nearly flat against the sides) or shut.
+func set_rear(open: bool, animate := true) -> void:
+	rear_open = open
+	if _rear_shape:
+		_rear_shape.disabled = open
+	if _rear_tween:
+		_rear_tween.kill()
+		_rear_tween = null
+	for i in range(_rear_leaves.size()):
+		var piv: Node3D = _rear_leaves[i]
+		var ang := (REAR_SWING if i == 0 else -REAR_SWING) if open else 0.0
+		if not animate:
+			piv.rotation.y = ang
+			continue
+		if _rear_tween == null:
+			_rear_tween = create_tween().set_parallel(true)
+		_rear_tween.tween_property(piv, "rotation:y", ang, 0.6 + i * 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	if animate:
+		Audio.play_at("door", to_global(Vector3(0, FLOOR_Y + 1.0, REAR_Z)), -2.0, 0.85)
+
 func set_door(open: bool, animate := true) -> void:
 	door_open = open and modules.has("door")
 	if _door_shape:
@@ -1724,6 +1791,8 @@ func prompt_for(action: String) -> String:
 			if not modules.has("door"):
 				return ""
 			return "[E] %s the sliding door%s" % ["Close" if door_open else "Open", take]
+		"rear_door":
+			return "[E] %s the back doors" % ("Close" if rear_open else "Open")
 		"hood":
 			if not modules.has("engine"):
 				if held == "engine_block":
@@ -1809,6 +1878,8 @@ func do_action(action: String, player: Node) -> void:
 		"door":
 			if modules.has("door"):
 				set_door(not door_open)
+		"rear_door":
+			set_rear(not rear_open)
 		"hood":
 			if not modules.has("engine"):
 				if held == "engine_block":

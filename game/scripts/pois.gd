@@ -198,7 +198,7 @@ static func _house(root: Node3D, key: String, rng: RandomNumberGenerator) -> voi
 	var ang := 0.55
 	var rl := (d * 0.5 + 0.6) / cos(ang)
 	for s in [-1.0, 1.0]:
-		Lib.box(root, Vector3(0, y + h + tan(ang) * (d * 0.25 + 0.3) - 0.1, s * (d * 0.25 + 0.3)), Vector3(w + 0.8, 0.18, rl), Lib.mat("shingles", Color.WHITE, 0.4), true, Vector3(-s * ang, 0, 0))
+		Lib.box(root, Vector3(0, y + h + tan(ang) * (d * 0.25 + 0.3) - 0.1, s * (d * 0.25 + 0.3)), Vector3(w + 0.8, 0.18, rl), Lib.mat("shingles", Color.WHITE, 0.4), true, Vector3(s * ang, 0, 0))
 	for s in [-1.0, 1.0]:
 		for k in range(4):
 			var gh := (tan(ang) * d * 0.5) * (1.0 - k / 4.0)
@@ -352,6 +352,14 @@ static func _decor(parent: Node3D, pos: Vector3, id: String, rot := 0.0, s := 1.
 	n.scale = Vector3.ONE * s
 	parent.add_child(n)
 
+## Free-standing furniture in a house is real, movable furniture: it is spawned once as a
+## normal placeable (saved with the game) and never comes back once you've taken it.
+static func _furn(parent: Node3D, pos: Vector3, rot: float, type: String, id: String) -> void:
+	var xf: Transform3D = parent.global_transform * Transform3D(Basis(Vector3.UP, rot), pos)
+	var rec := {"type": type, "pos": Game.arr(xf.origin), "rot": xf.basis.get_euler().y, "data": {}}
+	if Game.world:
+		Game.world.call_deferred("spawn_poi_furniture", id, rec)
+
 static func house(root: Node3D, offset: Vector3, yaw: float, key: String, rng: RandomNumberGenerator, style: String, small := false) -> void:
 	var hn := Node3D.new()
 	hn.position = offset
@@ -396,7 +404,7 @@ static func house(root: Node3D, offset: Vector3, yaw: float, key: String, rng: R
 	var slab := (d * 0.5 + 0.55) / cos(pitch)
 	var roof_m := Lib.mat("shingles", [Color.WHITE, Color(0.8, 0.55, 0.45), Color(0.6, 0.7, 0.8), Color(0.6, 0.75, 0.55)][rng.randi() % 4], 0.4)
 	for s in [-1.0, 1.0]:
-		Lib.box(hn, Vector3(0, fy + h + rise * 0.5 + 0.05, s * (d * 0.25 + 0.25)), Vector3(w + 0.8, 0.14, slab), roof_m, true, Vector3(-s * pitch, 0, 0), 0.03)
+		Lib.box(hn, Vector3(0, fy + h + rise * 0.5 + 0.05, s * (d * 0.25 + 0.25)), Vector3(w + 0.8, 0.14, slab), roof_m, true, Vector3(s * pitch, 0, 0), 0.03)
 		Lib.box(hn, Vector3(0, fy + h - 0.05, s * (d * 0.5 + 0.5)), Vector3(w + 0.8, 0.18, 0.06), Lib.mat("planks", Color(0.9, 0.9, 0.88), 1.0))
 	Lib.box(hn, Vector3(0, fy + h + rise + 0.08, 0), Vector3(w + 0.85, 0.1, 0.22), roof_m)
 	var gable_body := load("res://scripts/shapes.gd")
@@ -426,20 +434,12 @@ static func house(root: Node3D, offset: Vector3, yaw: float, key: String, rng: R
 	var lx := -w * 0.25
 	var lz := (d * 0.5 + split_z) * 0.5 + 0.2
 	if not small:
-		Lib.box(hn, Vector3(lx, y + 0.005, lz), Vector3(2.6, 0.01, 1.8), Lib.mat("carpet", Color.WHITE, 1.0))
-		# sofa
-		var sx := -w * 0.5 + 0.55
-		Lib.box(hn, Vector3(sx, y + 0.25, lz), Vector3(0.85, 0.45, 2.0), fabric, true, Vector3.ZERO, 0.08)
-		Lib.box(hn, Vector3(sx - 0.33, y + 0.65, lz), Vector3(0.22, 0.55, 2.0), fabric, false, Vector3.ZERO, 0.08)
-		for zz in [lz - 1.0, lz + 1.0]:
-			Lib.box(hn, Vector3(sx, y + 0.45, zz), Vector3(0.85, 0.35, 0.2), fabric, false, Vector3.ZERO, 0.08)
-		for k in range(3):
-			Lib.box(hn, Vector3(sx + 0.05, y + 0.52, lz - 0.6 + k * 0.6), Vector3(0.6, 0.1, 0.55), fabric, false, Vector3.ZERO, 0.05)
-		Lib.box(hn, Vector3(lx + 0.2, y + 0.22, lz), Vector3(0.8, 0.06, 1.2), dark, true, Vector3.ZERO, 0.02)
-		_decor(hn, Vector3(lx + 0.2, y + 0.25, lz - 0.2), "coffee", 0.4)
-		_decor(hn, Vector3(lx + 0.3, y + 0.25, lz + 0.3), "rope", 0.0, 0.6)
-		# bookshelf (searchable) with decor
-		var shelf := loot(hn, Vector3(lx - 0.2, y, d * 0.5 - 0.35), Vector3(1.4, 1.9, 0.35), dark, key + "_shelf", "Bookshelf", "living")
+		# movable furniture: sofa against the side wall, a rug, and a spare shelf unit
+		_furn(hn, Vector3(-w * 0.5 + 0.55, y, lz), PI * 0.5, "sofa", key + "_f_sofa")
+		_furn(hn, Vector3(lx + 0.4, y, lz), PI * 0.5, ["rug", "mod_rug_persian", "mod_rug_braided", "mod_rug_woven", "mod_rug_cowhide"][rng.randi() % 5], key + "_f_rug")
+		_furn(hn, Vector3(lx + 0.9, y, lz - 0.7), PI * 0.5, "chair", key + "_f_armchair")
+		# bookshelf (searchable) against the partition wall, clear of every doorway
+		var shelf := loot(hn, Vector3(-w * 0.3 + 1.4, y, split_z + 0.25), Vector3(1.4, 1.9, 0.35), dark, key + "_shelf", "Bookshelf", "living")
 		cardboard(hn, Vector3(lx + 1.1, y, lz + 1.15), key + "_mbox", "living" if rng.randf() < 0.6 else "kitchen", rng.randf() * TAU, "moving box")
 		for k in range(4):
 			Lib.box(shelf, Vector3(0, 0.3 + k * 0.45, 0.02), Vector3(1.3, 0.03, 0.3), dark)
@@ -463,15 +463,12 @@ static func house(root: Node3D, offset: Vector3, yaw: float, key: String, rng: R
 	_decor(cab, Vector3(-0.2, 0.95, -0.1), "water_dirty", 0.0)
 	loot(hn, Vector3(kx + 1.9 if kx + 1.9 < w * 0.5 - 0.4 else kx - 1.3, y, counter_z), Vector3(0.75, 1.8, 0.7), Lib.mat("paint", Color(0.92, 0.92, 0.9), 1.0, true, 0.3, 0.2), key + "_fridge", "Old fridge", "kitchen")
 	if not small:
-		Lib.box(hn, Vector3(kx, y + 0.76, kz - 0.4), Vector3(1.4, 0.06, 0.9), dark, true, Vector3.ZERO, 0.02)
-		for xx in [kx - 0.6, kx + 0.6]:
-			for zz in [kz - 0.8, kz]:
-				Lib.box(hn, Vector3(xx, y + 0.37, zz), Vector3(0.06, 0.74, 0.06), dark)
-		for s in [-1.0, 1.0]:
-			Lib.box(hn, Vector3(kx + s * 0.35, y + 0.45, kz - 0.4 + s * 0.75), Vector3(0.42, 0.05, 0.42), dark, false, Vector3.ZERO, 0.02)
-			Lib.box(hn, Vector3(kx + s * 0.35, y + 0.72, kz - 0.4 + s * 0.95), Vector3(0.42, 0.5, 0.04), dark, false, Vector3.ZERO, 0.02)
-		_decor(hn, Vector3(kx - 0.3, y + 0.8, kz - 0.4), "stew", 0.0)
-		_decor(hn, Vector3(kx + 0.3, y + 0.8, kz - 0.5), "coffee", 1.0)
+		# movable kitchen table and chairs
+		_furn(hn, Vector3(kx, y, kz - 0.4), 0.0, "table", key + "_f_table")
+		_furn(hn, Vector3(kx - 0.35, y, kz - 1.25), PI, "chair", key + "_f_chair1")
+		_furn(hn, Vector3(kx + 0.35, y, kz + 0.45), 0.0, "chair", key + "_f_chair2")
+	else:
+		_furn(hn, Vector3(0.3, y, 0.4), 0.0, "camp_folding_chair", key + "_f_chair1")
 	# --- bedroom (back left)
 	var bx := -w * 0.2
 	var bz := -d * 0.5 + 1.25

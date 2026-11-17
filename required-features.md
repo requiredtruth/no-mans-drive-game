@@ -66,6 +66,17 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ Keep working through the item backlog. Track finished items in `done.md` and items still to be made in `todo.md`.
 - Keep everything as close as possible to Nomad Drive (the inspiration), while going much further with all our extra additions. High resolution.
 
+### Requests after 1.7 (addressed in 1.7.1)
+
+- ✅ Steering wheel must be there and visible.
+- ✅ House roofs were upside down.
+- ✅ A bookcase blocked the front door.
+- ✅ Furniture should be movable.
+- ✅ No blocky shadows.
+- ✅ Climb onto vehicles; open the van's back doors.
+- ✅ A car and a truck at the starting point.
+- ✅ For now, tons of every kind of item at the start until everything is confirmed working.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.

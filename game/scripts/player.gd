@@ -190,6 +190,9 @@ func _physics_process(delta: float) -> void:
 func _move(delta: float) -> void:
 	if not Game.world.ground_ready(global_position):
 		return
+	if _climbing:
+		velocity = Vector3.ZERO
+		return
 	var input := Vector2.ZERO
 	if not Game.ui_open and not Game.paused:
 		input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -216,7 +219,8 @@ func _move(delta: float) -> void:
 	else:
 		velocity.y -= GRAVITY * delta
 		if is_on_floor() and Input.is_action_just_pressed("jump") and not Game.ui_open:
-			velocity.y = JUMP
+			if not try_climb():
+				velocity.y = JUMP
 			crouching = false
 	var was_air := not is_on_floor()
 	var fall_speed := velocity.y
@@ -240,6 +244,65 @@ func _move(delta: float) -> void:
 	head.position.x = cos(_bob) * bob_amt * 0.5 * minf(hspeed / WALK, 1.0)
 	if global_position.y < -200.0:
 		teleport(Game.rv.global_position + Vector3(4, 3, 0))
+
+## Climbing: face a vehicle, trailer, crate or wall and press [Jump] to pull yourself up onto it
+## (roofs up to about 3.6 m, e.g. the van roof by its rear ladder).
+var _climbing := false
+const CLIMB_MAX := 3.7
+
+func climb_target() -> Vector3:
+	var fwd := -global_transform.basis.z
+	fwd.y = 0.0
+	if fwd.length() < 0.01:
+		return Vector3.INF
+	fwd = fwd.normalized()
+	var space := get_world_3d().direct_space_state
+	var hit := {}
+	for hy in [1.2, 0.6]:
+		var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, hy, 0), global_position + Vector3(0, hy, 0) + fwd * 0.95, 1 | 16)
+		q.exclude = [get_rid()]
+		hit = space.intersect_ray(q)
+		if not hit.is_empty():
+			break
+	if hit.is_empty():
+		return Vector3.INF
+	var over: Vector3 = hit["position"] + fwd * 0.45
+	var q2 := PhysicsRayQueryParameters3D.create(Vector3(over.x, global_position.y + CLIMB_MAX + 0.4, over.z), Vector3(over.x, global_position.y + 0.45, over.z), 1 | 16)
+	q2.exclude = [get_rid()]
+	var top := space.intersect_ray(q2)
+	if top.is_empty() or (top["normal"] as Vector3).y < 0.7:
+		return Vector3.INF
+	var tp: Vector3 = top["position"]
+	var h := tp.y - global_position.y
+	if h < 0.5 or h > CLIMB_MAX:
+		return Vector3.INF
+	# room to stand on top?
+	var q3 := PhysicsRayQueryParameters3D.create(tp + Vector3(0, 0.05, 0), tp + Vector3(0, 1.75, 0), 1 | 16)
+	q3.exclude = [get_rid()]
+	if not space.intersect_ray(q3).is_empty():
+		return Vector3.INF
+	return tp
+
+func try_climb() -> bool:
+	if _climbing or driving:
+		return false
+	var tp := climb_target()
+	if tp == Vector3.INF:
+		return false
+	_climbing = true
+	velocity = Vector3.ZERO
+	$CollisionShape3D.disabled = true
+	var t := create_tween()
+	var up := Vector3(global_position.x, tp.y + 0.1, global_position.z)
+	var dur := clampf((tp.y - global_position.y) * 0.28, 0.35, 1.0)
+	t.tween_property(self, "global_position", up, dur).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	t.tween_property(self, "global_position", tp + Vector3(0, 0.08, 0), 0.25)
+	t.tween_callback(func() -> void:
+		$CollisionShape3D.disabled = false
+		_climbing = false)
+	Audio.play("step_wood", -6.0, 0.8)
+	Game.stats["energy"] = maxf(Game.stats["energy"] - 0.5, 0.0)
+	return true
 
 ## Walk up steps and kerbs (van and camper steps, door sills, porch edges) without jumping:
 ## when something low blocks the way, lift onto it if there is room above and floor on top.
@@ -310,6 +373,11 @@ func _update_prompt() -> void:
 			elif t.has_meta("res_kind"):
 				prompt = _resource_prompt(t)
 	_set_highlight(look_target)
+	if prompt == "" and ray.is_colliding():
+		var rc: Object = ray.get_collider()
+		var in_van: bool = Game.rv != null and Game.rv.is_inside(global_position)
+		if rc and not in_van and (rc.is_in_group("rv") or rc.is_in_group("vehicle")) and climb_target() != Vector3.INF:
+			prompt = "[Space / JUMP] Climb up"
 	var held := Game.equipped()
 	if _place_module != "" and not builder.active:
 		var nm: String = Data.VAN_SLOTS[_place_module]["name"]
@@ -560,8 +628,9 @@ func _update_placement() -> void:
 	_place_host = _host_of(hit["collider"] as Node)
 	_place_xf = Transform3D(basis, pos)
 	_place_ghost.global_transform = _place_xf
-	_place_ghost.visible = true
-	_paint_ghost(_place_ghost, _ghost_ok if _place_valid else _ghost_bad)
+	# only show where it would go; a red ghost stuck to walls was just in the way
+	_place_ghost.visible = _place_valid
+	_paint_ghost(_place_ghost, _ghost_ok)
 
 func _paint_ghost(n: Node, m: Material) -> void:
 	if n is GeometryInstance3D:

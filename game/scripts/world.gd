@@ -134,6 +134,9 @@ func start(loaded: Dictionary) -> void:
 		Game.legacy_inventory = {}
 	if not loaded.has("player"):
 		_starter_lot()
+		_start_vehicles()
+		if TEST_DEPOT:
+			test_depot(rv.global_transform * Transform3D(Basis.IDENTITY, Vector3(-RV.W * 0.5 - 7.5, 0, 2.0)))
 	Game.playing = true
 	apply_settings()
 	if loaded.get("in_rv", false):
@@ -191,9 +194,17 @@ func _setup_environment() -> void:
 	add_child(we)
 	sun = DirectionalLight3D.new()
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 110.0
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.shadow_blur = 1.5
+	# four cascades packed tight near the player: crisp, smooth shadows up close, soft far away
+	sun.directional_shadow_max_distance = 90.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+	sun.directional_shadow_split_1 = 0.06
+	sun.directional_shadow_split_2 = 0.16
+	sun.directional_shadow_split_3 = 0.4
+	sun.directional_shadow_blend_splits = true
+	sun.directional_shadow_fade_start = 0.85
+	sun.shadow_bias = 0.03
+	sun.shadow_normal_bias = 1.2
+	sun.shadow_blur = 1.2
 	add_child(sun)
 	rain = _make_precip(false)
 	snow = _make_precip(true)
@@ -923,6 +934,55 @@ func _starter_lot() -> void:
 	bp.y = gen.height(bp.x, bp.z)
 	Net.place_structure(Game.new_struct_id(), {"type": "workbench", "pos": Game.arr(bp), "rot": rv.rotation.y - PI * 0.5, "data": {}})
 
+## A car and two trucks parked up the road from the van, ready to drive.
+func _start_vehicles() -> void:
+	var good := {"fuel": 40.0, "battery": 90.0, "parts": {"engine": 85.0, "tires": 85.0, "battery": 90.0, "body": 80.0}}
+	var specs := [["start_car", "sedan", 9.5], ["start_truck", "pickup", 16.5], ["start_boxtruck", "box_truck", 25.0]]
+	for e in specs:
+		if Game.vehicles.has(e[0]):
+			continue
+		var p: Vector3 = rv.to_global(Vector3(0.2, 0, RV.FRONT_Z + float(e[2])))
+		p.y = gen.height(p.x, p.z) + 1.0
+		spawn_vehicle(e[0], e[1], p, Vector3(0, rv.rotation.y, 0), good.duplicate(true))
+
+## For testing: while the game is in development a new game starts with a pile of every item in
+## the game laid out in rows next to the lot (also on the cheats menu).
+const TEST_DEPOT := true
+func test_depot(xf: Transform3D) -> void:
+	var groups := {}
+	for id in Data.ITEMS:
+		var k: String = Data.ITEMS[id]["kind"]
+		var g := "big" if k in ["placeable", "module"] else k
+		if not groups.has(g):
+			groups[g] = []
+		groups[g].append(id)
+	var order := ["tool", "ammo", "wear", "food", "medical", "purify", "material", "container", "fuel", "paint", "seed", "junk", "decor", "big"]
+	for g in groups:
+		if not order.has(g):
+			order.append(g)
+	var row_z := 0.0
+	var row_w := 16.0
+	for g in order:
+		if not groups.has(g):
+			continue
+		var x := 0.0
+		var depth := 0.0
+		for id in groups[g]:
+			var bb: AABB = Items.display_bounds(id)
+			var wdt := maxf(bb.size.x, 0.35) + 0.3
+			if x + wdt > row_w:
+				x = 0.0
+				row_z -= depth + 0.35
+				depth = 0.0
+			var lp := Vector3(-x - wdt * 0.5, 0, row_z - maxf(bb.size.z, 0.35) * 0.5)
+			var gp: Vector3 = xf * lp
+			gp.y = gen.height(gp.x, gp.z) - bb.position.y + 0.02
+			var n := Data.stack(id) * (3 if Data.stack(id) > 1 else 1)
+			Game.place_item(id, mini(n, 60), Transform3D(xf.basis, gp))
+			x += wdt
+			depth = maxf(depth, maxf(bb.size.z, 0.35))
+		row_z -= depth + 0.9
+
 func fire_heat(p: Vector3) -> float:
 	var best := 0.0
 	for f in _fires:
@@ -1115,7 +1175,15 @@ func spawn_structure(id: String, rec: Dictionary) -> void:
 	if k != "":
 		occupancy[k] = id
 
+## House furniture (see Pois._furn): spawned the first time its house loads.
+func spawn_poi_furniture(id: String, rec: Dictionary) -> void:
+	if Game.structures.has(id) or Game.removed.has(id) or structures.has(id):
+		return
+	Net.place_structure(id, rec)
+
 func remove_structure_local(id: String) -> void:
+	if id.begins_with("poi"):
+		Game.removed[id] = true # taken from a house: don't put it back there
 	if structures.has(id):
 		var s: Node = structures[id]
 		var rec: Dictionary = Game.structures.get(id, {})

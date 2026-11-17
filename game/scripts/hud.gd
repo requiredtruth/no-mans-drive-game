@@ -227,8 +227,9 @@ func _on_note(text: String) -> void:
 
 func _build_dash() -> void:
 	dash = PanelContainer.new()
-	dash.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	dash.position = Vector2(-260, -205)
+	# at the top, under the compass, so it never covers the steering wheel and dashboard
+	dash.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	dash.position = Vector2(-260, 58)
 	dash.custom_minimum_size = Vector2(520, 0)
 	root.add_child(dash)
 	var v := VBoxContainer.new()
@@ -562,6 +563,12 @@ func open_cheats() -> void:
 		grid.add_child(UI.button(label, func() -> void:
 			cb.call()
 			Game.notify("Cheat: " + label), 360))
+	add.call("Lay out every item (test depot)", func() -> void:
+		var pl: Node3D = Game.player
+		var f: Vector3 = -pl.global_transform.basis.z
+		f.y = 0.0
+		var b := Basis.looking_at(-f.normalized(), Vector3.UP)
+		Game.world.test_depot(Transform3D(b, pl.global_position + f.normalized() * 2.0 + b.x * 8.0)))
 	add.call("Drop one of every item here", func() -> void:
 		var i := 0
 		var base: Vector3 = Game.player.global_position - Game.player.global_transform.basis.z * 2.0
