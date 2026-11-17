@@ -3,6 +3,7 @@ extends Node
 
 const Data = preload("res://scripts/data.gd")
 const WorldItem = preload("res://scripts/world_item.gd")
+const SaveStore = preload("res://scripts/save_store.gd")
 const SAVE_PATH := "user://savegame.json"
 const SETTINGS_PATH := "user://settings.cfg"
 const DAY_LENGTH := 1440.0 # real seconds per in-game day (24 minutes)
@@ -38,6 +39,7 @@ var spawn_point = null # Vector3 of last slept bed/tent
 var next_struct_id := 1
 var rv_state := {}
 var vehicles := {} # id -> saved state of cars and trailers
+var journey := preload("res://scripts/journey.gd").new()
 var playing := false
 var paused := false
 var ui_open := false
@@ -438,6 +440,7 @@ func purify_water() -> bool:
 
 # ---------------------------------------------------------------- new / save / load
 func new_game(seed_in: int, diff_in: String) -> void:
+	journey.reset()
 	seed_value = seed_in
 	difficulty = diff_in
 	time_of_day = 8.0
@@ -459,7 +462,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	vehicles = {}
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	return not SaveStore.recover(SAVE_PATH).is_empty()
 
 func v3(a) -> Vector3:
 	return Vector3(a[0], a[1], a[2])
@@ -508,6 +511,7 @@ func save_game() -> bool:
 	if not playing or not world:
 		return false
 	var d := world_snapshot()
+	d["journey_completed"] = journey.completed
 	d["version"] = 1
 	d["v17"] = true
 	d["slots"] = slots
@@ -517,23 +521,19 @@ func save_game() -> bool:
 	d["player_yaw"] = player.rotation.y if player else 0.0
 	d["in_rv"] = player.driving if player else false
 	d["spawn"] = arr(spawn_point) if spawn_point != null else null
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if f == null:
-		notify("Could not save game")
+	if not SaveStore.write(SAVE_PATH, d):
+		notify("Could not save game — previous save kept")
 		return false
-	f.store_string(JSON.stringify(d))
 	notify("Game saved")
 	return true
 
 func load_game_data() -> Dictionary:
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
-	if f == null:
+	var d := SaveStore.recover(SAVE_PATH)
+	if d.is_empty():
 		return {}
-	var parsed = JSON.parse_string(f.get_as_text())
-	if typeof(parsed) != TYPE_DICTIONARY:
-		return {}
-	var d: Dictionary = parsed
 	apply_world_snapshot(d)
+	journey.reset()
+	journey.restore(d.get("journey_completed", 0))
 	worn = d.get("worn", {})
 	if not d.has("v17"):
 		worn["nav_wristwatch"] = true # saves from before 1.7 always showed the exact time

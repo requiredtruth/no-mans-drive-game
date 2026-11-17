@@ -607,6 +607,7 @@ func _lid_box(parent: Node3D, action: String, center: Vector3, size: Vector3, si
 	hs.set_script(RvPart)
 	hs.rv = self
 	hs.action = action
+	hs.highlight_root = pivot
 	hs.collision_layer = 2
 	hs.collision_mask = 0
 	var cs := CollisionShape3D.new()
@@ -843,6 +844,7 @@ func _cupboard(vis: Node3D, action: String, center: Vector3, size: Vector3, shel
 	hs.set_script(RvPart)
 	hs.rv = self
 	hs.action = action
+	hs.highlight_root = pivot
 	hs.collision_layer = 2
 	hs.collision_mask = 0
 	var cs := CollisionShape3D.new()

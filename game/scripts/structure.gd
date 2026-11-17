@@ -42,6 +42,20 @@ func setup(p_id: String, rec: Dictionary) -> void:
 		add_to_group("roof")
 	_build()
 
+var _hl := false
+
+func aim_name() -> String:
+	return str(Data.PIECES.get(type, {}).get("name", type.replace("_", " ").capitalize()))
+
+func set_highlight(on: bool) -> void:
+	if on == _hl:
+		return
+	_hl = on
+	# Outline the furniture shell, never loose items stored on or inside it.
+	for child in get_children():
+		if child is MeshInstance3D or child == _door_pivot:
+			Items.set_outline(child, on)
+
 func record() -> Dictionary:
 	return Game.structures.get(id, {})
 
@@ -175,12 +189,16 @@ func _build() -> void:
 			# when you carry the crate
 			_solid(Vector3(0, 0.05, 0), Vector3(1.1, 0.1, 0.7), planks)
 			for sx in [-1.0, 1.0]:
-				_solid(Vector3(sx * 0.525, 0.4, 0), Vector3(0.05, 0.8, 0.7), planks)
-				_solid(Vector3(0, 0.4, sx * 0.325), Vector3(1.0, 0.8, 0.05), planks)
-				Lib.box(self, Vector3(sx * 0.53, 0.4, 0), Vector3(0.08, 0.82, 0.74), dark)
-			for y in [0.06, 0.78]:
+				# Broad collision walls retain small objects; visible planks have real gaps.
+				_col(Vector3(sx * 0.525, 0.4, 0), Vector3(0.05, 0.8, 0.7))
+				_col(Vector3(0, 0.4, sx * 0.325), Vector3(1.0, 0.8, 0.05))
 				for sz in [-1.0, 1.0]:
-					Lib.box(self, Vector3(0, y, sz * 0.34), Vector3(1.12, 0.06, 0.04), dark)
+					Lib.box(self, Vector3(sx * 0.5, 0.4, sz * 0.3), Vector3(0.07, 0.8, 0.07), dark)
+				for y in [0.17, 0.36, 0.55, 0.74]:
+					Lib.box(self, Vector3(sx * 0.525, y, 0), Vector3(0.05, 0.14, 0.7), planks)
+					Lib.box(self, Vector3(0, y, sx * 0.325), Vector3(1.0, 0.14, 0.05), planks)
+					for x in [-0.46, 0.46]:
+						Lib.box(self, Vector3(x, y, sx * 0.353), Vector3(0.014, 0.014, 0.006), Items.dark_steel())
 			if persistent and data.has("items") and not (data["items"] as Dictionary).is_empty():
 				call_deferred("_spill_legacy")
 		"planter":

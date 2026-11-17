@@ -12,7 +12,11 @@ The target is the **level of quality and detail**, not a copy. Never copy anothe
 4. **The same cupboard with both doors open.** Each hinged door turns on its own hinge and shows a white outline when you aim at it. Inside are shelves, a divider, and jars and cans with labels. Wood grain runs the right way on every panel, and the wall has dirt and stains near the floor.
 5. **Inside the van, the living area and cab.** A big window looks out on grass. There's a potted palm, wooden bedside cabinets, corner shelves holding a battery, a flashlight and a camera, a shovel leaning upright, and a crate holding a dozen spray-paint cans in different colours. Past them are textured cab seats, a steering wheel with a gauge cluster, and a loft bed over the cab. The floor is warm wood planking. A white outline and a "Shovel" label mark what you're aiming at.
 
-## The differences
+## Progress through 1.10.0
+
+The comparison below describes the original 1.8 baseline, not the current implementation. Version 1.9 added loose-item outlines, action rows and cab materials. Version 1.10 adds cupboard/fridge-door and cargo-lid outlines, placed-furniture outlines, 16 original printed labels with paper normals, detailed can lids, slatted crates, and a nine-stop route card/notebook. Reference targets still outstanding include litre-based transfers, house cabinet doors, broader bevel/material work and interior grime/contact lighting. The `--v110` devtest captures the new presentation for review; `--v18` retains vehicle regression coverage.
+
+## The differences (historical 1.8 baseline)
 
 ### Models and materials
 | Reference | No Man's Drive 1.8.0 |

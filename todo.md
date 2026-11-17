@@ -6,21 +6,20 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 ## Quality pass (see NOTES.md)
 
-- [ ] Extend aim outlines and crosshair labels from loose items to individual cupboard doors and other interactable props.
+- [ ] Extend aim outlines to the remaining vehicle exterior hotspots and built-in house containers (van cupboard/fridge doors, cargo lids and placed furniture completed in 1.10).
 - [ ] Liquids in litres for fuel, water and coolant, with a two-gauge transfer panel and a pump nozzle at fuel stations.
 - [ ] Texture and bevel pass on the van interior (cab, dashboard, seats, cupboards, floor), then houses.
-- [ ] Labelled consumables (cans, jars, bottles, spray paint) and slatted crates.
+- [ ] Label remaining jars, chemistry containers and other packaging (16 food/drink/water/spray labels and slatted crates completed in 1.10).
 - [ ] House cabinets and wardrobes as physical shelves with hinged doors.
 - [ ] Detailed first-person hand and sleeve; bigger held items.
 - [ ] Ambient occlusion and grime in interiors.
-- [ ] A light objective track (destinations along the road) in a top-right card.
 
 ## Testing phase
 
 - [ ] The test depot (every item at the start of a new game) stays on until everything has been checked; turn it off with `TEST_DEPOT` in `game/scripts/world.gd` for a normal start.
 - [ ] Make the built-in house cabinets, wardrobes and fridges movable too (they are searchable containers today).
 
-## Next up (1.9)
+## Remaining gameplay expansion
 
 - [ ] Vehicle performance parts and add-ons for the other cars (they take the turbo and ram plow at the hood today; the rest is van-only).
 - [ ] Base building pieces: metal and concrete walls, metal floor, metal door with code lock, window barricades, weapon rack, mannequin, tanning rack, anvil bench, hydroponic tray, industrial crate.

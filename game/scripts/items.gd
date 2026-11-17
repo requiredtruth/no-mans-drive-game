@@ -161,8 +161,11 @@ func _mesh(parts: Array) -> ArrayMesh:
 	return Lib._commit(parts)
 
 # ------------------------------------------------------------------ public
+var _building_id := ""
+
 func mesh(id: String) -> Mesh:
 	if not _meshes.has(id):
+		_building_id = id
 		_meshes[id] = _build(id)
 	return _meshes[id]
 
@@ -691,6 +694,21 @@ func _jerrycan(col := Color(0.7, 0.1, 0.08)) -> Mesh:
 	lathe(spout, [Vector2(0.02, 0.33), Vector2(0.02, 0.37), Vector2(0.022, 0.37), Vector2(0.022, 0.38)], 14, Vector3(0, 0, 0.08))
 	return _mesh([[body, paint(col)], [spout, dark_steel()]])
 
+func _printed_label(fallback: Material, bottom: float, top: float) -> Material:
+	var path := "res://assets/textures/label_%s.png" % _building_id
+	if not ResourceLoader.exists(path):
+		return fallback
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = load(path)
+	mat.roughness = 0.68
+	mat.uv1_scale = Vector3(1, -1.0 / (top - bottom), 1)
+	mat.uv1_offset = Vector3(0, top / (top - bottom), 0)
+	mat.normal_enabled = true
+	mat.normal_texture = Lib.tex("label_paper_n")
+	mat.normal_scale = 0.25
+	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return mat
+
 func _can(label: Color, band_col: Color, r: float, h: float) -> Mesh:
 	var rim := _st()
 	lathe(rim, [Vector2(r * 0.92, 0.0), Vector2(r, 0.006), Vector2(r, 0.012)], 24)
@@ -699,7 +717,12 @@ func _can(label: Color, band_col: Color, r: float, h: float) -> Mesh:
 	lathe(lab, [Vector2(r * 1.002, 0.012), Vector2(r * 1.002, h - 0.012)], 24, Vector3.ZERO, false, false)
 	var bnd := _st()
 	lathe(bnd, [Vector2(r * 1.004, h * 0.4), Vector2(r * 1.004, h * 0.6)], 24, Vector3.ZERO, false, false)
-	return _mesh([[rim, steel()], [lab, paint(label)], [bnd, paint(band_col)]])
+	# Rolled concentric lid ridges and a stamped pull ring catch the light.
+	for k in [0.55, 0.72, 0.88]:
+		torus(rim, Vector3(0, h + 0.0005, 0), r * k, 0.001, 24, 6)
+	torus(rim, Vector3(0, h + 0.002, r * 0.15), r * 0.19, 0.002, 16, 6)
+	var printed := _printed_label(paint(label), 0.012, h - 0.012)
+	return _mesh([[rim, steel()], [lab, printed]]) if ResourceLoader.exists("res://assets/textures/label_%s.png" % _building_id) else _mesh([[rim, steel()], [lab, printed], [bnd, paint(band_col)]])
 
 func _bottle(liquid: Color, cap: Color) -> Mesh:
 	var body := _st()
@@ -711,7 +734,7 @@ func _bottle(liquid: Color, cap: Color) -> Mesh:
 	var glass := Lib.color_mat(liquid, 0.05, 0.1)
 	glass = glass.duplicate()
 	glass.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return _mesh([[body, glass], [capst, c(cap, 0.5)], [label, paint(Color(0.95, 0.95, 0.9))]])
+	return _mesh([[body, glass], [capst, c(cap, 0.5)], [label, _printed_label(paint(Color(0.95, 0.95, 0.9)), 0.05, 0.11)]])
 
 func _mug() -> Mesh:
 	var mug := _st()
@@ -1060,7 +1083,7 @@ func _spray() -> Mesh:
 	lathe(cap, [Vector2(0.031, 0.165), Vector2(0.031, 0.2), Vector2(0.026, 0.21)], 18)
 	var lab := _st()
 	lathe(lab, [Vector2(0.0325, 0.04), Vector2(0.0325, 0.11)], 20, Vector3.ZERO, false, false)
-	return _mesh([[b, steel()], [cap, c(Color(0.25, 0.55, 0.8), 0.3)], [lab, paint(Color(0.9, 0.85, 0.2))]])
+	return _mesh([[b, steel()], [cap, c(Color(0.25, 0.55, 0.8), 0.3)], [lab, _printed_label(paint(Color(0.9, 0.85, 0.2)), 0.04, 0.11)]])
 
 func _engine_block() -> Mesh:
 	var blk := _st()

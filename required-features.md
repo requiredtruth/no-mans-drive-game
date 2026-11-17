@@ -132,3 +132,10 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - Use original or properly licensed assets, and record their attribution (see the in-game Credits and `ASSETS.md`).
 - Verify gameplay, save/load and controls with the automated tour (`game/scripts/devtest.gd`). Verify on Android. Test co-op with multiple clients.
 - Tag each version on `main` and publish a GitHub release with the signed APK.
+
+## November 17 quality update (1.10.0)
+
+- Latest request: “Post to main APPROVED rerelease the release apk. check all md files and complete as much detail and quality as possible.”
+- ✅ Added a saved nine-stop roadside journey, door/furniture aim feedback, 16 original printed labels and slatted wooden storage crates.
+- ✅ Save replacement retains a previous valid backup and can recover from a damaged main save.
+- 🔄 Remaining work is still tracked in `todo.md`; this release does not claim the entire item backlog or visual overhaul is finished.

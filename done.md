@@ -2,6 +2,15 @@
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.
 
+## Version 1.10.0: roadside details and saved journey
+
+- [x] Nine deterministic roadside destinations, visited in order, with saved progress, distance/bearing, a top-right card and a notebook route list. Existing saves begin with an unstarted journey.
+- [x] White aim outlines and names for van cupboard/fridge doors, cargo lids, and placed furniture; outline clears on target change.
+- [x] Sixteen original printed food/drink/water/spray labels, paper normal map, and rolled lid ridges/pull rings on cans.
+- [x] Slatted wooden storage crate with gaps, corner posts and fasteners; retaining collision walls preserve its storage behavior.
+- [x] Checked temporary save replacement, previous-valid-save backup, and recovery if the main save is damaged.
+- [x] Automated route progression, save recovery and interaction tests in `--v110`, plus a rendered screenshot tour. Publication is gated by these and the existing `--v18` regression tour.
+
 ## Version 1.9.0: interaction and cab detail
 
 - [x] Loose items show a white outline and a name with stack count at the crosshair.

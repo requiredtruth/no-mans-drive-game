@@ -428,7 +428,7 @@ func _interact() -> void:
 var _hl_node: Node = null
 
 func _set_highlight(t: Object) -> void:
-	var n: Node = t as Node if t and (t as Node).is_in_group("world_item") else null
+	var n: Node = t as Node if is_instance_valid(t) and t.has_method("set_highlight") else null
 	if n == _hl_node:
 		return
 	if _hl_node and is_instance_valid(_hl_node):

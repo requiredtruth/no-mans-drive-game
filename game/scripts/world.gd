@@ -291,6 +291,12 @@ func _process(delta: float) -> void:
 		_fire_scan = 1.0
 		_fires = get_tree().get_nodes_in_group("structure").filter(func(s): return s.type == "campfire")
 		_cook_tick(1.0)
+		Game.journey.prepare(gen, Game.seed_value)
+		if not player.dead:
+			var milestone: String = Game.journey.visit(player.global_position)
+			if milestone != "":
+				Game.notify(milestone)
+				Audio.play("pickup", -8.0)
 	_ambience(delta)
 	# keep physics bodies frozen until ground exists below them
 	if rv and rv.is_authority():

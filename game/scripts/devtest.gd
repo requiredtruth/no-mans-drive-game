@@ -1686,7 +1686,141 @@ func _drive18() -> void:
 func RV_W() -> float:
 	return Game.rv.W
 
+var quality_failures := 0
+
+func _check_quality(condition: bool, message: String) -> void:
+	_log(("PASS: " if condition else "FAIL: ") + message)
+	if not condition:
+		quality_failures += 1
+
+func _v110() -> void:
+	var Journey = load("res://scripts/journey.gd")
+	var SaveStore = load("res://scripts/save_store.gd")
+	var route = Journey.new()
+	route.prepare(Game.world.gen, Game.seed_value)
+	_check_quality(route.stops.size() == 9, "nine actual generated destinations")
+	var twin = Journey.new()
+	twin.prepare(Game.world.gen, Game.seed_value)
+	_check_quality(route.stops == twin.stops, "route deterministic for the same seed")
+	var start: Vector3 = route.current()["pos"]
+	_check_quality(route.visit(start + Vector3(0, 30, 0)) == "", "flying above a stop does not complete it")
+	_check_quality(route.visit(start + Vector3(200, 0, 0)) == "", "far-away stop is not completed")
+	_check_quality(route.visit(start) != "" and route.completed == 1, "arrival advances the route once")
+	_check_quality(route.visit(start) == "" and route.completed == 1, "revisiting does not duplicate progress")
+	twin.restore(route.completed)
+	_check_quality(twin.current() == route.current(), "progress restores to the correct destination")
+	for i in range(1, 9):
+		route.visit(route.current()["pos"])
+	_check_quality(route.completed == 9 and route.current().is_empty(), "all destinations complete without overflow")
+	route.restore(999)
+	_check_quality(route.completed == 9, "invalid saved progress is clamped")
+	route.reset()
+	_check_quality(route.completed == 0 and route.stops.is_empty(), "new game clears journey")
+	var path: String = out + "/save-test.json"
+	var old := {"seed": 4242, "journey_completed": 2, "slots": [{"id": "canned_food", "n": 1}]}
+	var newer := {"seed": 4242, "journey_completed": 3, "slots": []}
+	_check_quality(SaveStore.write(path, old), "first checked save")
+	_check_quality(SaveStore.write(path, newer), "replace existing save")
+	_check_quality(SaveStore.recover(path).get("journey_completed") == 3, "newest save loads")
+	_check_quality(SaveStore.read(path + ".bak").get("journey_completed") == 2, "previous save retained")
+	var broken := FileAccess.open(path, FileAccess.WRITE)
+	broken.store_string("{interrupted")
+	broken.close()
+	_check_quality(SaveStore.recover(path).get("journey_completed") == 2, "corrupt main recovers previous save")
+	_check_quality(SaveStore.write(path, newer) and SaveStore.read(path + ".bak").get("journey_completed") == 2, "recovery save keeps valid backup")
+	var invalid := FileAccess.open(path, FileAccess.WRITE)
+	invalid.store_string('{"seed": 42, "slots": [null]}')
+	invalid.close()
+	_check_quality(SaveStore.read(path).is_empty(), "malformed slots rejected before state mutation")
+	for suffix in ["", ".bak", ".tmp"]:
+		DirAccess.remove_absolute(path + suffix)
+	var pl = Game.player
+	var rv = Game.rv
+	Game.god_mode = true
+	Game.world.hud.close_modal()
+	Game.time_of_day = 11.0
+	await _settle(pl.global_position)
+	rv.modules = rv._all_modules()
+	rv._apply_visuals()
+	await _wait(0.5)
+	var door = rv._doors["cabinet"]["pivot"]
+	var hot: Node
+	for child in door.get_children():
+		if child.has_method("set_highlight"):
+			hot = child
+	pl._set_highlight(hot)
+	_check_quality(hot != null and hot._hl and hot.aim_name() == "Pantry cupboard", "individual cupboard door has outline and aim name")
+	pl._set_highlight(null)
+	_check_quality(not hot._hl, "cupboard outline clears")
+	var cp: Vector3 = rv.to_global(Vector3(0.48, rv.FLOOR_Y + 0.08, -0.8))
+	_player_at(cp, 0)
+	_look_at_point(rv.to_global(Vector3(-rv.W * 0.5 + 0.7, rv.FLOOR_Y + 0.5, -1.45)))
+	await _wait(0.3)
+	await _shot("quality_cupboard_closed")
+	rv.do_action("cabinet", pl)
+	await _wait(0.4)
+	await _shot("quality_cupboard_open")
+	# A close, uncluttered product display uses the real item meshes and materials.
+	var stage := Node3D.new()
+	Game.world.add_child(stage)
+	stage.position = Vector3(0, 100, 0)
+	Lib.box(stage, Vector3(0, -0.08, 0), Vector3(5, 0.12, 3), Lib.mat("planks", Color.WHITE, 2.0, false))
+	var products := ["canned_food", "water_clean", "paint_can", "soda", "water_dirty"]
+	for i in range(products.size()):
+		var item := Items.display_instance(products[i])
+		stage.add_child(item)
+		item.position = Vector3(-0.8 + i * 0.4, 0, 0)
+		item.rotation.y = PI
+		_check_quality(ResourceLoader.exists("res://assets/textures/label_%s.png" % products[i]), "label imported: " + products[i])
+	var cam := Camera3D.new()
+	stage.add_child(cam)
+	cam.position = Vector3(0, 0.8, 1.75)
+	cam.look_at(stage.global_position + Vector3(0, 0.15, 0))
+	cam.make_current()
+	Game.world.hud.root.hide()
+	await _wait(0.4)
+	await _shot("quality_printed_labels")
+	var crate := StaticBody3D.new()
+	crate.set_script(load("res://scripts/structure.gd"))
+	crate.persistent = false
+	crate.setup("", {"type": "crate", "pos": [0, 0, 0], "data": {}})
+	stage.add_child(crate)
+	for child in stage.get_children():
+		if child != crate and child != cam:
+			child.hide()
+	cam.position = Vector3(1.6, 1.5, 1.8)
+	cam.look_at(crate.global_position + Vector3(0, 0.3, 0))
+	pl._set_highlight(crate)
+	_check_quality(crate._hl, "furniture outline enabled")
+	pl._set_highlight(null)
+	await _wait(0.3)
+	await _shot("quality_slatted_crate")
+	Game.world.hud.root.show()
+	pl.camera.make_current()
+	stage.queue_free()
+	var hp: Vector3 = Game.world.gen.poi_for_row(1)["pos"] + Vector3(0, 0.2, 22)
+	_player_at(hp, 0)
+	await _settle(hp)
+	_look_at_point(Game.world.gen.poi_for_row(1)["pos"] + Vector3.UP)
+	await _wait(0.4)
+	await _shot("quality_journey_hud")
+	Game.world.hud.open_book()
+	await _wait(0.4)
+	await _shot("quality_route_notebook")
+	Game.world.hud.close_modal()
+	_log("Quality checks: %d failure(s)" % quality_failures)
+
 func _run() -> void:
+	if "--v110" in OS.get_cmdline_user_args():
+		Game.new_game(4242, "Normal")
+		get_tree().root.get_node("Main")._start_world({})
+		await _wait(1.5)
+		await _v110()
+		var log_file := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		log_file.store_string("\n".join(log_lines))
+		log_file.close()
+		get_tree().quit(1 if quality_failures else 0)
+		return
 	if "--drive18" in OS.get_cmdline_user_args():
 		var md := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")

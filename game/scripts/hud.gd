@@ -8,6 +8,10 @@ var root: Control
 var bars := {}
 var clock: Label
 var info: Label
+var journey_card: PanelContainer
+var journey_title: Label
+var journey_detail: Label
+var journey_progress: ProgressBar
 var prompt_label: Label
 var aim_label: Label
 var action_hints: VBoxContainer
@@ -102,6 +106,30 @@ func _build_top_right() -> void:
 		l.add_theme_color_override("font_outline_color", Color.BLACK)
 		l.add_theme_constant_override("outline_size", 5)
 		v.add_child(l)
+	journey_card = PanelContainer.new()
+	journey_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.055, 0.08, 0.075, 0.88)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	journey_card.add_theme_stylebox_override("panel", style)
+	v.add_child(journey_card)
+	var route := VBoxContainer.new()
+	route.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	journey_card.add_child(route)
+	journey_title = UI.label("OPEN ROAD · 0/9", 15, Color("e6c78b"))
+	journey_detail = UI.label("Find your first destination", 14)
+	route.add_child(journey_title)
+	route.add_child(journey_detail)
+	journey_progress = UI.bar(Color("87ad85"))
+	journey_progress.custom_minimum_size = Vector2(0, 5)
+	journey_progress.max_value = Game.journey.COUNT
+	journey_progress.show_percentage = false
+	journey_progress.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	route.add_child(journey_progress)
 	compass = Control.new()
 	compass.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	compass.position = Vector2(-220, 10)
@@ -138,7 +166,7 @@ func _build_center() -> void:
 	root.add_child(aim_label)
 	action_hints = VBoxContainer.new()
 	action_hints.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	action_hints.position = Vector2(-330, 88)
+	action_hints.position = Vector2(-330, 190)
 	action_hints.custom_minimum_size.x = 306
 	action_hints.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(action_hints)
@@ -373,6 +401,10 @@ func _process(delta: float) -> void:
 		if Game.wears_flag("altimeter"):
 			info.text += " · Alt %d m" % int(round(p.global_position.y))
 		var gameplay_visible: bool = modal == null and not p.dead
+		journey_card.visible = gameplay_visible
+		journey_title.text = "OPEN ROAD · %d/%d" % [Game.journey.completed, Game.journey.COUNT]
+		journey_detail.text = Game.journey.title() + "\n" + Game.journey.guidance(p.global_position)
+		journey_progress.value = Game.journey.completed
 		var target: Object = p.look_target
 		aim_label.text = target.aim_name() if is_instance_valid(target) and target.has_method("aim_name") else ""
 		aim_label.visible = gameplay_visible and not p.driving
@@ -518,6 +550,13 @@ func open_inventory() -> void:
 ## on a fire or stove, and carry modules to the van.
 func open_book() -> void:
 	var body := _open_modal("inventory", "Notebook", null, 1150.0)
+	Game.journey.prepare(Game.world.gen, Game.seed_value)
+	body.add_child(UI.label("Open road journey · %d/%d destinations" % [Game.journey.completed, Game.journey.COUNT], 19, Color("e6c78b")))
+	body.add_child(UI.label("An optional route south along the highway. Visit each destination in order; explore freely between stops.", 15))
+	for i in range(Game.journey.stops.size()):
+		var stop: Dictionary = Game.journey.stops[i]
+		var marker := "✓" if i < Game.journey.completed else ("→" if i == Game.journey.completed else "·")
+		body.add_child(UI.label("%s %d. %s · road %.1f km" % [marker, i + 1, Game.journey.NAMES.get(stop["type"], "Stop"), stop["pos"].z / 1000.0], 14))
 	var cols := HBoxContainer.new()
 	cols.add_theme_constant_override("separation", 20)
 	body.add_child(cols)
