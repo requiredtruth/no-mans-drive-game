@@ -13,14 +13,17 @@ static func _toolkit() -> bool:
 static func _tk_hint() -> String:
 	return "" if _toolkit() else "  (needs a Toolkit in hand or within reach)"
 
-const TIRES := ["tire", "offroad_tire", "worn_tire"]
+const TIRES := ["tire", "offroad_tire", "worn_tire", "vehicle_tire_sand", "vehicle_tire_solid"]
+## Tires that are remembered per wheel (they look and grip differently).
+const SPECIAL_TIRES := ["offroad_tire", "vehicle_tire_sand", "vehicle_tire_solid"]
+const BATTERIES := ["car_battery", "worn_battery", "vehicle_lithium_battery"]
 
 static func prompt(v: Node, action: String) -> String:
 	var held := Game.equipped()
 	var parts: Dictionary = v.parts
 	if action == "battery":
 		if v.missing.has("battery"):
-			if held in ["car_battery", "worn_battery"]:
+			if held in BATTERIES:
 				return "[E] Fit the %s" % Data.item_name(held)
 			return "Battery tray — empty. Carry a Car Battery here"
 		if held == "":
@@ -38,7 +41,7 @@ static func prompt(v: Node, action: String) -> String:
 		if v.missing.has(action):
 			if held in TIRES:
 				return "[E] Fit the %s%s" % [Data.item_name(held), _tk_hint()]
-			return "Bare wheel hub — carry a Spare Tire, Worn Tire or Off-Road Tire here"
+			return "Bare wheel hub — carry a tire here (spare, worn, off-road, sand or solid)"
 		if held == "":
 			return "Tire fitted (tires %d%%)   [G] Pull it off%s" % [int(parts["tires"]), _tk_hint()]
 		return "Tire fitted (tires %d%%)" % int(parts["tires"])
@@ -51,15 +54,17 @@ static func act(v: Node, action: String) -> bool:
 	var parts: Dictionary = v.parts
 	if action == "battery":
 		if v.missing.has("battery"):
-			if held not in ["car_battery", "worn_battery"]:
+			if held not in BATTERIES:
 				Game.notify("Carry a Car Battery in your hands to fit it here")
 				return true
 			Game.remove_item(held, 1)
 			v.missing.erase("battery")
-			parts["battery"] = 100.0 if held == "car_battery" else 25.0
+			parts["battery"] = 25.0 if held == "worn_battery" else 100.0
+			if v.get("battery_kind") != null:
+				v.battery_kind = held if held == "vehicle_lithium_battery" else ""
 			v.battery = parts["battery"]
 			Audio.play_at("hammer", v.global_position, -4.0, 1.3)
-			Game.notify("Battery fitted" if held == "car_battery" else "Dead battery fitted — it holds a little charge")
+			Game.notify("Dead battery fitted — it holds a little charge" if held == "worn_battery" else "%s fitted" % Data.item_name(held))
 			v._apply_visuals()
 		else:
 			Game.notify("Battery %d%% — [G] with empty hands pulls it out" % int(parts["battery"]))
@@ -104,8 +109,8 @@ static func act(v: Node, action: String) -> bool:
 		Game.remove_item(held, 1)
 		v.missing.erase(action)
 		if kinds != null:
-			if held == "offroad_tire":
-				kinds[action] = "offroad_tire"
+			if held in SPECIAL_TIRES:
+				kinds[action] = held
 			else:
 				kinds.erase(action)
 		parts["tires"] = minf(parts["tires"] + (5.0 if held == "worn_tire" else 15.0), 100.0)
@@ -125,6 +130,10 @@ static func pull(v: Node, action: String) -> bool:
 		if v.missing.has("battery"):
 			return false
 		var item := "car_battery" if parts["battery"] >= 70.0 else "worn_battery"
+		if v.get("battery_kind") != null:
+			if v.battery_kind == "vehicle_lithium_battery":
+				item = "vehicle_lithium_battery" # lithium cells don't wear out like lead-acid
+			v.battery_kind = ""
 		Game.add_item(item, 1, true)
 		v.missing["battery"] = true
 		parts["battery"] = 0.0
@@ -144,8 +153,13 @@ static func pull(v: Node, action: String) -> bool:
 		var kinds = v.get("wheel_kind")
 		# a tire comes off as good as the set it belongs to; a worn one can still be refitted
 		var item := "tire" if parts["tires"] >= 60.0 else "worn_tire"
-		if kinds != null and kinds.get(action, "") == "offroad_tire" and parts["tires"] >= 50.0:
-			item = "offroad_tire"
+		var kind: String = str(kinds.get(action, "")) if kinds != null else ""
+		if kind == "vehicle_tire_solid":
+			item = kind # solid rubber doesn't wear
+		elif kind in SPECIAL_TIRES and parts["tires"] >= 50.0:
+			item = kind
+		if kinds != null:
+			kinds.erase(action)
 		Game.add_item(item, 1, true)
 		parts["tires"] = maxf(parts["tires"] - 15.0, 0.0)
 		v.missing[action] = true
@@ -160,16 +174,21 @@ static func apply_wheels(v: Node, grip: float) -> void:
 	for i in range(v.wheels.size()):
 		var w: VehicleWheel3D = v.wheels[i]
 		var gone: bool = v.missing.has("wheel%d" % i)
-		w.wheel_friction_slip = grip * (0.25 if gone else 1.0)
+		var g: float = v.wheel_grip(i) if v.has_method("wheel_grip") else 1.0
+		w.wheel_friction_slip = grip * g * (0.25 if gone else 1.0)
 		# on a bare hub the vehicle sits down on its brake drums
 		if not w.has_meta("radius"):
 			w.set_meta("radius", w.wheel_radius)
 		w.wheel_radius = float(w.get_meta("radius")) * (0.45 if gone else 1.0)
 		var kinds = v.get("wheel_kind")
-		var knob: bool = kinds != null and kinds.get("wheel%d" % i, "") == "offroad_tire"
+		var kind: String = str(kinds.get("wheel%d" % i, "")) if kinds != null else ""
+		var knob := kind == "offroad_tire"
 		var tm = w.get_meta("tire_mesh") if w.has_meta("tire_mesh") else null
 		if tm:
 			tm.visible = not gone and not knob
+			if not tm.has_meta("plain"):
+				tm.set_meta("plain", tm.mesh)
+			tm.mesh = Items.mesh(kind) if kind in ["vehicle_tire_sand", "vehicle_tire_solid"] else tm.get_meta("plain")
 		var km = w.get_meta("knobby_mesh") if w.has_meta("knobby_mesh") else null
 		if km:
 			km.visible = not gone and knob

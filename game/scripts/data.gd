@@ -55,6 +55,33 @@ const ITEMS := {
 	"fuel_tank_xl": {"name": "Long-Range Fuel Tank", "color": Color("3a3a3a"), "kind": "module"},
 	"tune_kit": {"name": "Engine Tune Kit", "color": Color("c0392b"), "kind": "module"},
 	"offroad_tire": {"name": "Off-Road Tire", "color": Color("1a1a1a"), "kind": "module"},
+	# 1.8: performance parts (fitted at the open hood) and body add-ons (fitted on the outside)
+	"vehicle_engine_block_t2": {"name": "High-Compression Engine (Tier 2)", "color": Color("4a5560"), "kind": "module"},
+	"vehicle_engine_block_t3": {"name": "Supercharged V8 Engine (Tier 3)", "color": Color("8a2a20"), "kind": "module"},
+	"vehicle_turbocharger": {"name": "Turbocharger", "color": Color("b0b4b8"), "kind": "module"},
+	"vehicle_supercharger": {"name": "Supercharger", "color": Color("c0c4c8"), "kind": "module"},
+	"vehicle_nos_kit": {"name": "Nitrous Oxide Kit", "color": Color("2a5ac0"), "kind": "module"},
+	"vehicle_dual_fan_radiator": {"name": "Dual-Fan Radiator", "color": Color("5a5e64"), "kind": "module"},
+	"vehicle_armored_radiator": {"name": "Armored Radiator", "color": Color("3a3e44"), "kind": "module"},
+	"vehicle_suspension_part": {"name": "Independent Suspension Kit", "color": Color("d0a020"), "kind": "module"},
+	"vehicle_leaf_spring": {"name": "Heavy-Duty Leaf Springs", "color": Color("4a4a4a"), "kind": "module"},
+	"vehicle_lithium_battery": {"name": "Lithium Deep-Cycle Battery", "color": Color("2a8a5a"), "kind": "module"},
+	"vehicle_tire_sand": {"name": "Sand Dune Tire", "color": Color("2a2622"), "kind": "module"},
+	"vehicle_tire_solid": {"name": "Solid Puncture-Proof Tire", "color": Color("202020"), "kind": "module"},
+	"vehicle_roof_rack": {"name": "Roof Rack", "color": Color("2a2a2c"), "kind": "module"},
+	"vehicle_mod_cargo_box": {"name": "Roof Cargo Box", "color": Color("1e1e22"), "kind": "module"},
+	"vehicle_mod_roof_tent": {"name": "Roof Tent", "color": Color("5a6a3a"), "kind": "module"},
+	"vehicle_side_panniers": {"name": "Side Panniers", "color": Color("3a3a30"), "kind": "module"},
+	"vehicle_mod_jerry_holder": {"name": "Jerry Can Holder", "color": Color("903028"), "kind": "module"},
+	"vehicle_mod_spare_mount": {"name": "Spare Tire Mount", "color": Color("2a2a2a"), "kind": "module"},
+	"vehicle_mod_snorkel": {"name": "Off-Road Snorkel", "color": Color("1a1a1a"), "kind": "module"},
+	"vehicle_mod_winch": {"name": "Recovery Winch", "color": Color("c03028"), "kind": "module"},
+	"vehicle_mod_ram_plow": {"name": "Steel Ram Plow", "color": Color("6a6e72"), "kind": "module"},
+	"vehicle_mod_windshield_mesh": {"name": "Windshield Mesh", "color": Color("5a5e62"), "kind": "module"},
+	"vehicle_mod_door_armor": {"name": "Door Armor Plates", "color": Color("5a5a52"), "kind": "module"},
+	"vehicle_mod_mud_flaps": {"name": "Mud Flaps", "color": Color("1a1a1a"), "kind": "module"},
+	"mod_underglow_neon_kit": {"name": "Underglow Neon Kit", "color": Color("d040f0"), "kind": "module"},
+	"vehicle_tow_hitch": {"name": "Tow Hitch", "color": Color("3a3a3a"), "kind": "module"},
 	# Food & drink
 	"raw_meat": {"name": "Raw Meat", "color": Color("c0504d"), "kind": "food", "food": 8, "water": 0, "health": -6, "cook": "cooked_meat"},
 	"cooked_meat": {"name": "Cooked Meat", "color": Color("8b4a2b"), "kind": "food", "food": 35, "water": -2, "health": 4},
@@ -280,9 +307,9 @@ const ITEMS := {
 	"vehicle_hubcap": {"name": "Rusted Hubcap", "color": Color("a0a4a8"), "kind": "decor"},
 	"vehicle_side_mirror": {"name": "Side View Mirror", "color": Color("2a2a2a"), "kind": "junk"},
 	"vehicle_taillight": {"name": "Taillight Assembly", "color": Color("c02020"), "kind": "junk"},
-	"vehicle_alternator": {"name": "Alternator", "color": Color("9a9ea4"), "kind": "material"},
-	"vehicle_starter_motor": {"name": "Starter Motor", "color": Color("4a4e54"), "kind": "material"},
-	"vehicle_radiator": {"name": "Radiator", "color": Color("6a6e74"), "kind": "material"},
+	"vehicle_alternator": {"name": "Alternator", "color": Color("9a9ea4"), "kind": "module"},
+	"vehicle_starter_motor": {"name": "Starter Motor", "color": Color("4a4e54"), "kind": "module"},
+	"vehicle_radiator": {"name": "Radiator", "color": Color("6a6e74"), "kind": "module"},
 	"mod_coolant_jug_20l": {"name": "Coolant Jug (20 L)", "color": Color("40c060"), "kind": "material"},
 	# Cab decor: set it on the dashboard or a shelf, or aim at the ceiling to hang it
 	"mod_decor_fuzzy_dice": {"name": "Fuzzy Dice", "color": Color("e04040"), "kind": "decor", "hang": true},
@@ -403,6 +430,36 @@ const RECIPES := [
 	{"out": "fuel_tank_xl", "n": 1, "cost": {"scrap": 4, "pipe": 1, "bolts": 2}},
 	{"out": "tune_kit", "n": 1, "cost": {"engine_parts": 2, "wire": 1, "bolts": 2}},
 	{"out": "offroad_tire", "n": 1, "cost": {"tire": 1, "hide": 1, "bolts": 1}},
+	# 1.8: performance parts and van add-ons
+	{"out": "vehicle_engine_block_t2", "n": 1, "cost": {"engine_block": 1, "engine_parts": 3, "bolts": 4}},
+	{"out": "vehicle_engine_block_t3", "n": 1, "cost": {"vehicle_engine_block_t2": 1, "vehicle_supercharger": 1, "engine_parts": 4, "pipe": 2}},
+	{"out": "vehicle_turbocharger", "n": 1, "cost": {"engine_parts": 2, "pipe": 2, "bolts": 2}},
+	{"out": "vehicle_supercharger", "n": 1, "cost": {"engine_parts": 3, "pipe": 1, "rope": 1, "bolts": 2}},
+	{"out": "vehicle_nos_kit", "n": 1, "cost": {"pipe": 2, "wire": 1, "elec_relay_switch": 1, "scrap": 2}},
+	{"out": "vehicle_radiator", "n": 1, "cost": {"pipe": 2, "scrap": 2}},
+	{"out": "vehicle_dual_fan_radiator", "n": 1, "cost": {"vehicle_radiator": 1, "wire": 2, "elec_relay_switch": 1}},
+	{"out": "vehicle_armored_radiator", "n": 1, "cost": {"vehicle_radiator": 1, "scrap": 4, "bolts": 2}},
+	{"out": "vehicle_alternator", "n": 1, "cost": {"elec_copper_spool": 1, "scrap": 2, "bolts": 1}},
+	{"out": "vehicle_starter_motor", "n": 1, "cost": {"engine_parts": 1, "wire": 2, "bolts": 1}},
+	{"out": "vehicle_suspension_part", "n": 1, "cost": {"salvage_rusted_spring": 4, "pipe": 2, "bolts": 3}},
+	{"out": "vehicle_leaf_spring", "n": 1, "cost": {"scrap": 5, "bolts": 3}},
+	{"out": "vehicle_lithium_battery", "n": 1, "cost": {"car_battery": 1, "elec_circuit_board": 1, "elec_copper_spool": 1}},
+	{"out": "vehicle_tire_sand", "n": 1, "cost": {"tire": 1, "cured_rubber_sheet": 2, "bolts": 1}},
+	{"out": "vehicle_tire_solid", "n": 1, "cost": {"tire": 1, "cured_rubber_sheet": 3}},
+	{"out": "vehicle_roof_rack", "n": 1, "cost": {"pipe": 4, "bolts": 4}},
+	{"out": "vehicle_mod_cargo_box", "n": 1, "cost": {"scrap": 3, "bolts": 2, "rope": 1}},
+	{"out": "vehicle_mod_roof_tent", "n": 1, "cost": {"heavy_canvas": 3, "foam": 2, "pipe": 2}},
+	{"out": "vehicle_side_panniers", "n": 1, "cost": {"scrap": 4, "bolts": 2}},
+	{"out": "vehicle_mod_jerry_holder", "n": 1, "cost": {"pipe": 2, "bolts": 2, "fuel_can_empty": 2}},
+	{"out": "vehicle_mod_spare_mount", "n": 1, "cost": {"pipe": 2, "bolts": 2}},
+	{"out": "vehicle_mod_snorkel", "n": 1, "cost": {"pipe": 3, "duct_tape": 1}},
+	{"out": "vehicle_mod_winch", "n": 1, "cost": {"rope": 4, "vehicle_starter_motor": 1, "bolts": 2}},
+	{"out": "vehicle_mod_ram_plow", "n": 1, "cost": {"scrap": 6, "pipe": 2, "bolts": 3}},
+	{"out": "vehicle_mod_windshield_mesh", "n": 1, "cost": {"wire": 3, "pipe": 1}},
+	{"out": "vehicle_mod_door_armor", "n": 1, "cost": {"scrap": 5, "bolts": 2}},
+	{"out": "vehicle_mod_mud_flaps", "n": 1, "cost": {"cured_rubber_sheet": 2, "bolts": 1}},
+	{"out": "mod_underglow_neon_kit", "n": 1, "cost": {"wire": 2, "elec_light_bulb": 2, "glass": 1}},
+	{"out": "vehicle_tow_hitch", "n": 1, "cost": {"pipe": 1, "scrap": 2, "bolts": 2}},
 	{"out": "paint_can", "n": 1, "cost": {"berries": 3, "scrap": 1}},
 	# 1.7: hunting, leatherwork and camp gear
 	{"out": "hunt_sinew_cord", "n": 2, "cost": {"sinew": 3}},
@@ -516,7 +573,7 @@ const DRINKS := ["water_clean", "water_dirty", "coffee", "soda", "berry_juice", 
 ## Van module slots. Each slot takes one item. "needs": slots that must be fitted first.
 ## "toolkit": a Toolkit must be in hand or within reach. "drive": required to drive.
 const VAN_SLOTS := {
-	"engine": {"item": "engine_block", "name": "Engine", "toolkit": true, "drive": true},
+	"engine": {"item": "engine_block", "alts": ["vehicle_engine_block_t2", "vehicle_engine_block_t3"], "name": "Engine", "toolkit": true, "drive": true},
 	"steering": {"item": "steering_wheel", "name": "Steering wheel", "toolkit": true, "drive": true},
 	"seat_driver": {"item": "car_seat", "name": "Driver's seat", "drive": true},
 	"seat_passenger": {"item": "car_seat", "name": "Passenger seat"},
@@ -543,11 +600,49 @@ const VAN_SLOTS := {
 	"bullbar": {"item": "bull_bar", "name": "Bull bar", "toolkit": true},
 	"heater": {"item": "heater_unit", "name": "Heater"},
 	"big_tank": {"item": "fuel_tank_xl", "name": "Long-range tank", "toolkit": true},
-	"engine_tune": {"item": "tune_kit", "name": "Engine tune", "toolkit": true, "needs": ["engine"]},
+	"engine_tune": {"item": "tune_kit", "name": "Engine tune", "toolkit": true, "needs": ["engine"], "hood": true},
+	# 1.8 performance parts, fitted at the open hood. "alts": other parts that fit the same spot.
+	"turbo": {"item": "vehicle_turbocharger", "name": "Turbocharger", "toolkit": true, "needs": ["engine"], "hood": true},
+	"supercharger": {"item": "vehicle_supercharger", "name": "Supercharger", "toolkit": true, "needs": ["engine"], "hood": true},
+	"nitrous": {"item": "vehicle_nos_kit", "name": "Nitrous kit", "toolkit": true, "needs": ["engine"], "hood": true},
+	"radiator": {"item": "vehicle_radiator", "alts": ["vehicle_dual_fan_radiator", "vehicle_armored_radiator"], "name": "Radiator", "toolkit": true, "needs": ["engine"], "hood": true},
+	"alternator": {"item": "vehicle_alternator", "name": "Alternator", "toolkit": true, "needs": ["engine"], "hood": true},
+	"starter": {"item": "vehicle_starter_motor", "name": "Starter motor", "toolkit": true, "needs": ["engine"], "hood": true},
+	"suspension": {"item": "vehicle_suspension_part", "alts": ["vehicle_leaf_spring"], "name": "Suspension", "toolkit": true, "hood": true},
+	# 1.8 body add-ons, fitted on the outside of the van
+	"roof_rack": {"item": "vehicle_roof_rack", "name": "Roof rack", "toolkit": true},
+	"cargo_box": {"item": "vehicle_mod_cargo_box", "name": "Roof cargo box", "toolkit": true, "needs": ["roof_rack"]},
+	"roof_tent": {"item": "vehicle_mod_roof_tent", "name": "Roof tent", "toolkit": true, "needs": ["roof_rack"]},
+	"spare_mount": {"item": "vehicle_mod_spare_mount", "name": "Spare tire mount", "toolkit": true, "needs": ["roof_rack"]},
+	"panniers": {"item": "vehicle_side_panniers", "name": "Side panniers", "toolkit": true},
+	"jerry_holder": {"item": "vehicle_mod_jerry_holder", "name": "Jerry can holder", "toolkit": true},
+	"snorkel": {"item": "vehicle_mod_snorkel", "name": "Snorkel", "toolkit": true},
+	"winch": {"item": "vehicle_mod_winch", "name": "Winch", "toolkit": true},
+	"ram_plow": {"item": "vehicle_mod_ram_plow", "name": "Ram plow", "toolkit": true},
+	"windshield_mesh": {"item": "vehicle_mod_windshield_mesh", "name": "Windshield mesh", "toolkit": true},
+	"door_armor": {"item": "vehicle_mod_door_armor", "name": "Door armor", "toolkit": true},
+	"mud_flaps": {"item": "vehicle_mod_mud_flaps", "name": "Mud flaps", "toolkit": true},
+	"underglow": {"item": "mod_underglow_neon_kit", "name": "Underglow", "toolkit": true},
+	"tow_hitch": {"item": "vehicle_tow_hitch", "name": "Tow hitch", "toolkit": true},
 }
 
 ## Upgrades that cars accept at the hood (carry the part there and press [E]).
-const CAR_UPGRADE_ITEMS := {"tune_kit": "engine_tune", "bull_bar": "bullbar", "fuel_tank_xl": "big_tank"}
+const CAR_UPGRADE_ITEMS := {"tune_kit": "engine_tune", "bull_bar": "bullbar", "fuel_tank_xl": "big_tank", "vehicle_turbocharger": "turbo", "vehicle_mod_ram_plow": "ram_plow"}
+
+## How each engine, radiator and tire changes the van. Engines: power and top-speed multipliers,
+## fuel use, heat. Radiators: cooling. Tires: grip on road, grip off road, wear.
+const ENGINES := {
+	"engine_block": {"power": 1.0, "top": 1.0, "fuel": 1.0, "heat": 1.0},
+	"vehicle_engine_block_t2": {"power": 1.3, "top": 1.1, "fuel": 1.1, "heat": 1.15},
+	"vehicle_engine_block_t3": {"power": 1.75, "top": 1.25, "fuel": 1.45, "heat": 1.4},
+}
+const RADIATORS := {"": 1.0, "vehicle_radiator": 1.6, "vehicle_dual_fan_radiator": 2.4, "vehicle_armored_radiator": 1.9}
+const TIRE_KINDS := {
+	"": {"road": 1.0, "off": 1.0, "wear": 1.0},
+	"offroad_tire": {"road": 1.0, "off": 1.25, "wear": 0.45},
+	"vehicle_tire_sand": {"road": 0.92, "off": 1.45, "wear": 0.8},
+	"vehicle_tire_solid": {"road": 0.9, "off": 1.0, "wear": 0.0},
+}
 
 ## Buildable pieces. "snap": grid snapping mode.
 const PIECES := {
@@ -611,6 +706,8 @@ const RV_UPGRADES := {
 	"big_tank": {"name": "Long-Range Fuel Tank (140 L)"},
 	"solar": {"name": "Roof Solar Panel (charges battery)"},
 	"bullbar": {"name": "Bull Bar (-60% crash damage)"},
+	"turbo": {"name": "Turbocharger (+25% power)"},
+	"ram_plow": {"name": "Ram Plow (-50% crash damage)"},
 	"heater": {"name": "Cabin Heater"},
 	"water_tank": {"name": "Water Tank (60 L)"},
 }

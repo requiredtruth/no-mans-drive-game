@@ -19,6 +19,9 @@ func _wait(sec: float) -> void:
 	await get_tree().create_timer(sec).timeout
 
 func _shot(name: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		_log("shot %s (skipped, headless)" % name)
+		return
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	img.save_png("%s/%s.png" % [out, name])
@@ -1430,10 +1433,262 @@ func _v171() -> void:
 		await _wait(0.3)
 		_log("carrying the sofa: %s; removed flag %s" % [Game.carried("sofa") > 0, Game.removed.has("poi1_f_sofa")])
 
+## 1.8: performance parts, engine heat, nitrous, tire types, lithium battery and the body add-ons.
+func _hold18(id: String) -> void:
+	Game.slots[0] = {"id": id, "n": 1}
+	Game.slots[1] = {"id": "toolkit", "n": 1}
+	Game.select_slot(0)
+	Game._changed()
+
+func _v18() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	w.hud.close_modal()
+	Game.time_of_day = 11.0
+	Game.weather = "clear"
+	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
+	await _settle(pl.global_position)
+	# make the van road-ready the quick way
+	rv.modules = rv._all_modules()
+	rv.missing = {}
+	for k in rv.parts:
+		rv.parts[k] = 100.0
+	rv.battery = 100.0
+	rv.fuel = 60.0
+	rv._apply_visuals()
+	await _wait(0.5)
+	# fit hood parts through the real hood action
+	var hood: Vector3 = rv.to_global(Vector3(0, 1.68, rv.FRONT_Z + 0.85))
+	var hp: Vector3 = rv.to_global(Vector3(0, 0, rv.FRONT_Z + 2.6))
+	_player_at(_ground(hp.x, hp.z), 0.0)
+	for id in ["vehicle_turbocharger", "vehicle_supercharger", "vehicle_nos_kit", "vehicle_dual_fan_radiator", "vehicle_alternator", "vehicle_starter_motor", "vehicle_suspension_part"]:
+		_hold18(id)
+		var pr: String = await _aim_prompt(hood)
+		_log("hood prompt holding %s: '%s'" % [id, pr])
+		rv.do_action("hood", pl)
+	_log("hood modules: %s kinds %s" % [str(rv.modules.keys().filter(func(k): return Game.Data.VAN_SLOTS[k].get("hood", false))), str(rv.module_kind)])
+	# take the last one back out with [G] and refit it
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	_look_at_point(hood)
+	await _wait(0.15)
+	pl._update_prompt()
+	_log("hood prompt empty-handed: '%s'" % pl.prompt)
+	pl.place_or_grab()
+	_log("after [G]: suspension fitted %s, holding %s" % [rv.modules.has("suspension"), Game.equipped()])
+	rv.do_action("hood", pl)
+	# body add-ons through their mounts
+	for slot in ["roof_rack", "cargo_box", "roof_tent", "spare_mount", "panniers", "jerry_holder", "snorkel", "winch", "ram_plow", "windshield_mesh", "door_armor", "mud_flaps", "underglow", "tow_hitch"]:
+		_hold18(Game.Data.VAN_SLOTS[slot]["item"])
+		var ok: bool = rv.install_module(slot)
+		if not ok:
+			_log("  could not fit %s" % slot)
+	_log("fuel capacity with jerry cans: %d" % int(rv.fuel_capacity()))
+	_log("can tow: %s" % rv.can_tow())
+	# tires: sand on the back, solid on the front
+	for i in range(4):
+		rv.missing["wheel%d" % i] = true
+	for i in range(4):
+		_hold18("vehicle_tire_solid" if i < 2 else "vehicle_tire_sand")
+		rv.Mounts.act(rv, "wheel%d" % i)
+	_log("wheel kinds: %s" % str(rv.wheel_kind))
+	_log("grip on road: %s" % str([rv.wheel_grip(0), rv.wheel_grip(2)]))
+	# lithium battery
+	Game.slots[0] = {"id": "", "n": 0}
+	rv.Mounts.pull(rv, "battery")
+	_log("pulled battery: holding %s" % Game.equipped())
+	_hold18("vehicle_lithium_battery")
+	rv.Mounts.act(rv, "battery")
+	_log("battery kind %s, charge %d" % [rv.battery_kind, int(rv.battery)])
+	# spare on the roof
+	_hold18("tire")
+	rv._spare_action()
+	_log("spare tire: %s" % rv.spare_tire)
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	rv.headlights = true
+	rv._apply_visuals()
+	await _wait(0.6)
+	# --- pictures
+	for v in [["z01_front", Vector3(-5.5, 0, 8.5), Vector3(0, 1.4, 2.0)], ["z02_rear", Vector3(5.0, 0, -9.0), Vector3(0, 1.4, -2.0)],
+			["z03_side_right", Vector3(7.5, 0, 0.5), Vector3(0, 1.6, 0.0)], ["z04_side_left", Vector3(-7.5, 0, -0.5), Vector3(0, 1.6, 0.0)]]:
+		var cp: Vector3 = rv.to_global(v[1])
+		_player_at(_ground(cp.x, cp.z), 0.0)
+		_look_at_point(rv.to_global(v[2]))
+		await _wait(0.5)
+		await _shot(v[0])
+	# on the roof
+	var rp: Vector3 = rv.to_global(Vector3(-0.1, rv.ROOF_Y + 0.5, 0.05))
+	_player_at(rp, 0.0)
+	await _wait(0.6)
+	var rpr: String = await _aim_prompt(rv.to_global(Vector3(0.52, rv.ROOF_Y + 0.88, 1.15)))
+	_log("roof prompt: '%s' (feet %.2f above van origin)" % [rpr, rv.to_local(pl.global_position).y])
+	var tpr: String = await _aim_prompt(rv.to_global(Vector3(-0.52, rv.ROOF_Y + 0.75, 1.2)))
+	_log("tent prompt: '%s'" % tpr)
+	_look_at_point(rv.to_global(Vector3(0.3, rv.ROOF_Y + 0.5, 1.6)))
+	rv.do_action("cargo_box", pl)
+	await _wait(0.6)
+	await _shot("z05_roof_rack")
+	rv.do_action("cargo_box", pl)
+	# panniers open
+	var pp: Vector3 = rv.to_global(Vector3(rv.W * 0.5 + 1.6, 0, -0.95))
+	_player_at(_ground(pp.x, pp.z), 0.0)
+	var pr2: String = await _aim_prompt(rv.to_global(Vector3(rv.W * 0.5 + 0.32, rv.FLOOR_Y + 0.3, -0.95)))
+	_log("pannier prompt: '%s'" % pr2)
+	rv.do_action("pannier_r", pl)
+	await _wait(0.6)
+	await _shot("z06_pannier_open")
+	rv.do_action("pannier_r", pl)
+	# night: underglow
+	Game.time_of_day = 22.5
+	var np: Vector3 = rv.to_global(Vector3(-6.0, 0, 5.0))
+	_player_at(_ground(np.x, np.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 0.6, 0)))
+	await _wait(0.8)
+	await _shot("z07_underglow_night")
+	Game.time_of_day = 11.0
+	rv.headlights = false
+	# drive: heat, nitrous (out on the open road, clear of the parked test cars)
+	var gz: float = rv.global_position.z + 160.0
+	var gx: float = w.gen.road_x(gz) - 1.8
+	rv.global_position = Vector3(gx, w.gen.height(gx, gz) + 1.0, gz)
+	rv.rotation = Vector3(0, atan2(w.gen.road_x(gz + 5.0) - w.gen.road_x(gz), 5.0), 0)
+	pl.teleport(rv.global_position + Vector3(3, 0, 0))
+	await _settle(rv.global_position)
+	pl.enter_vehicle(rv, true)
+	rv.set_camera(false)
+	await _wait(0.6)
+	await _shot("z08_driver_view")
+	rv.set_camera(true)
+	rv.try_start_engine()
+	_log("engine on %s (starter fitted)" % rv.engine_on)
+	Input.action_press("move_forward", 1.0)
+	await _wait(5.0)
+	_log("after 5 s full throttle: %d km/h, %d°C (force %.0f brake %.0f driver %s trailer %s ui %s)" % [int(rv.speed_kmh()), int(rv.engine_heat), rv.engine_force, rv.brake, rv.driver, rv.trailer, Game.ui_open])
+	Input.action_press("sprint")
+	await _wait(3.0)
+	_log("after 3 s nitrous: %d km/h, %d°C, NOS %d%%, boosting %s" % [int(rv.speed_kmh()), int(rv.engine_heat), int(rv.nitrous), rv.boosting])
+	await _shot("z09_nitrous")
+	Input.action_release("sprint")
+	Input.action_release("move_forward")
+	_log("dash: %s" % rv.dash_extra())
+	# no radiator, no coolant: does it cook?
+	rv.modules.erase("radiator")
+	rv.coolant = 20.0
+	Input.action_press("move_forward", 1.0)
+	Input.action_press("sprint")
+	await _wait(8.0)
+	_log("no radiator, low coolant, full boost 8 s: %d°C, engine on %s, engine %d%%" % [int(rv.engine_heat), rv.engine_on, int(rv.parts["engine"])])
+	Input.action_release("sprint")
+	Input.action_release("move_forward")
+	Input.action_press("jump")
+	await _wait(2.0)
+	Input.action_release("jump")
+	pl.exit_vehicle()
+	await _wait(0.5)
+	rv.engine_heat = 112.0
+	rv._overheated = true
+	rv.try_start_engine()
+	_log("restart while hot: engine on %s" % rv.engine_on)
+	_hold18("mod_coolant_jug_20l")
+	rv.do_action("hood", pl)
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	var hp2: Vector3 = rv.to_global(Vector3(0, 0, rv.FRONT_Z + 2.6))
+	_player_at(_ground(hp2.x, hp2.z), 0.0)
+	var hpr: String = await _aim_prompt(rv.to_global(Vector3(0, 1.68, rv.FRONT_Z + 0.85)))
+	_log("hood prompt empty-handed: '%s'" % hpr)
+	_log("after coolant: %d°C coolant %d%%" % [int(rv.engine_heat), int(rv.coolant)])
+	# winch: drag the van off into the field, then winch it back
+	var off: Vector3 = rv.global_position + Vector3(18.0, 0, 0)
+	rv.global_position = Vector3(off.x, w.gen.height(off.x, off.z) + 1.5, off.z)
+	rv.linear_velocity = Vector3.ZERO
+	await _wait(1.0)
+	var d0: float = absf(rv.global_position.x - w.gen.road_x(rv.global_position.z))
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	rv.do_action("winch", pl)
+	await _wait(0.5)
+	_log("winch: %.1f m from the road -> %.1f m" % [d0, absf(rv.global_position.x - w.gen.road_x(rv.global_position.z))])
+	# save round trip
+	var st: Dictionary = rv.save_state()
+	rv.apply_state(st)
+	_log("after save/load: kinds %s battery %s spare %s tires %s" % [str(rv.module_kind), rv.battery_kind, rv.spare_tire, str(rv.wheel_kind)])
+	# the new items' icons
+	if DisplayServer.get_name() != "headless":
+		await _items_sheet()
+
+func _drive18() -> void:
+	var rv = Game.rv
+	var pl = Game.player
+	Game.world.hud.close_modal()
+	await _settle(pl.global_position)
+	rv.modules = rv._all_modules()
+	rv.missing = {}
+	for k in rv.parts:
+		rv.parts[k] = 100.0
+	rv.battery = 100.0
+	rv.fuel = 60.0
+	rv._apply_visuals()
+	var extra: Array = []
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--fit="):
+			extra = a.substr(6).split(",")
+	for slot in extra:
+		if slot.begins_with("engine="):
+			rv.module_kind["engine"] = slot.substr(7)
+		elif slot.begins_with("tire="):
+			for i in range(4):
+				rv.wheel_kind["wheel%d" % i] = slot.substr(5)
+		elif slot == "lithium":
+			rv.battery_kind = "vehicle_lithium_battery"
+		else:
+			rv.modules[slot] = true
+	rv._apply_visuals()
+	var gen = Game.world.gen
+	var z: float = rv.global_position.z + 160.0
+	var x: float = gen.road_x(z) - 1.8
+	rv.global_position = Vector3(x, gen.height(x, z) + 1.0, z)
+	rv.rotation = Vector3(0, atan2(gen.road_x(z + 5.0) - gen.road_x(z), 5.0), 0)
+	pl.teleport(rv.global_position + Vector3(3, 0, 0))
+	await _settle(rv.global_position)
+	await _wait(1.0)
+	pl.enter_vehicle(rv, true)
+	await _wait(0.5)
+	rv.try_start_engine()
+	Input.action_press("move_forward", 1.0)
+	if "--nos" in OS.get_cmdline_user_args():
+		Input.action_press("sprint")
+	for i in range(6):
+		await _wait(1.0)
+		_log("fit %s t=%d: %d km/h, engine_force %.0f brake %.0f sleeping %s freeze %s driver %s heat %d" % [str(extra), i + 1, int(rv.speed_kmh()), rv.engine_force, rv.brake, rv.sleeping, rv.freeze, rv.driver, int(rv.engine_heat)])
+	Input.action_release("move_forward")
+	Input.action_release("sprint")
+
 func RV_W() -> float:
 	return Game.rv.W
 
 func _run() -> void:
+	if "--drive18" in OS.get_cmdline_user_args():
+		var md := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		md._start_world({})
+		await _wait(1.5)
+		await _drive18()
+		get_tree().quit()
+		return
+	if "--v18" in OS.get_cmdline_user_args():
+		var m18 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		m18._start_world({})
+		await _wait(1.5)
+		await _v18()
+		var f18 := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		f18.store_string("\n".join(log_lines))
+		f18.close()
+		get_tree().quit()
+		return
 	if "--v171" in OS.get_cmdline_user_args():
 		var m171 := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")

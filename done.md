@@ -2,6 +2,30 @@
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.
 
+## Version 1.8.0: van performance parts and body add-ons
+
+### Performance parts (fitted at the open hood with a toolkit nearby; [G] with empty hands takes them out again, last one first)
+- [x] Tier 2 high-compression engine and tier 3 supercharged V8 fit the engine bay in place of the stock block: more power and top speed, more fuel and heat.
+- [x] Turbocharger (+25% power, +8% top speed, more heat) and supercharger (strong low-speed pull, a bit more fuel).
+- [x] Nitrous kit: hold Shift (NOS on touch) while accelerating for a big boost; the bottle refills slowly when not in use.
+- [x] Engine heat and coolant: the engine warms toward a temperature set by load against cooling. Above 100°C it wears; at 118°C it seizes and won't restart until it cools. Coolant boils off when hot and drains in crashes; top it up at the hood with Engine Coolant (+50%) or a Coolant Jug (+100%).
+- [x] Radiators: stock, dual-fan (best cooling) and armored (good cooling, never leaks in a crash, halves crash damage to the engine).
+- [x] Alternator (battery charges 3× faster while driving) and starter motor (no more sputtering starts, uses less battery).
+- [x] Suspension: independent kit (stiffer, less body roll, +8% grip) or heavy-duty leaf springs (more ground clearance and load).
+- [x] Lithium deep-cycle battery for the battery tray: lights drain it half as fast, solar charges it faster, and it comes out as good as it went in.
+- [x] Sand dune tires (much more grip off the road) and solid puncture-proof tires (never wear, a little less grip), fitted wheel by wheel like the off-road tire.
+
+### Body add-ons (fitted on the outside of the van)
+- [x] Roof rack over the front of the roof; on it a lockable roof cargo box (things inside ride along), a roof tent you can sleep in, and a spare tire mount that holds any tire.
+- [x] Side panniers: a lidded storage box on each flank.
+- [x] Jerry can holder: +40 L fuel range.
+- [x] Snorkel: driving into deep water drowns the engine (-15%) unless a snorkel keeps the intake above it.
+- [x] Winch on the front bumper: hauls a ditched or flipped van back toward the road (uses battery).
+- [x] Steel ram plow (-50% crash damage), door armor plates (-30%), windshield mesh (halves crash injuries).
+- [x] Mud flaps (30% less tire wear off the road), underglow neon (lights up under the van with the headlights).
+- [x] Tow hitch: the van needs one to tow trailers. Vans from older saves keep theirs.
+- [x] Cars take the turbo and the ram plow at the hood too.
+
 ## Version 1.7.2
 
 - [x] Starting steering wheel lies on top of the tires next to the van.

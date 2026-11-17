@@ -2,15 +2,27 @@
 
 What is still to be made. Finished work moves to `done.md`. Each item needs a real 3D model and texture, an entry in `game/scripts/data.gd`, a model in `game/scripts/items.gd` (or a structure in `structure.gd` for furniture), and a place in the loot tables, a recipe or a world drop. The full source lists are in `docs/item-backlog/`.
 
+**Quality bar:** read `NOTES.md` before changing models, textures, the HUD, items or interactions. It lists the gap to the reference screenshots and the rules every new piece follows.
+
+## Quality pass (see NOTES.md)
+
+- [ ] Aim outline, floating name label at the cursor, and right-hand action hints with one key cap per row.
+- [ ] Liquids in litres for fuel, water and coolant, with a two-gauge transfer panel and a pump nozzle at fuel stations.
+- [ ] Texture and bevel pass on the van interior (cab, dashboard, seats, cupboards, floor), then houses.
+- [ ] Labelled consumables (cans, jars, bottles, spray paint) and slatted crates.
+- [ ] House cabinets and wardrobes as physical shelves with hinged doors.
+- [ ] Detailed first-person hand and sleeve; bigger held items.
+- [ ] Ambient occlusion and grime in interiors.
+- [ ] A light objective track (destinations along the road) in a top-right card.
+
 ## Testing phase
 
 - [ ] The test depot (every item at the start of a new game) stays on until everything has been checked; turn it off with `TEST_DEPOT` in `game/scripts/world.gd` for a normal start.
 - [ ] Make the built-in house cabinets, wardrobes and fridges movable too (they are searchable containers today).
 
-## Next up (1.8)
+## Next up (1.9)
 
-- [ ] Vehicle parts that change how the van drives: suspension kits, mud, sand and solid tires, radiators and coolant (engine heat), turbo, supercharger, nitrous, lithium battery, alternator and starter motor as fittable modules.
-- [ ] Vehicle add-ons on the van body: roof rack, cargo box, roof tent, side panniers, jerry can holder, spare tire mount, snorkel, winch, ram plow, windshield mesh, door armor, mud flaps, underglow, tow hitch.
+- [ ] Vehicle performance parts and add-ons for the other cars (they take the turbo and ram plow at the hood today; the rest is van-only).
 - [ ] Base building pieces: metal and concrete walls, metal floor, metal door with code lock, window barricades, weapon rack, mannequin, tanning rack, anvil bench, hydroponic tray, industrial crate.
 - [ ] Power: generators, batteries, solar array, wind turbine, power hub, battery monitor, with lights and appliances that need power.
 - [ ] Machines: smelter, crusher, chemistry station, coolant still, water filtration, 3D printer, fabricator.
@@ -160,21 +172,6 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 ### Vehicle Simulator and Engine Parts
 
-- [ ] vehicle engine block tier 2 - high compression (`vehicle_engine_block_t2`)
-- [ ] vehicle engine block tier 3 - v8 supercharged (`vehicle_engine_block_t3`)
-- [ ] reinforced sand dune tire (`vehicle_tire_sand`)
-- [ ] puncture-proof solid tire (`vehicle_tire_solid`)
-- [ ] independent suspension kit (`vehicle_suspension_part`)
-- [ ] heavy-duty leaf spring suspension (`vehicle_leaf_spring`)
-- [ ] deep-cycle lithium vehicle battery (`vehicle_lithium_battery`)
-- [ ] heavy-duty armored radiator (`vehicle_armored_radiator`)
-- [ ] dual-fan high-capacity radiator (`vehicle_dual_fan_radiator`)
-- [ ] turbocharger attachment (`vehicle_turbocharger`)
-- [ ] supercharger unit (`vehicle_supercharger`)
-- [ ] nitrous oxide injection kit (`vehicle_nos_kit`)
-- [ ] roof-mounted cargo rack (`vehicle_roof_rack`)
-- [ ] side storage panniers (`vehicle_side_panniers`)
-- [ ] underglow neon lighting kit (`mod_underglow_neon_kit`)
 - [ ] canteen 2l (`mod_canteen_2l`)
 - [ ] coffee flask 3l (`mod_coffee_flask_3l`)
 
@@ -208,7 +205,6 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 - [ ] vehicle windshield glass (`vehicle_windshield`)
 - [ ] exhaust muffler pipe (`vehicle_exhaust_pipe`)
 - [ ] catalytic converter (`vehicle_catalytic_converter`)
-- [ ] tow hitch receiver (`vehicle_tow_hitch`)
 - [ ] heavy towing tow-rope (`vehicle_tow_rope`)
 
 ### Navigation, Maps and Communications
@@ -238,13 +234,3 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 ### Specialized Vehicle Armor and Mod Add-Ons
 
-- [ ] heavy front steel ram plow (`vehicle_mod_ram_plow`)
-- [ ] windshield protective wire mesh (`vehicle_mod_windshield_mesh`)
-- [ ] roof-mounted pop-up camping tent (`vehicle_mod_roof_tent`)
-- [ ] roof cargo storage box (`vehicle_mod_cargo_box`)
-- [ ] side-mounted jerry can holder (`vehicle_mod_jerry_holder`)
-- [ ] reinforced door armor plating (`vehicle_mod_door_armor`)
-- [ ] off-road snorkel air intake (`vehicle_mod_snorkel`)
-- [ ] heavy-duty winch system (`vehicle_mod_winch`)
-- [ ] spare tire roof carrier mount (`vehicle_mod_spare_mount`)
-- [ ] vehicle mud flaps (`vehicle_mod_mud_flaps`)

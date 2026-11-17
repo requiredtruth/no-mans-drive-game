@@ -311,6 +311,8 @@ func _process(delta: float) -> void:
 			var spd: float = rv.speed_kmh()
 			dash_label.text = "%3d km/h   %s   Fuel %d/%d L   Battery %d%%   Engine %d%%   Tires %d%%%s" % [int(absf(spd)), "R" if spd < -0.5 else "D",
 				int(rv.fuel), int(rv.fuel_capacity()), int(rv.battery), int(rv.parts["engine"]), int(rv.parts["tires"]), "   LIGHTS" if rv.headlights else ""]
+			if rv.has_method("dash_extra"):
+				dash_label.text += "\n" + rv.dash_extra()
 			if not rv.engine_on and p.is_driver:
 				dash_label.text += "\nEngine off — press USE (left click / RT) to start"
 			dash_fuel.max_value = rv.fuel_capacity()
@@ -621,7 +623,7 @@ func open_cheats() -> void:
 		Game.rv.fuel = Game.rv.fuel_capacity()
 		Game.rv.water = Game.rv.water_capacity())
 	add.call("Fit all van upgrades", func() -> void:
-		for u in ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank"]:
+		for u in Game.rv.ADDONS:
 			Game.rv.modules[u] = true
 		for i in range(4):
 			Game.rv.wheel_kind["wheel%d" % i] = "offroad_tire"

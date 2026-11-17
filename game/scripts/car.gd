@@ -561,7 +561,7 @@ func _physics_process(delta: float) -> void:
 		handbrake = Input.is_action_pressed("jump")
 	var fwd := linear_velocity.dot(global_transform.basis.z)
 	var tow := 0.75 if trailer and is_instance_valid(trailer) else 1.0
-	var power: float = float(spec["power"]) * (1.3 if upgrades.has("engine_tune") else 1.0) * lerpf(0.6, 1.0, parts["engine"] / 100.0) * tow * maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
+	var power: float = float(spec["power"]) * (1.3 if upgrades.has("engine_tune") else 1.0) * (1.25 if upgrades.has("turbo") else 1.0) * lerpf(0.6, 1.0, parts["engine"] / 100.0) * tow * maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
 	var top: float = spec["top"]
 	var force := 0.0
 	var brk := 0.0
@@ -613,7 +613,7 @@ func _physics_process(delta: float) -> void:
 	parts["engine"] = maxf(parts["engine"] - dist / 1000.0 * 0.3, 0.0)
 	var dv := (_prev_vel - linear_velocity).length()
 	if dv > 7.0 and driver != 0:
-		var dmg := (dv - 7.0) * 2.5 * Game.diff("damage") * (0.4 if upgrades.has("bullbar") else 1.0)
+		var dmg := (dv - 7.0) * 2.5 * Game.diff("damage") * (0.4 if upgrades.has("bullbar") else 1.0) * (0.5 if upgrades.has("ram_plow") else 1.0)
 		parts["body"] = maxf(parts["body"] - dmg, 0.0)
 		parts["engine"] = maxf(parts["engine"] - dmg * 0.5, 0.0)
 		Audio.play_at("hit", global_position, 6.0, 0.7)
@@ -666,4 +666,4 @@ func paint_palette() -> Array:
 	return COLORS
 
 func upgrade_list() -> Array:
-	return ["engine_tune", "offroad_tires", "big_tank", "bullbar"]
+	return ["engine_tune", "offroad_tires", "big_tank", "bullbar", "turbo", "ram_plow"]

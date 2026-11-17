@@ -383,6 +383,8 @@ func _nearest_tow() -> Node:
 	for v in get_tree().get_nodes_in_group("vehicle") + [Game.rv]:
 		if v == self or v == null or v.is_in_group("trailer") or not v.has_method("hitch_global"):
 			continue
+		if v.has_method("can_tow") and not v.can_tow():
+			continue
 		var d: float = v.hitch_global().distance_to(my)
 		if d < bd:
 			bd = d

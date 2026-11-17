@@ -50,6 +50,7 @@ func _ready() -> void:
 		_btn("CAM", "camera", Color(0.45, 0.45, 0.45), 0.8),
 		_btn("GAS", "move_forward", Color(0.35, 0.75, 0.35), 1.25),
 		_btn("REV", "move_back", Color(0.8, 0.45, 0.25), 1.0),
+		_btn("NOS", "sprint", Color(0.25, 0.45, 0.9), 0.75),
 	]
 	var bag := _btn("BOOK", "inventory", Color(0.45, 0.45, 0.45), 0.75)
 	var pause := _btn("II", "pause", Color(0.3, 0.3, 0.3), 0.6)
@@ -143,7 +144,8 @@ func _layout() -> void:
 	_place(d[2], Vector2(r - px.call(d[0]) - px.call(d[2]) - 16, b - px.call(d[5]) - px.call(d[2]) - 20))
 	_place(d[3], Vector2(r - px.call(d[3]), vp.y * 0.3))
 	_place(d[4], Vector2(r - px.call(d[3]) - px.call(d[4]) - 10, vp.y * 0.3))
-	_place(d[7], Vector2(vp.x * 0.5 + 250, 14))
+	_place(d[7], Vector2(r - px.call(d[3]) - px.call(d[4]) - px.call(d[7]) - 20, vp.y * 0.3))
+	_place(d[8], Vector2(vp.x * 0.5 + 250, 14))
 	_stick_center = Vector2(40 + STICK_R * _scale + 30, vp.y - STICK_R * _scale - 60)
 	_update_stick_visual()
 

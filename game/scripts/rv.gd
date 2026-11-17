@@ -36,6 +36,15 @@ const FREE := {
 }
 ## Modules that sit on another one and move with it.
 const FOLLOW := {"stove": "kitchen", "sink": "kitchen", "coffee": "kitchen", "mattress": "bed"}
+## Fitted modules that count as upgrades (the rest is the van's build-out and furniture).
+const ADDONS := ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank", "turbo", "supercharger", "nitrous",
+	"radiator", "alternator", "starter", "suspension", "roof_rack", "cargo_box", "roof_tent", "spare_mount", "panniers",
+	"jerry_holder", "snorkel", "winch", "ram_plow", "windshield_mesh", "door_armor", "mud_flaps", "underglow", "tow_hitch"]
+## Slots that existed before 1.8 (old saves that predate modules get these fitted).
+const LEGACY_SLOTS := ["engine", "steering", "seat_driver", "seat_passenger", "door", "headlight_l", "headlight_r", "radio",
+	"floor", "walls", "kitchen", "stove", "sink", "coffee", "overhead", "fridge", "cupboard", "dinette", "toilet", "bed",
+	"mattress", "light"]
+const OVERHEAT := 100.0
 
 var fuel := 18.0
 var water := 6.0
@@ -58,6 +67,18 @@ var radio_on := false
 var radio_station := 0
 var driver := 0 # peer id of the driver (0 = nobody)
 var odometer := 0.0
+var module_kind := {} # slot -> the alternative part fitted there (e.g. "engine" -> "vehicle_engine_block_t3")
+var engine_heat := 20.0 # coolant temperature, °C
+var coolant := 100.0 # %
+var nitrous := 100.0 # % left in the bottle
+var battery_kind := "" # "vehicle_lithium_battery" when a lithium battery sits in the tray
+var spare_tire := "" # tire riding on the roof-rack spare mount
+var boosting := false
+var _off_road := false
+var _overheated := false
+var _underglow: Node3D
+var _spare_vis: MeshInstance3D
+var _hood_part: StaticBody3D
 var attached: Array = [] # furniture placed inside / on top of the van: {type, pos(local), rot(local), data}
 
 var wheels: Array[VehicleWheel3D] = []
@@ -550,7 +571,159 @@ func _build_exterior() -> void:
 	Lib.box(vis, Vector3(-SKIN - 0.006, 1.12, -1.45), Vector3(0.02, 0.2, 0.2), paint_m, false, Vector3.ZERO, 0.03)
 	_strip(seam, Vector2(-1.56, 1.01), Vector2(-1.34, 1.01), 0.01, -SKIN - 0.004, -1.0)
 	_part(Vector3(-W * 0.5 - 0.1, 1.12, -1.45), Vector3(0.25, 0.4, 0.4), "fuel")
-	_part(Vector3(0, 1.68, FRONT_Z + 0.85), Vector3(W, 0.3, 0.9), "hood")
+	_hood_part = _part(Vector3(0, 1.68, FRONT_Z + 0.85), Vector3(W, 0.3, 0.9), "hood")
+	_build_addons(vis)
+
+func _addon_mesh(parent: Node3D, item: String, pos: Vector3, rot := Vector3.ZERO, scl := Vector3.ONE) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = Items.mesh(item)
+	mi.position = pos
+	mi.rotation = rot
+	mi.scale = scl
+	parent.add_child(mi)
+	return mi
+
+## An open-topped box with a hinged lid along its outer edge (hinge on +x when side > 0).
+## Things set inside ride along with the van.
+func _lid_box(parent: Node3D, action: String, center: Vector3, size: Vector3, side: float, body_m: Material, lid_m: Material) -> void:
+	var t := 0.03
+	var bottom := center.y - size.y * 0.5
+	var walls := [
+		[Vector3(center.x, bottom + t * 0.5, center.z), Vector3(size.x, t, size.z)],
+		[Vector3(center.x - size.x * 0.5 + t * 0.5, center.y, center.z), Vector3(t, size.y, size.z)],
+		[Vector3(center.x + size.x * 0.5 - t * 0.5, center.y, center.z), Vector3(t, size.y, size.z)],
+		[Vector3(center.x, center.y, center.z - size.z * 0.5 + t * 0.5), Vector3(size.x, size.y, t)],
+		[Vector3(center.x, center.y, center.z + size.z * 0.5 - t * 0.5), Vector3(size.x, size.y, t)],
+	]
+	for wl in walls:
+		Lib.box(parent, wl[0], wl[1], body_m)
+		_shape(wl[0], wl[1])
+	var pivot := Node3D.new()
+	pivot.position = Vector3(center.x + side * size.x * 0.5, center.y + size.y * 0.5, center.z)
+	parent.add_child(pivot)
+	Lib.box(pivot, Vector3(-side * size.x * 0.5, 0.02, 0), Vector3(size.x + 0.03, 0.04, size.z + 0.03), lid_m, false, Vector3.ZERO, 0.015)
+	Lib.box(pivot, Vector3(-side * (size.x - 0.04), -0.02, 0), Vector3(0.03, 0.05, 0.14), Lib.color_mat(Color(0.75, 0.75, 0.78), 0.3, 0.8))
+	var hs := StaticBody3D.new()
+	hs.set_script(RvPart)
+	hs.rv = self
+	hs.action = action
+	hs.collision_layer = 2
+	hs.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(size.x, 0.1, size.z)
+	cs.shape = sh
+	cs.position = Vector3(-side * size.x * 0.5, 0.03, 0)
+	hs.add_child(cs)
+	pivot.add_child(hs)
+	if _grp != "":
+		hs.set_meta("slot", _grp)
+		_mod_parts[_grp].append(hs)
+	# the outer face works too, so you can open it standing beside the van
+	var face := _part(Vector3(center.x + side * (size.x * 0.5 + 0.03), center.y, center.z), Vector3(0.05, size.y, size.z), action)
+	_doors[action] = {"pivot": pivot, "open": false, "angle": -side * 1.9}
+
+## 1.8 body add-ons: roof rack and what sits on it, panniers, jerry cans, snorkel, winch, plow,
+## windshield mesh, door armor, mud flaps, underglow and the tow hitch. Each one shows only once fitted.
+func _build_addons(vis: Node3D) -> void:
+	var black := Lib.mat("metal", Color(0.12, 0.12, 0.13), 6.0, false, 0.5, 0.6)
+	var olive := Lib.mat("metal", Color(0.5, 0.51, 0.45), 5.0, false, 0.55, 0.6)
+	var dark_olive := Lib.mat("metal", Color(0.3, 0.31, 0.28), 5.0, false, 0.5, 0.6)
+	var shell := Lib.color_mat(Color(0.1, 0.1, 0.12), 0.3)
+	var rack_y := ROOF_Y + 0.42 # top of the rack's crossbars
+	# roof rack: rails over the front two-thirds of the roof, clear of the vent and the solar panel
+	var rr := _begin("roof_rack", vis)
+	_addon_mesh(rr, "vehicle_roof_rack", Vector3(0, ROOF_Y + 0.17, 1.2), Vector3.ZERO, Vector3(1.9, 1.15, 2.0))
+	for x in [-1.05, 1.05]:
+		for z in [0.0, 1.2, 2.4]:
+			Lib.box(rr, Vector3(x, ROOF_Y + 0.1, z), Vector3(0.08, 0.2, 0.1), black)
+	_shape(Vector3(0, rack_y - 0.02, 1.2), Vector3(2.1, 0.04, 2.8))
+	_end()
+	# roof cargo box (right half of the rack)
+	var cb := _begin("cargo_box", vis)
+	_lid_box(cb, "cargo_box", Vector3(0.52, rack_y + 0.22, 1.15), Vector3(0.9, 0.42, 1.3), 1.0, shell, shell)
+	_end()
+	# roof tent, folded (left half of the rack)
+	var rt := _begin("roof_tent", vis)
+	_addon_mesh(rt, "vehicle_mod_roof_tent", Vector3(-0.52, rack_y, 1.2), Vector3(0, PI * 0.5, 0), Vector3(1.2, 1.2, 1.2))
+	_shape(Vector3(-0.52, rack_y + 0.18, 1.2), Vector3(0.86, 0.36, 1.46))
+	_part(Vector3(-0.52, rack_y + 0.2, 1.2), Vector3(0.9, 0.42, 1.5), "roof_tent")
+	_end()
+	# spare tire mount at the front of the rack
+	var sm := _begin("spare_mount", vis)
+	_addon_mesh(sm, "vehicle_mod_spare_mount", Vector3(0, rack_y, 2.25))
+	_spare_vis = _addon_mesh(sm, "tire", Vector3(0, rack_y + 0.02, 2.25), Vector3.ZERO, Vector3.ONE * 0.95)
+	_part(Vector3(0, rack_y + 0.15, 2.25), Vector3(0.7, 0.3, 0.6), "spare_mount")
+	_end()
+	# side panniers: a lidded box on each flank, clear of the doors, filler and battery tray
+	var pn := _begin("panniers", vis)
+	_lid_box(pn, "pannier_r", Vector3(W * 0.5 + 0.16, FLOOR_Y + 0.27, -0.95), Vector3(0.28, 0.44, 1.2), 1.0, olive, dark_olive)
+	_lid_box(pn, "pannier_l", Vector3(-W * 0.5 - 0.16, FLOOR_Y + 0.27, -0.4), Vector3(0.28, 0.44, 1.2), -1.0, olive, dark_olive)
+	for zz in [[-1.4, -0.5], [-0.85, 0.05]]:
+		var sx: float = 1.0 if zz == [-1.4, -0.5] else -1.0
+		for z in zz:
+			Lib.box(pn, Vector3(sx * (W * 0.5 + 0.02), FLOOR_Y + 0.27, z), Vector3(0.05, 0.08, 0.06), black)
+	_end()
+	# jerry can holder behind the driver-side front wheel
+	var jh := _begin("jerry_holder", vis)
+	_addon_mesh(jh, "vehicle_mod_jerry_holder", Vector3(-W * 0.5 - 0.14, 0.95, 0.62), Vector3(0, -PI * 0.5, 0), Vector3.ONE * 1.2)
+	_shape(Vector3(-W * 0.5 - 0.14, 1.25, 0.62), Vector3(0.24, 0.6, 0.44))
+	_end()
+	# snorkel up the passenger-side windshield pillar
+	var sn := _begin("snorkel", vis)
+	_addon_mesh(sn, "vehicle_mod_snorkel", Vector3(W * 0.5 + 0.07, 1.42, CAB_Z + 0.9), Vector3(-0.5, 0, 0), Vector3(1.0, 1.75, 1.0))
+	_end()
+	# winch on the front bumper
+	var wi := _begin("winch", vis)
+	_addon_mesh(wi, "vehicle_mod_winch", Vector3(0, 0.35, FRONT_Z + 1.45), Vector3.ZERO, Vector3.ONE * 1.3)
+	_part(Vector3(0, 0.48, FRONT_Z + 1.5), Vector3(0.7, 0.3, 0.3), "winch")
+	_end()
+	# ram plow ahead of the bumper
+	var rp := _begin("ram_plow", vis)
+	_addon_mesh(rp, "vehicle_mod_ram_plow", Vector3(0, 0.22, FRONT_Z + 1.78), Vector3.ZERO, Vector3(1.95, 1.2, 1.0))
+	_shape(Vector3(0, 0.55, FRONT_Z + 1.78), Vector3(W, 0.6, 0.25))
+	_end()
+	# mesh guard over the windshield
+	var wm := _begin("windshield_mesh", vis)
+	var wpiv := Node3D.new()
+	wpiv.position = Vector3(0, 2.33, FRONT_Z + 0.1)
+	wpiv.rotation.x = -0.61
+	wm.add_child(wpiv)
+	_addon_mesh(wpiv, "vehicle_mod_windshield_mesh", Vector3(0, -0.68, 0.09), Vector3.ZERO, Vector3(1.72, 1.95, 1.0))
+	_end()
+	# armor plates on both cab doors
+	var da := _begin("door_armor", vis)
+	for sx in [-1.0, 1.0]:
+		_addon_mesh(da, "vehicle_mod_door_armor", Vector3(sx * (W * 0.5 + 0.03), 1.05, 2.15), Vector3(0, sx * PI * 0.5, 0), Vector3(1.15, 1.2, 1.0))
+	_end()
+	# mud flaps behind every wheel
+	var mf := _begin("mud_flaps", vis)
+	for wz in [2.55, -2.35]:
+		for sx in [-1.0, 1.0]:
+			_addon_mesh(mf, "vehicle_mod_mud_flaps", Vector3(sx * 1.08, 0.12, wz - 0.66), Vector3.ZERO, Vector3(0.7, 1.0, 1.0))
+	_end()
+	# underglow: neon tubes along the sills and a light underneath that comes on with the headlights
+	var ug := _begin("underglow", vis)
+	for sx in [-1.0, 1.0]:
+		_addon_mesh(ug, "mod_underglow_neon_kit", Vector3(sx * 0.9, 0.42, -0.4), Vector3(0, PI * 0.5, 0), Vector3(4.0, 1.0, 1.0))
+	# spotlights aimed at the road so the glow stays under the van and out of the cabin
+	_underglow = Node3D.new()
+	_underglow.visible = false
+	ug.add_child(_underglow)
+	for z in [-1.6, 0.0, 1.6]:
+		var sl := SpotLight3D.new()
+		sl.position = Vector3(0, 0.45, z)
+		sl.rotation.x = -PI * 0.5
+		sl.light_color = Color(0.8, 0.3, 1.0)
+		sl.light_energy = 3.0
+		sl.spot_range = 2.2
+		sl.spot_angle = 75.0
+		_underglow.add_child(sl)
+	_end()
+	# tow hitch receiver under the rear bumper; the ball sits at the hitch point
+	var th := _begin("tow_hitch", vis)
+	_addon_mesh(th, "vehicle_tow_hitch", Vector3(0, 0.58, REAR_Z - 0.35), Vector3(0, PI, 0))
+	_end()
 
 func _tail_mat_get() -> StandardMaterial3D:
 	if _tail_mat == null:
@@ -931,6 +1104,21 @@ func _build_mounts() -> void:
 	_mount("solar", Vector3(0.75, 2.6, REAR_Z - 0.25), Vector3(0.6, 1.0, 0.2))
 	_mount("water_tank", Vector3(-W * 0.5 - 0.05, 0.65, -1.2), Vector3(0.3, 0.35, 0.8))
 	_mount("big_tank", Vector3(W * 0.5 + 0.05, 0.65, -0.2), Vector3(0.3, 0.35, 0.9))
+	# 1.8 body add-ons
+	_mount("roof_rack", Vector3(0, ROOF_Y + 0.2, 1.2), Vector3(2.0, 0.2, 2.6))
+	_mount("cargo_box", Vector3(0.52, ROOF_Y + 0.62, 1.15), Vector3(0.9, 0.4, 1.3))
+	_mount("roof_tent", Vector3(-0.52, ROOF_Y + 0.6, 1.2), Vector3(0.9, 0.36, 1.45))
+	_mount("spare_mount", Vector3(0, ROOF_Y + 0.55, 2.25), Vector3(0.7, 0.25, 0.6))
+	_mount("panniers", Vector3(W * 0.5 + 0.16, FLOOR_Y + 0.27, -0.95), Vector3(0.3, 0.44, 1.2))
+	_mount("jerry_holder", Vector3(-W * 0.5 - 0.14, 1.25, 0.62), Vector3(0.26, 0.6, 0.44))
+	_mount("snorkel", Vector3(W * 0.5 + 0.1, 2.1, CAB_Z + 0.45), Vector3(0.2, 1.3, 0.25))
+	_mount("winch", Vector3(0, 0.45, FRONT_Z + 1.47), Vector3(0.7, 0.2, 0.2))
+	_mount("ram_plow", Vector3(0, 0.45, FRONT_Z + 1.78), Vector3(W, 0.5, 0.15))
+	_mount("windshield_mesh", Vector3(0, 2.3, FRONT_Z + 0.32), Vector3(W - 0.4, 0.5, 0.1))
+	_mount("door_armor", Vector3(-W * 0.5 - 0.06, 1.35, 2.15), Vector3(0.12, 0.55, 0.8))
+	_mount("mud_flaps", Vector3(-1.08, 0.35, -3.0), Vector3(0.4, 0.4, 0.12))
+	_mount("underglow", Vector3(-W * 0.5 + 0.1, 0.45, -0.4), Vector3(0.25, 0.15, 1.6))
+	_mount("tow_hitch", Vector3(0, 0.62, REAR_Z - 0.45), Vector3(0.45, 0.22, 0.3))
 	_mount("floor", Vector3(0, FLOOR_Y + 0.03, -0.9), Vector3(W - 0.4, 0.04, 4.4))
 	_mount("walls", Vector3(-W * 0.5 + 0.2, FLOOR_Y + 1.2, -2.0), Vector3(0.08, 1.2, 1.3))
 	_mount("kitchen", Vector3(kx + 0.01, FLOOR_Y + 0.46, 0.65), Vector3(0.66, 0.92, 1.74))
@@ -963,6 +1151,57 @@ func _build_cameras() -> void:
 # ------------------------------------------------------------------ modules
 func has_mod(slot: String) -> bool:
 	return modules.has(slot)
+
+## The part that is (or would be) fitted in a slot.
+func slot_item(slot: String) -> String:
+	return str(module_kind.get(slot, Data.VAN_SLOTS[slot]["item"]))
+
+## Whether a part fits a slot (its main part or one of its alternatives).
+static func accepts(slot: String, item: String) -> bool:
+	var spec: Dictionary = Data.VAN_SLOTS[slot]
+	return item != "" and (spec["item"] == item or item in spec.get("alts", []))
+
+## The hood slot a held part goes into, or "".
+static func hood_slot_for(item: String) -> String:
+	for slot in Data.VAN_SLOTS:
+		if Data.VAN_SLOTS[slot].get("hood", false) and accepts(slot, item):
+			return slot
+	return ""
+
+func _engine_spec() -> Dictionary:
+	return Data.ENGINES.get(slot_item("engine"), Data.ENGINES["engine_block"])
+
+func can_tow() -> bool:
+	return modules.has("tow_hitch")
+
+## Grip multiplier for one wheel from the tire fitted there, on or off the road.
+func wheel_grip(i: int) -> float:
+	var t: Dictionary = Data.TIRE_KINDS.get(str(wheel_kind.get("wheel%d" % i, "")), Data.TIRE_KINDS[""])
+	var g: float = t["off"] if _off_road else t["road"]
+	if modules.has("suspension"):
+		g *= 1.08
+	return g
+
+func _tire_wear_factor() -> float:
+	var sum := 0.0
+	var n := 0
+	for i in range(4):
+		if missing.has("wheel%d" % i):
+			continue
+		sum += float(Data.TIRE_KINDS.get(str(wheel_kind.get("wheel%d" % i, "")), Data.TIRE_KINDS[""])["wear"])
+		n += 1
+	return sum / n if n > 0 else 1.0
+
+## Extra readout on the driving dashboard.
+func dash_extra() -> String:
+	var t := "   Temp %d°C" % int(engine_heat)
+	if engine_heat > 95.0:
+		t += " HOT!"
+	if coolant < 99.0:
+		t += "  Coolant %d%%" % int(coolant)
+	if modules.has("nitrous"):
+		t += "   NOS %d%%%s" % [int(nitrous), " BOOST" if boosting else " (hold Shift / NOS)"]
+	return t
 
 func _needs_met(slot: String) -> String:
 	for n in Data.VAN_SLOTS[slot].get("needs", []):
@@ -1118,12 +1357,12 @@ func _apply_modules() -> void:
 		_mounts[slot].collision_layer = 2 if active else 0
 	set_door(door_open, false)
 	upgrades = {}
-	for u in ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank"]:
+	for u in ADDONS:
 		if modules.has(u):
 			upgrades[u] = true
 	var off := 0
 	for i in range(4):
-		if wheel_kind.get("wheel%d" % i, "") == "offroad_tire" and not missing.has("wheel%d" % i):
+		if wheel_kind.get("wheel%d" % i, "") in ["offroad_tire", "vehicle_tire_sand"] and not missing.has("wheel%d" % i):
 			off += 1
 	if off == 4:
 		upgrades["offroad_tires"] = true
@@ -1135,6 +1374,10 @@ func _apply_modules() -> void:
 		_set_radio(false)
 	if not (modules.has("headlight_l") or modules.has("headlight_r")):
 		headlights = false
+	if _spare_vis:
+		_spare_vis.visible = modules.has("spare_mount") and spare_tire != ""
+		if spare_tire != "":
+			_spare_vis.mesh = Items.mesh(spare_tire)
 	fuel = minf(fuel, fuel_capacity())
 	water = minf(water, water_capacity())
 	if _interior_light:
@@ -1149,7 +1392,7 @@ func _update_ghosts() -> void:
 	for slot in _mod_vis:
 		if FREE.has(slot):
 			continue # previewed where you aim (see preview_free)
-		var want: bool = Data.VAN_SLOTS.has(slot) and Data.VAN_SLOTS[slot]["item"] == held and not modules.has(slot) and _needs_met(slot) == ""
+		var want: bool = Data.VAN_SLOTS.has(slot) and accepts(slot, held) and not modules.has(slot) and _needs_met(slot) == ""
 		if want and not _ghosts.has(slot):
 			_ghosts[slot] = _make_ghost(slot)
 		if _ghosts.has(slot):
@@ -1189,12 +1432,13 @@ func mount_prompt(slot: String) -> String:
 	var item: String = spec["item"]
 	var nm := Data.item_name(item)
 	if modules.has(slot):
-		return "%s  —  [G] Take it out" % nm
+		return "%s  —  [G] Take it out" % Data.item_name(slot_item(slot))
 	var need := _needs_met(slot)
 	if need != "":
 		return "%s — fit the %s first" % [spec["name"], Data.VAN_SLOTS[need]["name"].to_lower()]
-	if Game.equipped() == item:
-		return "[E] Fit the %s%s" % [nm, "" if _toolkit_ok(slot) else "  (needs a Toolkit in hand or within reach)"]
+	var held := Game.equipped()
+	if accepts(slot, held):
+		return "[E] Fit the %s%s" % [Data.item_name(held), "" if _toolkit_ok(slot) else "  (needs a Toolkit in hand or within reach)"]
 	return "Empty: %s — carry a %s here" % [spec["name"].to_lower(), nm]
 
 func install_module(slot: String) -> bool:
@@ -1206,19 +1450,29 @@ func install_module(slot: String) -> bool:
 	if need != "":
 		Game.notify("Fit the %s first" % Data.VAN_SLOTS[need]["name"].to_lower())
 		return false
-	if Game.equipped() != item:
+	var held := Game.equipped()
+	if not accepts(slot, held):
 		Game.notify("Carry a %s in your hands to fit it here" % Data.item_name(item))
 		return false
 	if not _toolkit_ok(slot):
 		Game.notify("You need a Toolkit in hand or lying within reach")
 		return false
-	Game.remove_item(item, 1)
+	Game.remove_item(held, 1)
 	modules[slot] = true
+	if held != item:
+		module_kind[slot] = held
+	else:
+		module_kind.erase(slot)
+	item = held
 	match slot:
 		"engine":
 			parts["engine"] = maxf(parts["engine"], 45.0)
 		"water_tank":
 			water = minf(water, water_capacity())
+		"nitrous":
+			nitrous = 100.0
+		"radiator":
+			coolant = maxf(coolant, 60.0)
 	Audio.play_at("hammer", global_position, -4.0, 1.1)
 	Game.notify("%s fitted" % Data.item_name(item))
 	_apply_modules()
@@ -1228,7 +1482,7 @@ func install_module(slot: String) -> bool:
 func remove_module(slot: String) -> bool:
 	if not modules.has(slot):
 		return false
-	var item: String = Data.VAN_SLOTS[slot]["item"]
+	var item: String = slot_item(slot)
 	if slot in FIXED:
 		Game.notify("The %s is part of the van now" % Data.VAN_SLOTS[slot]["name"].to_lower())
 		return false
@@ -1244,6 +1498,10 @@ func remove_module(slot: String) -> bool:
 		return false
 	modules.erase(slot)
 	module_xf.erase(slot)
+	module_kind.erase(slot)
+	if slot == "spare_mount" and spare_tire != "":
+		Game.drop_pile(spare_tire, 1, to_global(Vector3(W * 0.5 + 1.0, 0.8, 1.2)))
+		spare_tire = ""
 	if slot == "engine" and engine_on:
 		stop_engine()
 	Game.add_item(item, 1, true)
@@ -1266,7 +1524,16 @@ func slot_for(part: Node) -> String:
 	if a == "door" and modules.has("door"):
 		return "door"
 	if a == "hood" and modules.has("engine"):
+		# the add-ons come out first, the last-listed one first, then the engine itself
+		var hood_slots: Array = []
+		for slot in Data.VAN_SLOTS:
+			if Data.VAN_SLOTS[slot].get("hood", false) and modules.has(slot):
+				hood_slots.append(slot)
+		if not hood_slots.is_empty():
+			return hood_slots[-1]
 		return "engine"
+	if a == "hood" and modules.has("suspension"):
+		return "suspension"
 	return ""
 
 ## What still has to go in before the van will drive.
@@ -1317,7 +1584,13 @@ func shelter_bonus() -> float:
 func _starter_state() -> void:
 	modules = {}
 	module_xf = {}
+	module_kind = {}
 	wheel_kind = {}
+	engine_heat = 20.0
+	coolant = 100.0
+	nitrous = 100.0
+	battery_kind = ""
+	spare_tire = ""
 	missing = {"battery": true, "wheel0": true, "wheel1": true, "wheel2": true, "wheel3": true}
 	parts = {"engine": 0.0, "tires": 40.0, "battery": 0.0, "body": 45.0}
 	fuel = 6.0
@@ -1328,9 +1601,7 @@ func _starter_state() -> void:
 ## Older saves had a fully fitted motorhome: keep it that way.
 func _all_modules() -> Dictionary:
 	var d := {}
-	for slot in Data.VAN_SLOTS:
-		if slot in ["solar", "bullbar", "heater", "big_tank", "engine_tune", "water_tank"]:
-			continue
+	for slot in LEGACY_SLOTS:
 		d[slot] = true
 	return d
 
@@ -1362,7 +1633,7 @@ func _spill_legacy() -> void:
 
 # ------------------------------------------------------------------ state
 func fuel_capacity() -> float:
-	return 140.0 if upgrades.has("big_tank") else 80.0
+	return (140.0 if upgrades.has("big_tank") else 80.0) + (40.0 if modules.has("jerry_holder") else 0.0)
 
 func water_capacity() -> float:
 	return 60.0 if modules.has("water_tank") else 0.0
@@ -1371,7 +1642,9 @@ func save_state() -> Dictionary:
 	return {"xform": [Game.arr(global_position), [rotation.x, rotation.y, rotation.z]], "fuel": fuel, "water": water,
 		"battery": battery, "parts": parts, "upgrades": upgrades, "paint": paint, "fridge": fridge,
 		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records(),
-		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open, "rear_open": rear_open}
+		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open, "rear_open": rear_open,
+		"module_kind": module_kind, "engine_heat": engine_heat, "coolant": coolant, "nitrous": nitrous, "battery_kind": battery_kind,
+		"spare_tire": spare_tire}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
@@ -1392,6 +1665,8 @@ func apply_state(s: Dictionary) -> void:
 		modules = s["modules"].duplicate()
 		module_xf = s.get("module_xf", {}).duplicate(true)
 		wheel_kind = s.get("wheel_kind", {}).duplicate()
+		if not s.has("module_kind"):
+			modules["tow_hitch"] = true # vans from before 1.8 could always tow: keep their hitch
 	else:
 		modules = _all_modules()
 		var old: Dictionary = s.get("upgrades", {})
@@ -1402,6 +1677,12 @@ func apply_state(s: Dictionary) -> void:
 			for i in range(4):
 				wheel_kind["wheel%d" % i] = "offroad_tire"
 		modules["water_tank"] = true
+	module_kind = s.get("module_kind", {}).duplicate()
+	engine_heat = float(s.get("engine_heat", 20.0))
+	coolant = float(s.get("coolant", 100.0))
+	nitrous = float(s.get("nitrous", 100.0))
+	battery_kind = str(s.get("battery_kind", ""))
+	spare_tire = str(s.get("spare_tire", ""))
 	paint = int(s.get("paint", 0))
 	radio_station = int(s.get("radio_station", 0))
 	door_open = bool(s.get("door_open", false))
@@ -1439,9 +1720,19 @@ func _apply_visuals() -> void:
 		_body_mat.albedo_color = Color.WHITE if primer else c.lerp(Color.WHITE, 0.55)
 		_body_mat.uv1_scale = Vector3.ONE * (0.6 if primer else 0.35)
 	_apply_modules()
-	var grip := 3.0 if not upgrades.has("offroad_tires") else 3.6
-	grip *= lerpf(0.55, 1.0, parts["tires"] / 100.0)
+	var grip := 3.0 * lerpf(0.55, 1.0, parts["tires"] / 100.0)
 	Mounts.apply_wheels(self, grip)
+	var leaf := slot_item("suspension") == "vehicle_leaf_spring" and modules.has("suspension")
+	var kit := modules.has("suspension") and not leaf
+	for w in wheels:
+		w.suspension_stiffness = 80.0 if leaf else (62.0 if kit else 50.0)
+		w.damping_compression = 2.4 if kit else (2.0 if leaf else 1.6)
+		w.damping_relaxation = 3.2 if kit else (2.8 if leaf else 2.2)
+		w.wheel_roll_influence = 0.02 if kit else 0.04
+		w.wheel_rest_length = 0.4 if leaf else 0.32
+		w.suspension_max_force = 120000.0 if leaf else 80000.0
+	if _underglow:
+		_underglow.visible = modules.has("underglow") and headlights
 	if _battery_vis:
 		_battery_vis.visible = not missing.has("battery")
 
@@ -1470,13 +1761,20 @@ func try_start_engine() -> void:
 	if parts["engine"] <= 1.0:
 		Game.notify("The engine is wrecked. Rebuild it with Engine Parts at the hood.")
 		return
-	if parts["engine"] < 25.0 and randf() < 0.35:
+	if _overheated and engine_heat > 85.0:
+		Game.notify("The engine is still too hot (%d°C). Let it cool down, or top up the coolant at the hood." % int(engine_heat))
+		return
+	if _intake_flooded():
+		Game.notify("The air intake is under water — the engine would drown. A snorkel keeps it breathing.")
+		return
+	if parts["engine"] < 25.0 and randf() < 0.35 and not modules.has("starter"):
 		Audio.play_at("engine_start", global_position, 0.0, 0.8)
 		Game.notify("The engine sputters... try again.")
 		battery -= 2.0
 		return
 	engine_on = true
-	battery -= 3.0
+	_overheated = false
+	battery -= 1.0 if modules.has("starter") else 3.0
 	Audio.play_at("engine_start", global_position)
 	_engine_audio.play()
 
@@ -1507,9 +1805,24 @@ func _physics_process(delta: float) -> void:
 		steer_in = Input.get_action_strength("move_left") - Input.get_action_strength("move_right")
 		handbrake = Input.is_action_pressed("jump")
 	var fwd_speed := linear_velocity.dot(global_transform.basis.z)
-	var power := 9500.0 * (1.35 if upgrades.has("engine_tune") else 1.0) * lerpf(0.65, 1.0, parts["engine"] / 100.0)
+	var eng := _engine_spec()
+	var power := 9500.0 * float(eng["power"]) * (1.35 if upgrades.has("engine_tune") else 1.0) * lerpf(0.65, 1.0, parts["engine"] / 100.0)
+	power *= (1.25 if modules.has("turbo") else 1.0)
 	power *= maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
-	var top := 27.0 * (1.12 if upgrades.has("engine_tune") else 1.0)
+	var top := 27.0 * float(eng["top"]) * (1.12 if upgrades.has("engine_tune") else 1.0) * (1.08 if modules.has("turbo") else 1.0)
+	if modules.has("supercharger"):
+		# instant boost from the belt: most of it down low
+		power *= 1.1 + 0.3 * clampf(1.0 - fwd_speed / top, 0.0, 1.0)
+		top *= 1.04
+	boosting = false
+	if modules.has("nitrous") and engine_on and is_driven_locally() and throttle > 0.1 and nitrous > 0.5 \
+			and Input.is_action_pressed("sprint") and not Game.ui_open:
+		boosting = true
+		power *= 1.6
+		top *= 1.25
+		nitrous = maxf(nitrous - delta * 14.0, 0.0)
+	elif modules.has("nitrous"):
+		nitrous = minf(nitrous + delta * 0.8, 100.0)
 	var force := 0.0
 	var brk := 0.0
 	if engine_on and fuel > 0.0:
@@ -1555,26 +1868,35 @@ func _physics_process(delta: float) -> void:
 	var spd := linear_velocity.length()
 	if engine_on:
 		var use := (0.0025 + 0.07 * throttle * clampf(spd / 22.0, 0.25, 1.0)) * Game.diff("fuel") * delta
+		use *= float(eng["fuel"]) * (1.12 if modules.has("supercharger") else 1.0) * (1.8 if boosting else 1.0)
 		fuel = maxf(fuel - use, 0.0)
-		battery = minf(battery + delta * 0.5, 100.0)
+		battery = minf(battery + delta * (1.5 if modules.has("alternator") else 0.5), 100.0)
 		if fuel <= 0.0:
 			stop_engine()
 			Game.notify("The engine dies — out of fuel.")
+	_update_heat(delta, throttle, spd, eng)
 	var dist := spd * delta
 	odometer += dist
 	if dist > 0.0:
 		var off_road := absf(global_position.x - Game.world.gen.road_x(global_position.z)) > 6.0
-		var tire_wear := (0.25 if upgrades.has("offroad_tires") else 0.6) * (3.0 if off_road else 1.0)
+		_off_road = off_road
+		var tire_wear := 0.6 * _tire_wear_factor() * (3.0 if off_road else 1.0) * (0.7 if off_road and modules.has("mud_flaps") else 1.0)
 		parts["tires"] = maxf(parts["tires"] - dist / 1000.0 * tire_wear, 0.0)
 		parts["engine"] = maxf(parts["engine"] - dist / 1000.0 * 0.35, 0.0)
 		if Engine.get_physics_frames() % 60 == 0:
 			_apply_visuals()
+	var lith := 0.5 if battery_kind == "vehicle_lithium_battery" else 1.0
 	if headlights:
-		battery = maxf(battery - delta * (0.02 if engine_on else 0.06), 0.0)
+		battery = maxf(battery - delta * (0.02 if engine_on else 0.06) * lith * (1.3 if modules.has("underglow") else 1.0), 0.0)
 	if interior_lights:
-		battery = maxf(battery - delta * 0.03, 0.0)
+		battery = maxf(battery - delta * 0.03 * lith, 0.0)
 	if upgrades.has("solar") and not missing.has("battery") and Game.time_of_day > 7.0 and Game.time_of_day < 18.0 and Game.weather != "rain":
-		battery = minf(battery + delta * 0.08, 100.0)
+		battery = minf(battery + delta * 0.08 * (1.5 if lith < 1.0 else 1.0), 100.0)
+	if engine_on and Engine.get_physics_frames() % 15 == 0 and _intake_flooded():
+		stop_engine()
+		parts["engine"] = maxf(parts["engine"] - 15.0, 0.0)
+		Audio.play_at("splash", global_position, 0.0, 0.6)
+		Game.notify("Water pours into the air intake — the engine drowns! (Engine -15%). A snorkel would have kept it breathing.")
 	if battery <= 0.0:
 		headlights = false
 		interior_lights = false
@@ -1583,12 +1905,16 @@ func _physics_process(delta: float) -> void:
 	var dv := (_prev_vel - linear_velocity).length()
 	if dv > 7.0 and driver != 0:
 		var dmg := (dv - 7.0) * 2.5 * Game.diff("damage") * (0.4 if upgrades.has("bullbar") else 1.0)
+		dmg *= (0.5 if modules.has("ram_plow") else 1.0) * (0.7 if modules.has("door_armor") else 1.0)
+		var armored := modules.has("radiator") and slot_item("radiator") == "vehicle_armored_radiator"
 		parts["body"] = maxf(parts["body"] - dmg, 0.0)
-		parts["engine"] = maxf(parts["engine"] - dmg * 0.5, 0.0)
+		parts["engine"] = maxf(parts["engine"] - dmg * (0.25 if armored else 0.5), 0.0)
+		if not armored and dmg > 8.0:
+			coolant = maxf(coolant - dmg, 0.0)
 		Audio.play_at("hit", global_position, 6.0, 0.6)
 		Game.notify("Crash! Body -%d%%" % int(dmg))
 		if Game.player and Game.player.driving:
-			Game.player.hurt(dmg * 0.5, "crash")
+			Game.player.hurt(dmg * (0.25 if modules.has("windshield_mesh") else 0.5), "crash")
 	_prev_vel = linear_velocity
 	# engine sound
 	if _engine_audio.playing:
@@ -1652,6 +1978,8 @@ func _update_lights() -> void:
 	for m in _head_mats:
 		m.emission_energy_multiplier = 3.0 if headlights else 0.0
 	_interior_light.visible = interior_lights
+	if _underglow:
+		_underglow.visible = modules.has("underglow") and headlights
 
 func is_inside(p: Vector3) -> bool:
 	var l := to_local(p)
@@ -1779,6 +2107,19 @@ func prompt_for(action: String) -> String:
 		"fridge", "cabinet", "overhead":
 			var nm: String = {"fridge": "fridge", "cabinet": "cupboard", "overhead": "overhead cabinet"}[action]
 			return "[E] %s %s%s" % ["Close" if _doors[action]["open"] else "Open", nm, take]
+		"cargo_box", "pannier_l", "pannier_r":
+			var bn: String = {"cargo_box": "roof cargo box", "pannier_l": "left pannier", "pannier_r": "right pannier"}[action]
+			return "[E] %s the %s%s" % ["Close" if _doors[action]["open"] else "Open", bn, take]
+		"roof_tent":
+			return "[E] Unfold the roof tent and sleep" + take
+		"spare_mount":
+			if spare_tire != "":
+				return "Spare: %s   [E] Take it down%s" % [Data.item_name(spare_tire), take]
+			if held in Mounts.TIRES:
+				return "[E] Stow the %s on the spare mount" % Data.item_name(held)
+			return "Spare tire mount — carry a tire here" + take
+		"winch":
+			return "[E] Winch the van back toward the road (uses battery)" + take
 		"battery":
 			return Mounts.prompt(self, action)
 		"bed": return "[E] Sleep in bed" + take
@@ -1795,15 +2136,28 @@ func prompt_for(action: String) -> String:
 			return "[E] %s the back doors" % ("Close" if rear_open else "Open")
 		"hood":
 			if not modules.has("engine"):
-				if held == "engine_block":
-					return "[E] Lower the Engine Block in%s" % ("" if _toolkit_ok("engine") else "  (needs a Toolkit in hand or within reach)")
+				if accepts("engine", held):
+					return "[E] Lower the %s in%s" % [Data.item_name(held), "" if _toolkit_ok("engine") else "  (needs a Toolkit in hand or within reach)"]
+				if held == "vehicle_suspension_part" or held == "vehicle_leaf_spring":
+					return mount_prompt("suspension") if not modules.has("suspension") else "The suspension is already upgraded"
 				return "Empty engine bay — carry an Engine Block here.  [E] Check what the van still needs"
-			if held == "tune_kit":
-				return mount_prompt("engine_tune") if not modules.has("engine_tune") else "The engine is already tuned"
+			var hs := hood_slot_for(held)
+			if hs != "":
+				if modules.has(hs):
+					return "There's already a %s fitted — [G] with empty hands takes the hood parts out" % Data.VAN_SLOTS[hs]["name"].to_lower()
+				return mount_prompt(hs)
+			if held in ["coolant_t1", "mod_coolant_jug_20l"]:
+				return "[E] Top up the coolant (%d%%, engine %d°C)" % [int(coolant), int(engine_heat)]
 			if held == "paint_can":
 				return "[E] Spray-paint the van"
 			var mp := Mounts.prompt(self, "hood")
-			return mp if mp != "" else "[E] Check the van over%s" % ("   [G] Hoist the engine out" if held == "" else "")
+			if mp != "":
+				return mp
+			var out := ""
+			if held == "":
+				var hslot := slot_for(_hood_part) if _hood_part else "engine"
+				out = "   [G] Hoist the engine out" if hslot == "engine" else "   [G] Take out the %s" % Data.item_name(slot_item(hslot))
+			return "[E] Check the van over (%d°C, coolant %d%%)%s" % [int(engine_heat), int(coolant), out]
 		"fuel":
 			if held == "fuel_can":
 				return "[E] Pour in the fuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
@@ -1862,8 +2216,14 @@ func do_action(action: String, player: Node) -> void:
 			Audio.play("click", -6.0)
 		"fridge", "cabinet", "overhead":
 			_toggle_door(action)
-		"bed":
+		"bed", "roof_tent":
 			Game.world.sleep(player.global_position)
+		"cargo_box", "pannier_l", "pannier_r":
+			_toggle_lid(action)
+		"spare_mount":
+			_spare_action()
+		"winch":
+			_winch_out()
 		"toilet":
 			Game.notify("Much better.")
 			Game.stats["water"] = maxf(Game.stats["water"] - 5.0, 0.0)
@@ -1882,13 +2242,22 @@ func do_action(action: String, player: Node) -> void:
 			set_rear(not rear_open)
 		"hood":
 			if not modules.has("engine"):
-				if held == "engine_block":
+				if accepts("engine", held):
 					install_module("engine")
+				elif accepts("suspension", held) and not modules.has("suspension"):
+					install_module("suspension")
 				else:
 					_report()
 				return
-			if held == "tune_kit":
-				install_module("engine_tune")
+			var hs := hood_slot_for(held)
+			if hs != "":
+				if modules.has(hs):
+					Game.notify("There's already a %s fitted" % Data.VAN_SLOTS[hs]["name"].to_lower())
+				else:
+					install_module(hs)
+				return
+			if held in ["coolant_t1", "mod_coolant_jug_20l"]:
+				_top_up_coolant(held)
 				return
 			if held == "paint_can":
 				Game.remove_item("paint_can", 1)
@@ -1966,11 +2335,108 @@ func _use_sink() -> void:
 		Game.stats["water"] = minf(Game.stats["water"] + 30.0, 100.0)
 		Audio.play("eat")
 
+## Engine temperature: it climbs toward a level set by how hard the engine works against how well
+## the radiator and coolant shed heat. Above 100°C the engine wears; at 118°C it seizes and stalls.
+func _update_heat(delta: float, throttle: float, spd: float, eng: Dictionary) -> void:
+	var target := 20.0
+	if engine_on:
+		var gen := (0.6 + 1.6 * throttle) * float(eng["heat"]) * (1.25 if modules.has("turbo") else 1.0) \
+			* (1.2 if modules.has("supercharger") else 1.0) * (2.2 if boosting else 1.0)
+		var rad: float = Data.RADIATORS.get(slot_item("radiator") if modules.has("radiator") else "", 1.0)
+		var cool := (0.9 + clampf(spd / 20.0, 0.0, 1.0) * 0.8) * rad * lerpf(0.35, 1.0, coolant / 100.0)
+		target = 20.0 + 50.2 * gen / cool
+	# hotter-running builds heat up faster; a hot engine cools off slowly
+	var gap := absf(target - engine_heat)
+	engine_heat = move_toward(engine_heat, target, delta * (maxf(gap * 0.06, 1.0) if target > engine_heat else maxf(gap * 0.025, 0.8)))
+	if engine_heat > 95.0:
+		coolant = maxf(coolant - delta * 0.4, 0.0)
+	if engine_heat > OVERHEAT:
+		parts["engine"] = maxf(parts["engine"] - (engine_heat - OVERHEAT) * 0.02 * delta, 0.0)
+	if engine_on and engine_heat > 118.0:
+		stop_engine()
+		_overheated = true
+		Audio.play_at("hit", global_position, 0.0, 0.5)
+		Game.notify("The engine overheats and seizes! Let it cool, top up the coolant, or fit a better radiator.")
+
+## True when the engine's air intake (or the snorkel head) is under water.
+func _intake_flooded() -> bool:
+	var gen = Game.world.gen if Game.world else null
+	if gen == null:
+		return false
+	var p := to_global(Vector3(W * 0.5 + 0.1, ROOF_Y - 0.1, CAB_Z + 0.3) if modules.has("snorkel") else Vector3(0, 1.15, FRONT_Z + 0.9))
+	return gen.is_water(p.x, p.z, 0.0) and p.y < gen.water_level(p.x, p.z)
+
+## Pour coolant in at the hood.
+func _top_up_coolant(held: String) -> void:
+	if coolant >= 99.0 and engine_heat < 60.0:
+		Game.notify("The coolant is full (%d°C)" % int(engine_heat))
+		return
+	Game.remove_item(held, 1)
+	coolant = minf(coolant + (100.0 if held == "mod_coolant_jug_20l" else 50.0), 100.0)
+	engine_heat = minf(engine_heat, 60.0)
+	_overheated = false
+	Audio.play_at("splash", global_position, -6.0, 1.2)
+	Game.notify("Coolant topped up — %d%%, engine down to %d°C" % [int(coolant), int(engine_heat)])
+
+## The winch hauls a stuck or ditched van back toward the road.
+func _winch_out() -> void:
+	if driver != 0:
+		Game.notify("Not while someone is driving")
+		return
+	if battery < 10.0:
+		Game.notify("The winch needs battery power")
+		return
+	var gen = Game.world.gen
+	var rx: float = gen.road_x(global_position.z)
+	var to_road := Vector3(rx - global_position.x, 0, 0)
+	var upright := global_transform.basis.y.y > 0.7
+	if to_road.length() < 4.0 and upright:
+		Game.notify("The van is on the road — nothing to winch it out of")
+		return
+	var step := minf(8.0, maxf(to_road.length() - 3.0, 0.0))
+	var p := global_position + to_road.normalized() * step if step > 0.0 else global_position
+	p.y = gen.height(p.x, p.z) + 1.2
+	global_position = p
+	rotation = Vector3(0, rotation.y, 0)
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	battery = maxf(battery - 5.0, 0.0)
+	Audio.play_at("engine_start", global_position, -4.0, 1.6)
+	Game.notify("The winch hauls the van %d m back toward the road" % int(step) if step > 0.0 else "The winch rights the van")
+
+## Swap a tire on and off the roof-rack spare mount.
+func _spare_action() -> void:
+	var held := Game.equipped()
+	if spare_tire == "":
+		if held not in Mounts.TIRES:
+			Game.notify("Carry a tire here to stow it on the spare mount")
+			return
+		Game.remove_item(held, 1)
+		spare_tire = held
+		Game.notify("%s stowed on the roof" % Data.item_name(held))
+	else:
+		if held != "":
+			Game.notify("You need an empty hand to take the spare down")
+			return
+		Game.add_item(spare_tire, 1, true)
+		Game.notify("You took the %s down" % Data.item_name(spare_tire))
+		spare_tire = ""
+	Audio.play_at("hammer", global_position, -6.0, 1.2)
+	_apply_modules()
+
+func _toggle_lid(action: String) -> void:
+	var d: Dictionary = _doors[action]
+	d["open"] = not d["open"]
+	var tw := create_tween()
+	tw.tween_property(d["pivot"], "rotation:z", float(d["angle"]) if d["open"] else 0.0, 0.35).set_trans(Tween.TRANS_SINE)
+	Audio.play_at("door", d["pivot"].global_position, -10.0, 1.2)
+
 func _report() -> void:
 	var need := missing_for_drive()
 	var lines: Array[String] = []
 	if need.is_empty():
 		lines.append("Ready to drive. Engine %d%% · Tires %d%% · Body %d%% · Battery %d%% · Fuel %d L" % [int(parts["engine"]), int(parts["tires"]), int(parts["body"]), int(battery), int(fuel)])
+		lines.append("Engine %d°C · Coolant %d%%%s" % [int(engine_heat), int(coolant), " · Nitrous %d%%" % int(nitrous) if modules.has("nitrous") else ""])
 	else:
 		lines.append("To drive, the van still needs: " + ", ".join(need))
 	var interior := 0
