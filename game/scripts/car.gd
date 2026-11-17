@@ -821,13 +821,22 @@ func _restore_camper_drawers() -> void:
 		drawer["items"] = (saved.get("items", []) as Array).duplicate(true)
 		(drawer["pivot"] as Node3D).position.x = float(drawer["home"]) + (0.28 if drawer["open"] else 0.0)
 
-func _camper_drawer_action(key: String) -> void:
+func drawer_transfer(action: String) -> void:
+	if action.begins_with("camper_drawer:"):
+		_camper_drawer_action(action.substr(14), true)
+
+func _camper_drawer_action(key: String, transfer := false) -> void:
 	if not _camper_drawers.has(key):
 		return
 	var drawer: Dictionary = _camper_drawers[key]
 	if not drawer["open"]:
 		drawer["open"] = true
 		create_tween().tween_property(drawer["pivot"], "position:x", float(drawer["home"]) + 0.28, 0.25)
+		Audio.play_at("door", global_position, -12.0)
+		return
+	if not transfer:
+		drawer["open"] = false
+		create_tween().tween_property(drawer["pivot"], "position:x", float(drawer["home"]), 0.25)
 		Audio.play_at("door", global_position, -12.0)
 		return
 	if Game.equipped() != "":
@@ -855,9 +864,7 @@ func _camper_drawer_action(key: String) -> void:
 					break
 		Game.notify("Item retrieved from camper drawer")
 		return
-	drawer["open"] = false
-	create_tween().tween_property(drawer["pivot"], "position:x", float(drawer["home"]), 0.25)
-	Audio.play_at("door", global_position, -12.0)
+	Game.notify("The camper drawer is empty")
 
 ## Attach furniture, chairs, beds and storage to ANY driveable vehicle.
 func attach_structure(world_rec: Dictionary) -> void:
@@ -974,9 +981,9 @@ func prompt_for(action: String) -> String:
 			if not drawer["open"]:
 				return "[E] Open camper drawer"
 			if Game.equipped() != "":
-				return "[E] Store held item in camper drawer"
+				return "[E] Close drawer   [G] Store held item"
 			if not (drawer["items"] as Array).is_empty():
-				return "[E] Take stored item from camper drawer"
+				return "[E] Close drawer   [G] Take stored item"
 			return "[E] Close camper drawer"
 	return ""
 

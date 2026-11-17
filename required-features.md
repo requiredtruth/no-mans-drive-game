@@ -1,6 +1,6 @@
 # No Man's Drive — required features
 
-### Continued Nomad Drive-style survival expansion — v1.14.1
+### Continued Nomad Drive-style survival expansion — v1.14.2
 
 - ✅ Add a separate normal work truck (distinct from pickup and from semi tractor) with drivable controls, repairable parts, cargo and working tailgate.
 - ✅ Add a distinct drivable semi tractor, six wheels, rear service locker and trailer hitch. Keep the box truck as a separate class.
@@ -10,6 +10,7 @@
 - ✅ Ensure beds sleep to 05:00 at night; bed frame in the flagship RV works even before a mattress is fitted.
 - ✅ Make the main RV dinette benches and smaller camper benches sit-able in first person, restoring energy with E/Jump stand-up.
 - ✅ Make all four main RV galley drawers independently openable, storable and retrievable, with physical fronts and persistent contents.
+- ✅ Separate drawer open/close [E] from deposit/retrieve [G] so stored items never prevent closing.
 - ✅ All new vehicle types included in Everything start map; separate semi and work truck gameplay categories.
 - 🔄 Continue expanding independent drawer and furniture interactions throughout roadside houses and trailers.
 - 🔄 Continue closing the gaps in the reference survival driving loop, item interactions, world details and on-device vehicle physics verification.

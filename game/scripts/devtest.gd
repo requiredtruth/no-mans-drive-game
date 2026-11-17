@@ -2276,10 +2276,10 @@ func _v112() -> void:
 	Game.slots[0] = {"id": "scrap", "n": 1}
 	Game.selected_slot = 0
 	van._drawer_action("0")
-	van._drawer_action("0")
+	van.drawer_transfer("drawer:0")
 	_check_quality(van._drawers["0"]["open"] and (van._drawers["0"]["items"] as Array).size() == 1, "drawer stores a physical item stack")
 	_check_quality(van.save_state()["drawers"]["0"]["items"].size() == 1, "drawer items survive RV save")
-	van._drawer_action("0")
+	van.drawer_transfer("drawer:0")
 	_check_quality((van._drawers["0"]["items"] as Array).is_empty() and Game.carried("scrap") > 0, "drawer returns stored items")
 	van._drawer_action("0")
 	_check_quality(not van._drawers["0"]["open"], "drawer closes independently")
@@ -2287,11 +2287,12 @@ func _v112() -> void:
 	_check_quality(compact._camper_drawers.size() == 3, "compact camper has three independent storage drawers")
 	Game.slots[0] = {"id": "scrap", "n": 1}
 	compact._camper_drawer_action("0")
-	compact._camper_drawer_action("0")
+	compact.drawer_transfer("camper_drawer:0")
 	_check_quality(compact._camper_drawers["0"]["items"].size() == 1, "camper drawer stores a real item stack")
 	_check_quality(compact.save_state()["camper_drawers"]["0"]["items"].size() == 1, "camper drawer contents persist in the save")
+	compact.drawer_transfer("camper_drawer:0")
 	compact._camper_drawer_action("0")
-	compact._camper_drawer_action("0")
+	_check_quality(not compact._camper_drawers["0"]["open"], "camper drawer closes even while carrying something")
 	var benchmark_bench: Node3D = van._bench_anchors["0"]
 	pl.sit_in(benchmark_bench)
 	_check_quality(pl.seated_at == benchmark_bench, "dinette bench seats player with first-person view")

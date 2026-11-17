@@ -514,6 +514,12 @@ func place_or_grab() -> void:
 	if builder.active and builder.kit != "":
 		builder.place()
 		return
+	# [G] on a drawer transfers the selected stack instead of placing it on the floor.
+	if look_target and look_target.get_script() == RvPart and look_target.rv.has_method("drawer_transfer"):
+		var action: String = str(look_target.action)
+		if action.begins_with("drawer:") or action.begins_with("camper_drawer:"):
+			look_target.rv.drawer_transfer(action)
+			return
 	if Game.equipped() != "":
 		place_held()
 		return

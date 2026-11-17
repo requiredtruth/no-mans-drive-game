@@ -868,7 +868,11 @@ func _drawer_saved() -> Dictionary:
 		result[key] = {"open": bool(d["open"]), "items": (d["items"] as Array).duplicate(true)}
 	return result
 
-func _drawer_action(key: String) -> void:
+func drawer_transfer(action: String) -> void:
+	if action.begins_with("drawer:"):
+		_drawer_action(action.substr(7), true)
+
+func _drawer_action(key: String, transfer := false) -> void:
 	if not _drawers.has(key):
 		return
 	var d: Dictionary = _drawers[key]
@@ -876,6 +880,11 @@ func _drawer_action(key: String) -> void:
 	if not bool(d["open"]):
 		d["open"] = true
 		create_tween().tween_property(d["pivot"], "position:x", float(d["home"]) + 0.34, 0.25)
+		Audio.play_at("door", global_position, -12.0)
+		return
+	if not transfer:
+		d["open"] = false
+		create_tween().tween_property(d["pivot"], "position:x", float(d["home"]), 0.25)
 		Audio.play_at("door", global_position, -12.0)
 		return
 	if held != "":
@@ -904,9 +913,7 @@ func _drawer_action(key: String) -> void:
 					break
 		Game.notify("%s taken from drawer" % Data.item_name(item_id))
 		return
-	d["open"] = false
-	create_tween().tween_property(d["pivot"], "position:x", float(d["home"]), 0.25)
-	Audio.play_at("door", global_position, -12.0)
+	Game.notify("The drawer is empty")
 
 func _toggle_door(action: String) -> void:
 	var d: Dictionary = _doors[action]
@@ -2169,9 +2176,9 @@ func prompt_for(action: String) -> String:
 		if not drawer["open"]:
 			return "[E] Pull open kitchen drawer"
 		if Game.equipped() != "":
-			return "[E] Store held item in kitchen drawer"
+			return "[E] Close drawer   [G] Store held item"
 		if not (drawer["items"] as Array).is_empty():
-			return "[E] Take %s from kitchen drawer" % Data.item_name(str(drawer["items"][-1]["id"]))
+			return "[E] Close drawer   [G] Take %s" % Data.item_name(str(drawer["items"][-1]["id"]))
 		return "[E] Close empty kitchen drawer"
 	if action.begins_with("sit_bench:"):
 		return "[E] Sit at the dinette (recover energy)"
