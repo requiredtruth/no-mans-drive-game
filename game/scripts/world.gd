@@ -947,7 +947,8 @@ func _start_vehicles() -> void:
 	var specs := [["start_car", "sedan", 9.5], ["start_truck", "pickup", 16.5], ["start_boxtruck", "box_truck", 25.0]]
 	if Game.map_mode == "everything":
 		specs.append_array([["start_offroad", "offroader", 32.0], ["start_compact_rv", "mini_rv", 39.5],
-			["start_touring_rv", "mid_rv", 48.0]])
+			["start_touring_rv", "mid_rv", 48.0], ["start_work_truck", "work_truck", 58.0],
+			["start_semi", "semi", 75.0], ["start_bare_long_rv", "long_rv", 96.0]])
 
 	for e in specs:
 		if Game.vehicles.has(e[0]):
@@ -1302,11 +1303,11 @@ func _poi_vehicles(poi: Dictionary) -> void:
 			if rng.randf() < 0.55:
 				plan.append(["veh_%d" % row, ["sedan", "pickup", "offroader"][rng.randi() % 3], Vector3(7.5, 0, 4)])
 		"truck_stop":
-			plan.append(["veh_%d" % row, "box_truck", Vector3(-7, 0, 3)])
+			plan.append(["veh_%d" % row, "semi" if rng.randf() < 0.3 else "box_truck", Vector3(-7, 0, 3)])
 			plan.append(["trl_%d" % row, ["tanker", "camper"][rng.randi() % 2], Vector3(5, 0, 6)])
 		"farm":
 			if rng.randf() < 0.6:
-				plan.append(["veh_%d" % row, "pickup", Vector3(-4, 0, 7)])
+				plan.append(["veh_%d" % row, "work_truck" if rng.randf() < 0.4 else "pickup", Vector3(-4, 0, 7)])
 			if rng.randf() < 0.5:
 				plan.append(["trl_%d" % row, "flatbed", Vector3(3, 0, 8)])
 	for p in plan:

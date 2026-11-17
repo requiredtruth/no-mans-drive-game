@@ -1,15 +1,17 @@
 # No Man's Drive — required features
 
-Every user requirement for this project, kept up to date. Items marked ✅ are in the current build. Items marked 🔄 are in progress for the next version.
+### Continued Nomad Drive-style survival expansion — v1.14.0
 
-### Continuing survival-feature expansion — v1.13.0
-
-- ✅ Expand beyond the reference game's RV survival features with six reinforced metal/concrete house pieces, a working hinged metal door and a barred glazed window.
-- ✅ Add four detailed, physical portable campsite objects: folding cot, charcoal water purifier, large rain barrel, fuelled cookstove; movable and storable in vehicles.
-- ✅ Charcoal-based water filtration, refillable rain barrel, real stove cooking without crafting menus, and night sleep to 05:00.
-- ✅ Preserve fuel/water/plant data when picking up and relocating working camp equipment, including saves.
-- 🔄 Continue completing all missing items in the backlog, visuals and physics across devices.
-
+- ✅ Add a separate normal work truck (distinct from pickup and from semi tractor) with drivable controls, repairable parts, cargo and working tailgate.
+- ✅ Add a distinct drivable semi tractor, six wheels, rear service locker and trailer hitch. Keep the box truck as a separate class.
+- ✅ Add a double-long bare motorhome shell that can be furnished and used for hauling. Rear access, physical storage, vehicle repairs and save/load must work.
+- ✅ Keep multiple furnished RV sizes as well as the large flagship RV, compact RV and touring RV.
+- ✅ Ensure beds sleep to 05:00 at night; bed frame in the flagship RV works even before a mattress is fitted.
+- ✅ Make the main RV dinette benches and smaller camper benches sit-able in first person, restoring energy with E/Jump stand-up.
+- ✅ Make all four main RV galley drawers independently openable, storable and retrievable, with physical fronts and persistent contents.
+- ✅ All new vehicle types included in Everything start map; separate semi and work truck gameplay categories.
+- 🔄 Continue expanding independent drawer and furniture interactions throughout roadside houses and trailers.
+- 🔄 Continue closing the gaps in the reference survival driving loop, item interactions, world details and on-device vehicle physics verification.
 
 ## User requests (verbatim intent)
 

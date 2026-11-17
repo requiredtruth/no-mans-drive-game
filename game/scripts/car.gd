@@ -10,6 +10,12 @@ const Mounts = preload("res://scripts/mounts.gd")
 const SPECS := {
 	"pickup": {"name": "Pickup Truck", "mass": 2100.0, "power": 7200.0, "top": 33.0, "fuel": 75.0, "w": 1.95, "wr": 0.42, "wz": [-1.75, 1.6], "wx": 0.86, "awd": true, "grip": 3.2,
 		"seat": Vector3(-0.42, 1.15, 0.15), "cam": Vector3(-0.42, 1.62, 0.12), "hitch": -2.85, "exit": Vector3(-1.9, 0.0, 0.2), "cargo": [Vector3(0, 1.0, -1.7), Vector3(1.6, 1.4, 1.9)]},
+	"work_truck": {"name": "Utility Work Truck", "mass": 3300.0, "power": 9800.0, "top": 29.0, "fuel": 110.0, "w": 2.05, "wr": 0.46, "wz": [-1.75, 1.6], "wx": 0.91, "awd": true, "grip": 3.2,
+		"seat": Vector3(-0.46, 1.19, 0.15), "cam": Vector3(-0.46, 1.68, 0.12), "hitch": -2.85, "exit": Vector3(-1.98, 0.0, 0.2), "cargo": [Vector3(0, 1.05, -1.7), Vector3(1.8, 1.4, 1.9)]},
+	"semi": {"name": "Semi Tractor", "mass": 7600.0, "power": 20000.0, "top": 25.0, "fuel": 260.0, "w": 2.5, "wr": 0.54, "wz": [-4.0, 2.3], "wx": 1.1, "awd": false, "grip": 3.25,
+		"seat": Vector3(-0.53, 1.75, 1.6), "cam": Vector3(-0.53, 2.25, 1.6), "hitch": -4.6, "exit": Vector3(-2.3, 0.0, 1.6), "cargo": [Vector3(0, 1.26, -3.1), Vector3(2.1, 1.0, 2.7)]},
+	"long_rv": {"name": "Extra-Long Bare RV", "mass": 6800.0, "power": 16500.0, "top": 23.0, "fuel": 210.0, "w": 2.48, "wr": 0.52, "wz": [-8.0, 1.85], "wx": 1.08, "awd": false, "grip": 3.3,
+		"seat": Vector3(-0.52, 1.35, 2.0), "cam": Vector3(-0.52, 1.9, 2.0), "hitch": -10.95, "exit": Vector3(-2.28, 0.0, 2.0), "cargo": [Vector3(0, 1.57, -4.6), Vector3(2.18, 2.3, 10.6)]},
 	"sedan": {"name": "Sedan", "mass": 1350.0, "power": 5200.0, "top": 40.0, "fuel": 50.0, "w": 1.8, "wr": 0.34, "wz": [-1.4, 1.35], "wx": 0.78, "awd": false, "grip": 3.0,
 		"seat": Vector3(-0.38, 0.75, -0.15), "cam": Vector3(-0.38, 1.18, -0.2), "hitch": -2.45, "exit": Vector3(-1.7, 0.0, -0.1), "cargo": [Vector3(0, 0.75, -1.85), Vector3(1.4, 0.4, 0.8)]},
 	"box_truck": {"name": "Box Truck", "mass": 4200.0, "power": 11500.0, "top": 26.0, "fuel": 130.0, "w": 2.3, "wr": 0.48, "wz": [-2.3, 2.1], "wx": 0.98, "awd": false, "grip": 3.1,
@@ -63,6 +69,7 @@ var _rear_anim: Tween
 var _rear_gate_home := Vector3.ZERO
 var engine_kind := "engine_block"
 var wheel_kind := {}
+var _camper_seats := {} # local floor anchors for real sit-able camper benches
 
 ## Cab interior: carpet, door cards, pillars, headliner, rear wall and a gauge cluster, so from
 ## the driver's seat you sit inside a real cab instead of looking out through a glass shell.
@@ -70,6 +77,9 @@ const CABS := {
 	# z_rear, z_ws_bottom, z_ws_top, belt, roof, floor, rear window [y0, y1, half-width] or [], pillars [[z, width]]
 	"sedan": [-1.42, 1.15, 0.52, 1.0, 1.37, 0.42, [], [[-0.15, 0.08], [-1.38, 0.08]]],
 	"pickup": [-0.72, 1.28, 0.74, 1.3, 1.88, 0.62, [1.38, 1.82, 0.7], [[-0.66, 0.12]]],
+	"work_truck": [-0.72, 1.28, 0.74, 1.3, 1.96, 0.62, [1.38, 1.85, 0.75], [[-0.66, 0.12]]],
+	"semi": [-1.72, 3.22, 2.55, 1.85, 3.48, 1.03, [], [[-1.64, 0.2]]],
+	"long_rv": [1.0, 2.7, 1.7, 1.45, 2.55, 0.88, [], [[1.0, 0.12]]],
 	"box_truck": [0.98, 2.95, 2.62, 1.55, 2.44, 1.02, [], [[1.2, 0.5]]],
 	"offroader": [-1.98, 1.02, 0.77, 1.38, 1.94, 0.74, [], [[-0.26, 0.12], [-1.88, 0.2]]],
 	"mini_rv": [0.62, 2.1, 1.3, 1.35, 2.25, 0.72, [], [[0.68, 0.12]]],
@@ -247,7 +257,7 @@ func _build() -> void:
 					Lib.box(self, Vector3(s * (w * 0.5 + 0.02), 0.92, z), Vector3(0.03, 0.04, 0.16), Items.steel())
 			_shape(Vector3(0, 0.75, 0), Vector3(w, 0.6, 4.6))
 			_shape(Vector3(0, 1.2, -0.15), Vector3(w - 0.1, 0.4, 2.0))
-		"pickup":
+		"pickup", "work_truck":
 			var o := Shapes.arched_bottom(-0.75, 2.7, by, [arches[1]])
 			for p in [Vector2(2.78, 0.75), Vector2(2.7, 1.15), Vector2(1.35, 1.25), Vector2(0.72, 1.9), Vector2(-0.55, 1.92), Vector2(-0.75, 1.25)]:
 				o.append(p)
@@ -280,6 +290,13 @@ func _build() -> void:
 				_shape(Vector3(s * (w * 0.5 - 0.05), 1.15, -1.76), Vector3(0.1, 0.42, 2.08))
 			_rear_gate_shape = _shape(Vector3(0, 1.15, -2.78), Vector3(w, 0.42, 0.08))
 			_part(Vector3(0, 1.14, -2.93), Vector3(w * 0.72, 0.5, 0.2), "rear")
+			if kind == "work_truck":
+				# Separate fleet work truck: flatbed guard rails, rack and commercial light bar.
+				for side in [-1.0, 1.0]:
+					Lib.box(self, Vector3(side * (w * 0.5 - 0.12), 1.6, -1.82), Vector3(0.06, 0.5, 1.8), Items.steel())
+				Lib.box(self, Vector3(0, 2.04, 0.4), Vector3(w - 0.2, 0.08, 0.12), Items.dark_steel())
+				for side in [-1.0, 1.0]:
+					Lib.box(self, Vector3(side * (w * 0.5 - 0.24), 2.10, 0.4), Vector3(0.26, 0.1, 0.15), Lib.color_mat(Color(1.0, 0.56, 0.11), 0.2, 0.0, Color(1.0, 0.46, 0.08), 1.3))
 		"box_truck":
 			var o := Shapes.arched_bottom(0.9, 3.45, by, [arches[1]])
 			for p in [Vector2(3.55, 0.8), Vector2(3.5, 1.35), Vector2(3.0, 1.45), Vector2(2.6, 2.45), Vector2(1.0, 2.5), Vector2(0.9, 1.0)]:
@@ -316,12 +333,38 @@ func _build() -> void:
 			_shape(Vector3(0, 2.02, 0.85), Vector3(w, 2.2, 0.1))
 			_rear_gate_shape = _shape(Vector3(0, 2.01, -3.72), Vector3(w, 2.2, 0.08))
 			_part(Vector3(0, 1.8, -3.86), Vector3(w * 0.73, 1.65, 0.18), "rear")
-		"mini_rv", "mid_rv":
+		"semi":
+			# Open rear tractor chassis, a separate high sleeper cab and visible fifth-wheel plate.
+			var body_m := Lib.mat("rv_paint", Color(0.65, 0.72, 0.79), 0.55, false, 0.56)
+			Lib.box(self, Vector3(0, 0.91, -1.4), Vector3(w * 0.77, 0.28, 7.8), Items.dark_steel())
+			Lib.box(self, Vector3(0, 2.15, 1.05), Vector3(w, 2.65, 4.9), body_m, false, Vector3.ZERO, 0.12)
+			Lib.box(self, Vector3(0, 3.5, 0.5), Vector3(w + 0.18, 0.12, 3.8), body_m)
+			for side in [-1.0, 1.0]:
+				var x: float = side * (w * 0.5 + 0.018)
+				Lib.box(self, Vector3(x, 2.49, 1.65), Vector3(0.02, 0.78, 1.35), _glass(), false, Vector3.ZERO, 0.03)
+				Lib.box(self, Vector3(x, 1.64, -0.72), Vector3(0.08, 0.12, 0.52), Items.dark_steel())
+				Lib.cyl(self, Vector3(side * (w * 0.5 + 0.15), 2.02, -0.4), 0.13, 0.13, 3.1, Items.steel())
+			Lib.box(self, Vector3(0, 2.53, 3.53), Vector3(w * 0.85, 1.0, 0.04), _glass())
+			Lib.box(self, Vector3(0, 1.05, 3.59), Vector3(w * 0.8, 0.9, 0.26), Items.steel())
+			Lib.box(self, Vector3(0, 1.2, -3.05), Vector3(1.2, 0.11, 1.5), Items.dark_steel())
+			Lib.cyl(self, Vector3(0, 1.33, -3.02), 0.58, 0.58, 0.10, Items.steel())
+			_shape(Vector3(0, 1.86, 1.05), Vector3(w, 2.6, 4.9))
+			_shape(Vector3(0, 0.92, -2.05), Vector3(w * 0.8, 0.25, 6.4))
+			_rear_gate = Node3D.new()
+			_rear_gate.name = "SemiToolLocker"
+			_rear_gate_home = Vector3(0, 1.4, -4.45)
+			_rear_gate.position = _rear_gate_home
+			add_child(_rear_gate)
+			Lib.box(_rear_gate, Vector3(0, 0.15, 0), Vector3(w * 0.6, 0.36, 0.07), body_m)
+			_rear_gate_shape = _shape(Vector3(0, 1.55, -4.45), Vector3(w * 0.6, 0.36, 0.08))
+			_part(Vector3(0, 1.55, -4.62), Vector3(w * 0.55, 0.5, 0.22), "rear")
+		"mini_rv", "mid_rv", "long_rv":
 			var is_mini := kind == "mini_rv"
-			var rz := -2.65 if is_mini else -3.35
+			var is_long := kind == "long_rv"
+			var rz := -10.6 if is_long else (-2.65 if is_mini else -3.35)
 			var fz := 2.75 if is_mini else 3.18
 			var length := fz - rz
-			var top_y := 2.75 if is_mini else 3.05
+			var top_y := 2.75 if is_mini else (3.15 if is_long else 3.05)
 			var floor_y := 0.88 if is_mini else 0.98
 			var wall := Lib.mat("rv_paint", Color(0.92, 0.9, 0.81), 0.4, false, 0.6)
 			var inside := Lib.mat("vinyl", Color(0.66, 0.65, 0.6), 2.0, false, 0.9)
@@ -347,11 +390,26 @@ func _build() -> void:
 			Lib.box(_rear_gate, Vector3(0, -(top_y - floor_y) * 0.5, 0), Vector3(w - 0.1, top_y - floor_y, 0.06), wall)
 			_rear_gate_shape = _shape(Vector3(0, (floor_y + top_y) * 0.5, rz), Vector3(w, top_y - floor_y, 0.08))
 			_part(Vector3(0, 1.65, rz - 0.2), Vector3(w * 0.7, 1.4, 0.22), "rear")
-			# Bed, cupboard, kitchenette, a table, and a real sleep hotspot inside.
-			Lib.box(self, Vector3(-0.32, floor_y + 0.28, rz + 1.0), Vector3(w - 0.38, 0.23, 1.38), Lib.mat("upholstery", Color(0.43, 0.49, 0.58), 1.3, false))
-			Lib.box(self, Vector3(-w * 0.5 + 0.27, floor_y + 0.48, 0.3), Vector3(0.46, 0.9, 0.92), Lib.mat("laminate", Color(0.65, 0.53, 0.43), 1.4, false))
-			Lib.box(self, Vector3(w * 0.5 - 0.3, floor_y + 0.4, 0.35), Vector3(0.52, 0.76, 0.8), Lib.mat("laminate", Color(0.6, 0.54, 0.47), 1.4, false))
-			_part(Vector3(0, floor_y + 0.5, rz + 1.0), Vector3(0.92, 0.28, 0.85), "sleep")
+			# The double-long body deliberately ships BARE so it can be furnished physically.
+			# Compact and touring campers keep working beds, seating and storage drawers.
+			if not is_long:
+				Lib.box(self, Vector3(-0.32, floor_y + 0.28, rz + 1.0), Vector3(w - 0.38, 0.23, 1.38), Lib.mat("upholstery", Color(0.43, 0.49, 0.58), 1.3, false))
+				Lib.box(self, Vector3(-w * 0.5 + 0.27, floor_y + 0.48, 0.3), Vector3(0.46, 0.9, 0.92), Lib.mat("laminate", Color(0.65, 0.53, 0.43), 1.4, false))
+				Lib.box(self, Vector3(w * 0.5 - 0.3, floor_y + 0.4, 0.35), Vector3(0.52, 0.76, 0.8), Lib.mat("laminate", Color(0.6, 0.54, 0.47), 1.4, false))
+				_part(Vector3(0, floor_y + 0.72, rz + 1.0), Vector3(0.98, 0.28, 0.95), "sleep")
+				for i in range(2):
+					var sz := -0.4 + float(i) * 0.9
+					Lib.box(self, Vector3(w * 0.5 - 0.44, floor_y + 0.32, sz), Vector3(0.66, 0.19, 0.5), Lib.mat("upholstery", Color(0.51, 0.54, 0.58), 1.4, false))
+					var anchor := Node3D.new()
+					anchor.position = Vector3(w * 0.5 - 0.44, floor_y, sz)
+					anchor.rotation.y = PI * 0.5
+					anchor.set_meta("seat_type", "bench")
+					add_child(anchor)
+					_camper_seats["sit_bench:%d" % i] = anchor
+					_part(Vector3(w * 0.5 - 0.83, floor_y + 0.49, sz), Vector3(0.16, 0.5, 0.48), "sit_bench:%d" % i)
+				for i in range(3):
+					var dz := -0.12 + float(i) * 0.27
+					_part(Vector3(-w * 0.5 + 0.58, floor_y + 0.53, dz), Vector3(0.15, 0.18, 0.22), "camper_drawer:%d" % i)
 		"offroader":
 			var o := Shapes.arched_bottom(-2.0, 2.05, by, arches)
 			for p in [Vector2(2.12, 0.8), Vector2(2.05, 1.25), Vector2(1.05, 1.32), Vector2(0.75, 1.95), Vector2(-1.9, 1.98), Vector2(-2.05, 1.25)]:
@@ -389,9 +447,9 @@ func _build() -> void:
 		_rear_gate_shape = _shape(Vector3(0, 1.05, r), Vector3(w - 0.15, 0.57, 0.08))
 		_part(Vector3(0, 1.1, r - 0.15), Vector3(w * 0.7, 0.65, 0.2), "rear")
 	# lights, grille, bumpers (front at the largest z of the body)
-	var front_z: float = {"sedan": 2.36, "pickup": 2.8, "box_truck": 3.57, "offroader": 2.13, "mini_rv": 2.77, "mid_rv": 3.2}[kind]
-	var rear_z: float = {"sedan": -2.36, "pickup": -2.84, "box_truck": -3.75, "offroader": -2.08, "mini_rv": -2.67, "mid_rv": -3.37}[kind]
-	var light_y: float = {"sedan": 0.72, "pickup": 1.0, "box_truck": 1.1, "offroader": 1.05, "mini_rv": 1.06, "mid_rv": 1.16}[kind]
+	var front_z: float = {"sedan": 2.36, "pickup": 2.8, "work_truck": 2.8, "box_truck": 3.57, "semi": 3.62, "offroader": 2.13, "mini_rv": 2.77, "mid_rv": 3.2, "long_rv": 3.2}[kind]
+	var rear_z: float = {"sedan": -2.36, "pickup": -2.84, "work_truck": -2.84, "box_truck": -3.75, "semi": -5.3, "offroader": -2.08, "mini_rv": -2.67, "mid_rv": -3.37, "long_rv": -10.62}[kind]
+	var light_y: float = {"sedan": 0.72, "pickup": 1.0, "work_truck": 1.05, "box_truck": 1.1, "semi": 1.42, "offroader": 1.05, "mini_rv": 1.06, "mid_rv": 1.16, "long_rv": 1.16}[kind]
 	_head_mat = Lib.color_mat(Color(0.95, 0.95, 0.9), 0.05, 0.0, Color(1, 0.95, 0.8), 0.01).duplicate()
 	_tail_mat = Lib.color_mat(Color(0.6, 0.05, 0.05), 0.2, 0.0, Color(1, 0.1, 0.05), 0.2).duplicate()
 	for s in [-1.0, 1.0]:
@@ -410,7 +468,7 @@ func _build() -> void:
 		add_child(sp)
 		_head_spots.append(sp)
 		# mirrors
-		Lib.box(self, Vector3(s * (w * 0.5 + 0.12), {"sedan": 1.0, "pickup": 1.38, "box_truck": 1.85, "offroader": 1.45, "mini_rv": 1.4, "mid_rv": 1.55}[kind], {"sedan": 0.95, "pickup": 1.15, "box_truck": 2.85, "offroader": 0.85, "mini_rv": 1.65, "mid_rv": 2.1}[kind]), Vector3(0.06, 0.16, 0.2), Items.dark_steel(), false, Vector3.ZERO, 0.02)
+		Lib.box(self, Vector3(s * (w * 0.5 + 0.12), {"sedan": 1.0, "pickup": 1.38, "work_truck": 1.46, "box_truck": 1.85, "semi": 2.0, "offroader": 1.45, "mini_rv": 1.4, "mid_rv": 1.55, "long_rv": 1.6}[kind], {"sedan": 0.95, "pickup": 1.15, "work_truck": 1.15, "box_truck": 2.85, "semi": 2.6, "offroader": 0.85, "mini_rv": 1.65, "mid_rv": 2.1, "long_rv": 2.1}[kind]), Vector3(0.06, 0.16, 0.2), Items.dark_steel(), false, Vector3.ZERO, 0.02)
 	Lib.box(self, Vector3(0, light_y, front_z + 0.005), Vector3(w * 0.5, 0.26, 0.04), Lib.color_mat(Color(0.06, 0.06, 0.06), 0.4), false, Vector3.ZERO, 0.02)
 	for k in range(4):
 		Lib.box(self, Vector3(0, light_y - 0.09 + k * 0.06, front_z + 0.03), Vector3(w * 0.48, 0.015, 0.02), Items.steel())
@@ -444,11 +502,12 @@ func _build() -> void:
 	var mesh := Shapes.commit([[body, _paint()], [glass, _glass()], [trim, Lib.color_mat(Color(0.05, 0.05, 0.05), 0.5)], [chrome_st, Items.steel()]])
 	_mesh_node(mesh)
 	# wheels
-	for i in range(4):
+	for i in range(6 if kind in ["semi", "long_rv"] else 4):
 		var front := i < 2
 		var sx := -1.0 if i % 2 == 0 else 1.0
+		var axle_z: float = float(wz[1]) if front else (float(wz[0]) + 1.45 if i >= 4 else float(wz[0]))
 		var vw := VehicleWheel3D.new()
-		vw.position = Vector3(sx * float(spec["wx"]), wr + 0.12, wz[1] if front else wz[0])
+		vw.position = Vector3(sx * float(spec["wx"]), wr + 0.12, axle_z)
 		vw.use_as_steering = front
 		vw.use_as_traction = (not front) or spec["awd"]
 		vw.wheel_radius = wr
@@ -471,7 +530,7 @@ func _build() -> void:
 		holder.add_child(tire)
 		vw.set_meta("tire_mesh", tire)
 		vw.set_meta("hub_mesh", Mounts.hub(holder))
-		_part(Vector3(sx * (float(spec["wx"]) + 0.12), wr + 0.12, wz[1] if front else wz[0]), Vector3(0.35, wr * 2.2, wr * 2.4), "wheel%d" % wheels.size())
+		_part(Vector3(sx * (float(spec["wx"]) + 0.12), wr + 0.12, axle_z), Vector3(0.35, wr * 2.2, wr * 2.4), "wheel%d" % wheels.size())
 		wheels.append(vw)
 	# interaction hotspots
 	_part(Vector3(-w * 0.5 - 0.1, sp_seat.y + 0.2, sp_seat.z), Vector3(0.25, 1.0, 1.0), "drive")
@@ -723,7 +782,7 @@ func set_rear_open(open: bool, animate := true) -> void:
 	if _rear_gate == null:
 		return
 	var target := Vector3(0, 2.45 if kind == "box_truck" and open else 0, 0)
-	var angle := (1.4 if kind == "pickup" else -1.4) if open and kind != "box_truck" else 0.0
+	var angle := (1.4 if kind in ["pickup", "work_truck"] else -1.4) if open and kind != "box_truck" else 0.0
 	if not animate:
 		_rear_gate.position = target + _rear_gate_home
 		_rear_gate.rotation.x = angle
@@ -809,6 +868,8 @@ func prompt_for(action: String) -> String:
 		"rear": return "[E] %s rear cargo door" % ("Close" if rear_open else "Open")
 		"cargo": return ("[E] Store held item in %s" % display_name() if Game.equipped() != "" else "[E] Take an item from vehicle cargo") if rear_open else "[E] Open rear cargo door"
 		"sleep": return "[E] Sleep in the camper bed"
+		"sit_bench:0", "sit_bench:1": return "[E] Sit in camper bench (recover energy)"
+		"camper_drawer:0", "camper_drawer:1", "camper_drawer:2": return "[E] Use camper storage drawer"
 	return ""
 
 func do_action(action: String, player: Node) -> void:
@@ -830,6 +891,11 @@ func do_action(action: String, player: Node) -> void:
 			cargo_store()
 		"sleep":
 			Game.world.sleep(player.global_position)
+		"sit_bench:0", "sit_bench:1":
+			if _camper_seats.has(action):
+				player.sit_in(_camper_seats[action])
+		"camper_drawer:0", "camper_drawer:1", "camper_drawer:2":
+			cargo_store()
 		"fuel":
 			if Game.equipped() != "fuel_can":
 				Game.notify("Carry a full Fuel Can here to pour it in")

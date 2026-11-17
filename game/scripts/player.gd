@@ -387,7 +387,7 @@ func _sit_tick(delta: float) -> void:
 	_seat_exit_world = seated_at.to_global(_seat_entry_local)
 	velocity = Vector3.ZERO
 	if not Game.paused and not Game.ui_open:
-		var multiplier := 1.4 if seated_at.get("type") == "sofa" else 1.0
+		var multiplier := 1.4 if seated_at.has_method("aim_name") and str(seated_at.get("type")) == "sofa" else 1.0
 		Game.stats["energy"] = minf(Game.stats["energy"] + delta * REST_ENERGY_PER_SECOND * multiplier, 100.0)
 
 func stand_up() -> void:

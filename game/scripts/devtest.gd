@@ -2241,7 +2241,7 @@ func _v112() -> void:
 	var pl = Game.player
 	Game.map_mode = "everything"
 	_check_quality(Game.map_mode == "everything", "Everything selection state is available")
-	var types := ["pickup", "sedan", "box_truck", "offroader", "mini_rv", "mid_rv"]
+	var types := ["pickup", "work_truck", "sedan", "box_truck", "semi", "offroader", "mini_rv", "mid_rv", "long_rv"]
 	for i in range(types.size()):
 		var kind: String = types[i]
 		var z: float = -100.0 - float(i) * 11.0
@@ -2262,6 +2262,27 @@ func _v112() -> void:
 		v.cargo_store()
 		_check_quality(v.rear_open, "cargo interaction opens rear access: " + kind)
 	var a = w.vehicle_nodes["quality_v112_box_truck"]
+	var long_rv = w.vehicle_nodes["quality_v112_long_rv"]
+	_check_quality(long_rv.wheels.size() == 6 and long_rv._camper_seats.is_empty(), "bare double-length RV has six wheels and no installed furniture")
+	_check_quality(w.vehicle_nodes["quality_v112_semi"].wheels.size() == 6, "semi tractor has a pair of rear axles")
+	_check_quality(w.vehicle_nodes["quality_v112_work_truck"].display_name() != w.vehicle_nodes["quality_v112_semi"].display_name(), "normal work truck and semi are separate vehicle options")
+	var van = Game.rv
+	_check_quality(van._drawers.size() == 4 and van._bench_anchors.size() == 2, "four usable kitchen drawers and two sit-able dinette benches")
+	Game.slots[0] = {"id": "scrap", "n": 1}
+	Game.selected_slot = 0
+	van._drawer_action("0")
+	van._drawer_action("0")
+	_check_quality(van._drawers["0"]["open"] and (van._drawers["0"]["items"] as Array).size() == 1, "drawer stores a physical item stack")
+	_check_quality(van.save_state()["drawers"]["0"]["items"].size() == 1, "drawer items survive RV save")
+	van._drawer_action("0")
+	_check_quality((van._drawers["0"]["items"] as Array).is_empty() and Game.carried("scrap") > 0, "drawer returns stored items")
+	van._drawer_action("0")
+	_check_quality(not van._drawers["0"]["open"], "drawer closes independently")
+	var benchmark_bench: Node3D = van._bench_anchors["0"]
+	pl.sit_in(benchmark_bench)
+	_check_quality(pl.seated_at == benchmark_bench, "dinette bench seats player with first-person view")
+	pl._sit_tick(0.3)
+	pl.stand_up()
 	_player_at(a.global_position + Vector3(3, 0.2, -5), -0.4)
 	await _settle(a.global_position)
 	_look_at_point(a.global_position + Vector3(0, 1.8, 0))

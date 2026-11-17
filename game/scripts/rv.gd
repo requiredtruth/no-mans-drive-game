@@ -789,6 +789,8 @@ func _wall_x(parent: Node3D, x: float, m: Material, holes: Array, z_a := REAR_Z,
 				Lib.box(parent, Vector3(x, (yr[0] + yr[1]) * 0.5, zc), Vector3(0.06, yr[1] - yr[0], z1 - z0), m)
 
 var _doors := {} # action -> {"pivot": Node3D, "open": bool}
+var _drawers := {} # independent kitchen drawers with physical sliding faces and saved item stacks
+var _bench_anchors := {}
 var _battery_vis: Node3D
 
 ## Materials: the bare shell is ribbed sheet metal and primer; fitted panels bring off-white wall
@@ -858,6 +860,53 @@ func _cupboard(vis: Node3D, action: String, center: Vector3, size: Vector3, shel
 		hs.set_meta("slot", _grp)
 		_mod_parts[_grp].append(hs)
 	_doors[action] = {"pivot": pivot, "open": false}
+
+func _drawer_saved() -> Dictionary:
+	var result := {}
+	for key in _drawers:
+		var d: Dictionary = _drawers[key]
+		result[key] = {"open": bool(d["open"]), "items": (d["items"] as Array).duplicate(true)}
+	return result
+
+func _drawer_action(key: String) -> void:
+	if not _drawers.has(key):
+		return
+	var d: Dictionary = _drawers[key]
+	var held := Game.equipped()
+	if not bool(d["open"]):
+		d["open"] = true
+		create_tween().tween_property(d["pivot"], "position:x", float(d["home"]) + 0.34, 0.25)
+		Audio.play_at("door", global_position, -12.0)
+		return
+	if held != "":
+		var stack: Dictionary = Game.take_held()
+		if str(stack.get("id", "")) != "":
+			(d["items"] as Array).append(stack.duplicate(true))
+			Game.notify("%s stored in kitchen drawer" % Data.item_name(str(stack["id"])))
+			Audio.play("pickup", -8.0)
+		return
+	var contents: Array = d["items"]
+	if not contents.is_empty():
+		var stack: Dictionary = contents[contents.size() - 1]
+		var item_id: String = str(stack["id"])
+		if Game.space_for(item_id) < int(stack["n"]):
+			Game.notify("Clear enough hand space to retrieve the drawer contents")
+			return
+		Game.add_item(item_id, int(stack["n"]), true)
+		contents.pop_back()
+		if stack.has("c") or stack.has("sd"):
+			for sl in Game.slots:
+				if sl["id"] == item_id and not sl.has("c") and not sl.has("sd"):
+					if stack.has("c"):
+						sl["c"] = stack["c"]
+					if stack.has("sd"):
+						sl["sd"] = stack["sd"]
+					break
+		Game.notify("%s taken from drawer" % Data.item_name(item_id))
+		return
+	d["open"] = false
+	create_tween().tween_property(d["pivot"], "position:x", float(d["home"]), 0.25)
+	Audio.play_at("door", global_position, -12.0)
 
 func _toggle_door(action: String) -> void:
 	var d: Dictionary = _doors[action]
@@ -978,9 +1027,17 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 	var kx := -W * 0.5 + 0.42
 	var kt := _begin("kitchen", vis)
 	Lib.box(kt, Vector3(kx, FLOOR_Y + 0.45, (kz0 + kz1) * 0.5), Vector3(0.6, 0.9, kz1 - kz0), M["cab"])
-	for dz in [0.15, 0.55, 0.95, 1.3]:
-		Lib.box(kt, Vector3(kx + 0.305, FLOOR_Y + 0.45, kz0 + dz), Vector3(0.01, 0.8, 0.005), M["cab_trim"])
-		Lib.box(kt, Vector3(kx + 0.32, FLOOR_Y + 0.75, kz0 + dz - 0.12), Vector3(0.02, 0.02, 0.1), M["metal"])
+	# Four separate drawers; handles and hit targets follow the sliding fronts.
+	for i in range(4):
+		var key := str(i)
+		var pivot := Node3D.new()
+		pivot.position = Vector3(kx + 0.325, FLOOR_Y + 0.48, kz0 + 0.22 + float(i) * 0.39)
+		kt.add_child(pivot)
+		Lib.box(pivot, Vector3.ZERO, Vector3(0.035, 0.29, 0.35), M["cab_trim"])
+		Lib.box(pivot, Vector3(0.035, 0.04, 0), Vector3(0.02, 0.028, 0.16), M["metal"])
+		_drawers[key] = {"pivot": pivot, "home": pivot.position.x, "open": false, "items": []}
+		var hotspot := _part(Vector3(kx + 0.41, FLOOR_Y + 0.48, kz0 + 0.22 + float(i) * 0.39), Vector3(0.14, 0.3, 0.34), "drawer:" + key)
+		hotspot.highlight_root = pivot
 	Lib.box(kt, Vector3(kx, FLOOR_Y + 0.92, (kz0 + kz1) * 0.5), Vector3(0.64, 0.05, kz1 - kz0 + 0.02), M["counter"])
 	_shape(Vector3(kx, FLOOR_Y + 0.4725, (kz0 + kz1) * 0.5), Vector3(0.64, 0.945, kz1 - kz0 + 0.02))
 	Lib.box(kt, Vector3(-W * 0.5 + 0.13, FLOOR_Y + 1.02, (kz0 + kz1) * 0.5), Vector3(0.01, 0.16, kz1 - kz0), Lib.mat("tiles", Color(0.85, 0.85, 0.82), 2.5, false, 0.3))
@@ -1043,11 +1100,19 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 	Lib.box(dn, Vector3(tx, FLOOR_Y + 0.69, -0.5), Vector3(0.72, 0.02, 0.92), M["cab_trim"])
 	_shape(Vector3(tx, FLOOR_Y + 0.72, -0.5), Vector3(0.7, 0.05, 0.9))
 	Lib.cyl(dn, Vector3(tx, FLOOR_Y + 0.36, -0.5), 0.04, 0.04, 0.72, M["metal"])
-	for z in [0.25, -1.25]:
+	for i in range(2):
+		var z := 0.25 if i == 0 else -1.25
 		Lib.box(dn, Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.22, z), Vector3(0.75, 0.44, 0.45), M["cab"])
 		Lib.box(dn, Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.5, z), Vector3(0.75, 0.12, 0.45), M["fabric"], false, Vector3.ZERO, 0.04)
 		Lib.box(dn, Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.85, z + signf(z) * 0.17), Vector3(0.75, 0.6, 0.1), M["fabric"], false, Vector3.ZERO, 0.04)
 		_shape(Vector3(W * 0.5 - 0.44, FLOOR_Y + 0.28, z), Vector3(0.75, 0.56, 0.45))
+		var anchor := Node3D.new()
+		anchor.position = Vector3(W * 0.5 - 0.44, FLOOR_Y, z)
+		anchor.rotation.y = PI * 0.5
+		anchor.set_meta("seat_type", "bench")
+		dn.add_child(anchor)
+		_bench_anchors[str(i)] = anchor
+		_part(Vector3(W * 0.5 - 0.83, FLOOR_Y + 0.56, z), Vector3(0.14, 0.44, 0.48), "sit_bench:" + str(i))
 	_end()
 	# ---- bathroom cubicle (right rear)
 	var tl := _begin("toilet", vis)
@@ -1066,13 +1131,13 @@ func _build_modules(vis: Node3D, M: Dictionary) -> void:
 	Lib.box(bd, Vector3(-0.27, FLOOR_Y + 0.3, -2.75), Vector3(1.85, 0.6, 1.2), M["cab"])
 	Lib.box(bd, Vector3(-0.27, FLOOR_Y + 0.605, -2.75), Vector3(1.8, 0.02, 1.15), Lib.mat("planks", Color(1.0, 0.9, 0.75), 2.0, false))
 	_shape(Vector3(-0.27, FLOOR_Y + 0.31, -2.75), Vector3(1.85, 0.62, 1.2))
+	_part(Vector3(-0.87, FLOOR_Y + 0.84, -2.75), Vector3(0.4, 0.25, 0.85), "bed")
 	_end()
 	var mt := _begin("mattress", vis)
 	Lib.box(mt, Vector3(-0.27, FLOOR_Y + 0.7, -2.75), Vector3(1.8, 0.18, 1.15), Lib.mat("upholstery", Color(1.6, 1.6, 1.55), 1.5, false, 0.95), false, Vector3.ZERO, 0.06)
 	Lib.box(mt, Vector3(-0.87, FLOOR_Y + 0.84, -2.75), Vector3(0.35, 0.1, 0.8), Lib.color_mat(Color("eae6dd"), 0.95), false, Vector3.ZERO, 0.04)
 	Lib.box(mt, Vector3(0.08, FLOOR_Y + 0.81, -2.75), Vector3(1.1, 0.06, 1.17), M["fabric2"], false, Vector3.ZERO, 0.02)
 	_shape(Vector3(-0.27, FLOOR_Y + 0.7, -2.75), Vector3(1.85, 0.2, 1.2))
-	_part(Vector3(-0.87, FLOOR_Y + 0.92, -2.75), Vector3(0.4, 0.15, 0.85), "bed")
 	_end()
 	# ---- ceiling lights, heater
 	var lt := _begin("light", vis)
@@ -1659,7 +1724,7 @@ func save_state() -> Dictionary:
 		"cabinet": cabinet, "pots": pots, "odometer": odometer, "missing": missing, "attached": attached, "cargo": _cargo_records(),
 		"modules": modules, "module_xf": module_xf, "wheel_kind": wheel_kind, "radio_station": radio_station, "door_open": door_open, "rear_open": rear_open,
 		"module_kind": module_kind, "engine_heat": engine_heat, "coolant": coolant, "nitrous": nitrous, "battery_kind": battery_kind,
-		"spare_tire": spare_tire}
+		"spare_tire": spare_tire, "drawers": _drawer_saved()}
 
 func apply_state(s: Dictionary) -> void:
 	if s.is_empty():
@@ -1705,6 +1770,13 @@ func apply_state(s: Dictionary) -> void:
 	set_rear(rear_open, false)
 	fridge = s.get("fridge", fridge)
 	cabinet = s.get("cabinet", cabinet)
+	var stored_drawers: Dictionary = s.get("drawers", {})
+	for key in _drawers:
+		var drawer: Dictionary = _drawers[key]
+		var saved: Dictionary = stored_drawers.get(key, {})
+		drawer["open"] = bool(saved.get("open", false))
+		drawer["items"] = (saved.get("items", []) as Array).duplicate(true)
+		(drawer["pivot"] as Node3D).position.x = float(drawer["home"]) + (0.34 if drawer["open"] else 0.0)
 	missing = s.get("missing", {})
 	var sp: Array = s.get("pots", pots)
 	pots = sp if sp.size() == 2 else pots
@@ -2090,6 +2162,19 @@ func prompt_for(action: String) -> String:
 	var held := Game.equipped()
 	if action.begins_with("mount:"):
 		return mount_prompt(action.substr(6))
+	if action.begins_with("drawer:"):
+		var drawer: Dictionary = _drawers.get(action.substr(7), {})
+		if drawer.is_empty():
+			return ""
+		if not drawer["open"]:
+			return "[E] Pull open kitchen drawer"
+		if Game.equipped() != "":
+			return "[E] Store held item in kitchen drawer"
+		if not (drawer["items"] as Array).is_empty():
+			return "[E] Take %s from kitchen drawer" % Data.item_name(str(drawer["items"][-1]["id"]))
+		return "[E] Close empty kitchen drawer"
+	if action.begins_with("sit_bench:"):
+		return "[E] Sit at the dinette (recover energy)"
 	if action.begins_with("wheel"):
 		return Mounts.prompt(self, action)
 	var take := "   [G] Take it out" if held == "" else ""
@@ -2183,6 +2268,14 @@ func do_action(action: String, player: Node) -> void:
 	var held := Game.equipped()
 	if action.begins_with("mount:"):
 		install_module(action.substr(6))
+		return
+	if action.begins_with("drawer:"):
+		_drawer_action(action.substr(7))
+		return
+	if action.begins_with("sit_bench:"):
+		var bench_id := action.substr(10)
+		if _bench_anchors.has(bench_id):
+			player.sit_in(_bench_anchors[bench_id])
 		return
 	if action == "battery" or action.begins_with("wheel") or (action == "hood" and modules.has("engine") and held in ["engine_parts", "scrap", "duct_tape"]):
 		if Mounts.act(self, action):
