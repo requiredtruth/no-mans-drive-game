@@ -1318,19 +1318,19 @@ func _poi_vehicles(poi: Dictionary) -> void:
 		spawn_vehicle(p[0], p[1], wp, Vector3(0, yaw + rng.randf_range(-0.6, 0.6), 0), {})
 
 # ------------------------------------------------------------------ co-op puppets
-func update_remote_player(peer: int, pos: Vector3, yaw: float, in_vehicle: bool, pname: String) -> void:
+func update_remote_player(peer: int, pos: Vector3, yaw: float, in_vehicle: bool, look: Dictionary) -> void:
 	var p: Node3D = remote_players.get(peer)
 	if p == null:
-		p = Node3D.new()
-		var body := Lib.cyl(p, Vector3(0, 0.85, 0), 0.3, 0.3, 1.3, Lib.mat("canvas", Color(0.4, 0.55, 0.8), 0.6, false))
-		body.name = "Body"
-		Lib.sphere(p, Vector3(0, 1.65, 0), 0.2, Lib.color_mat(Color(0.85, 0.7, 0.55)))
-		Lib.box(p, Vector3(0, 1.66, -0.18), Vector3(0.25, 0.06, 0.05), Lib.color_mat(Color(0.1, 0.1, 0.1)))
-		Lib.label3d(p, Vector3(0, 2.15, 0), pname, 40)
+		p = preload("res://scripts/avatar.gd").new()
 		add_child(p)
 		remote_players[peer] = p
+	var look_hash := hash(look)
+	if int(p.get_meta("look_hash", -1)) != look_hash:
+		p.set_meta("look_hash", look_hash)
+		p.set("display_name", str(look.get("username", "Human")).substr(0, 24))
+		p.call("rebuild", look)
 	p.visible = not in_vehicle
-	p.global_position = p.global_position.lerp(pos, 0.5) if p.global_position.distance_to(pos) < 10.0 else pos
+	p.global_position = p.global_position.lerp(pos, 0.35) if p.global_position.distance_to(pos) < 10.0 else pos
 	p.rotation.y = yaw
 
 func remove_remote_player(peer: int) -> void:

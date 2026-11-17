@@ -227,10 +227,12 @@ func _build() -> void:
 						Lib.box(self, Vector3(x, y, sx * 0.353), Vector3(0.014, 0.014, 0.006), Items.dark_steel())
 			if persistent and data.has("items") and not (data["items"] as Dictionary).is_empty():
 				call_deferred("_spill_legacy")
-		"planter":
-			_solid(Vector3(0, 0.25, 0), Vector3(1.6, 0.5, 0.8), planks)
-			Lib.box(self, Vector3(0, 0.5, 0), Vector3(1.45, 0.04, 0.65), Lib.mat("dirt", Color(0.7, 0.6, 0.5), 0.6))
-			_water_vis = Lib.box(self, Vector3(0, 0.515, 0), Vector3(1.45, 0.01, 0.65), Lib.color_mat(Color(0.1, 0.12, 0.18, 0.55), 0.1))
+		"planter", "garden_bed":
+			var w := 2.8 if type == "garden_bed" else 1.6
+			var z := 1.25 if type == "garden_bed" else 0.8
+			_solid(Vector3(0, 0.25, 0), Vector3(w, 0.5, z), planks)
+			Lib.box(self, Vector3(0, 0.5, 0), Vector3(w - 0.15, 0.04, z - 0.15), Lib.mat("dirt", Color(0.7, 0.6, 0.5), 0.6))
+			_water_vis = Lib.box(self, Vector3(0, 0.515, 0), Vector3(w - 0.15, 0.01, z - 0.15), Lib.color_mat(Color(0.1, 0.12, 0.18, 0.55), 0.1))
 			_plant = Node3D.new()
 			_plant.position = Vector3(0, 0.52, 0)
 			add_child(_plant)
@@ -332,7 +334,7 @@ func _build() -> void:
 			_col(Vector3(0, 0.8, -0.17), Vector3(0.96, 1.6, 0.015))
 	if type in EXTRA_FURNITURE:
 		_build_extra()
-	if type in ["campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern"] or type in FURNITURE:
+	if type in ["campfire", "tent", "crate", "planter", "garden_bed", "bed", "workbench", "rain_collector", "lantern"] or type in FURNITURE:
 		add_to_group("placeable")
 
 func _build_campfire() -> void:
@@ -452,7 +454,7 @@ func _refresh() -> void:
 				_lamp.visible = data.get("on", false)
 			if _screen:
 				_screen.material_override = Lib.color_mat(Color(0.5, 0.65, 0.8), 0.2, 0.0, Color(0.55, 0.7, 0.95), 1.6) if data.get("on", false) else Lib.color_mat(Color(0.06, 0.08, 0.07), 0.15, 0.2)
-		"planter":
+		"planter", "garden_bed":
 			for c in _plant.get_children():
 				c.queue_free()
 			_water_vis.visible = float(data.get("water", 0.0)) > 0.05
@@ -460,16 +462,25 @@ func _refresh() -> void:
 			if crop == "":
 				return
 			var g: float = clampf(float(data.get("growth", 0.0)), 0.0, 1.0)
-			for k in range(3):
-				var x := -0.5 + k * 0.5
+			for k in range(5 if type == "garden_bed" else 3):
+				var x := (k - 2) * 0.53 if type == "garden_bed" else (k - 1) * 0.5
 				var sprout := MeshInstance3D.new()
 				sprout.mesh = Lib.mesh("bush_berry") if crop == "tomato" else Lib.mesh("bush_fiber")
 				var s := lerpf(0.1, 0.55 if crop != "coffee_beans" else 0.7, g)
 				sprout.scale = Vector3(s, s, s)
 				sprout.position = Vector3(x, 0, 0)
 				_plant.add_child(sprout)
-				if g >= 1.0:
-					var fruit_col: Color = Color("d6402f") if crop == "tomato" else (Color("b03a2a") if crop == "coffee_beans" else Data.ITEMS.get(crop, {}).get("color", Color("b89060")))
+				var crop_spec: Dictionary = Data.ITEMS.get(crop, {})
+				if crop_spec.get("garden_type", "") == "flower":
+					var bloom: Color = crop_spec.get("color", Color("e5a3bd"))
+					Lib.cyl(_plant, Vector3(x, 0.19 * g, 0), 0.015, 0.017, 0.4 * g, Lib.color_mat(Color("4e8b43")))
+					if g > 0.45:
+						for petal in range(6):
+							var ang := float(petal) * TAU / 6.0
+							Lib.sphere(_plant, Vector3(x + cos(ang) * 0.06, 0.41 * g, sin(ang) * 0.06), 0.057 * g, Lib.color_mat(bloom), Vector3(0.9, 0.6, 0.6))
+						Lib.sphere(_plant, Vector3(x, 0.41 * g, 0), 0.035 * g, Lib.color_mat(Color("e9b648")))
+				elif g >= 1.0:
+					var fruit_col: Color = Color("d6402f") if crop == "tomato" else (Color("b03a2a") if crop == "coffee_beans" else crop_spec.get("color", Color("b89060")))
 					for f in range(3):
 						Lib.sphere(_plant, Vector3(x + randf_range(-0.12, 0.12), 0.25 + f * 0.08, randf_range(-0.12, 0.12)), 0.05, Lib.color_mat(fruit_col, 0.4))
 
@@ -525,13 +536,14 @@ func _process(delta: float) -> void:
 ## Called by the world once per in-game hour.
 func game_hour() -> void:
 	match type:
-		"planter":
+		"planter", "garden_bed":
 			var crop: String = data.get("crop", "")
 			var water: float = float(data.get("water", 0.0))
 			if Game.weather == "rain":
 				water = 1.0
 			if crop != "" and water > 0.0 and float(data.get("growth", 0.0)) < 1.0:
-				data["growth"] = minf(float(data.get("growth", 0.0)) + 1.0 / 30.0, 1.0)
+				var hours := int(Data.ITEMS.get(crop, {}).get("growth_hours", 28))
+				data["growth"] = minf(float(data.get("growth", 0.0)) + 1.0 / float(hours), 1.0)
 			data["water"] = maxf(water - 1.0 / 20.0, 0.0)
 			_refresh()
 			_save_data()
@@ -573,7 +585,7 @@ func _prompt() -> String:
 			return "[E] Sleep"
 		"crate":
 			return "Storage crate — put things inside with [G]"
-		"planter":
+		"planter", "garden_bed":
 			var crop: String = data.get("crop", "")
 			if crop == "":
 				return "[E] Plant seeds"
@@ -670,7 +682,7 @@ func interact(player: Node) -> void:
 			Game.world.sleep(global_position + Vector3(0, 0.5, 0))
 		"crate":
 			Game.notify("Hold something and press [G] to put it in the crate. Pick the crate up with [G] (empty hands) to carry everything at once.")
-		"planter":
+		"planter", "garden_bed":
 			_planter_interact()
 		"workbench":
 			assemble()
@@ -808,8 +820,16 @@ func _stove_interact() -> void:
 func _planter_interact() -> void:
 	var crop: String = data.get("crop", "")
 	if crop == "":
+		# A seed packet in hand determines the crop rather than always choosing tomatoes.
+		var wanted := Game.equipped()
+		var available: Array[String] = []
+		if Data.ITEMS.has(wanted) and Data.ITEMS[wanted].get("kind", "") == "seed":
+			available.append(wanted)
 		for seed_id in Data.ITEMS:
-			if Data.ITEMS[seed_id]["kind"] == "seed" and Game.count(seed_id) > 0:
+			if Data.ITEMS[seed_id].get("kind", "") == "seed" and seed_id not in available:
+				available.append(seed_id)
+		for seed_id in available:
+			if Game.count(seed_id) > 0:
 				Game.remove_item(seed_id, 1)
 				data["crop"] = Data.ITEMS[seed_id]["grows"]
 				data["growth"] = 0.0
@@ -820,7 +840,7 @@ func _planter_interact() -> void:
 		Game.notify("You have no seeds")
 		return
 	if float(data.get("growth", 0.0)) >= 1.0:
-		var n := randi_range(3, 5)
+		var n := randi_range(5, 9) if type == "garden_bed" else randi_range(3, 5)
 		Game.add_item(crop, n)
 		if randf() < 0.6:
 			for seed_id in Data.ITEMS:

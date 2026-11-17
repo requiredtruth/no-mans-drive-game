@@ -2,3 +2,6 @@ game/.godot/
 dist/
 *.apk
 *.tmp
+
+.server-bin/
+server-data/

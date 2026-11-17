@@ -662,6 +662,7 @@ func open_pause() -> void:
 	body.add_child(UI.button("Resume", close_modal))
 	if not Net.is_client():
 		body.add_child(UI.button("Save game", func() -> void: Game.save_game()))
+	body.add_child(UI.button("Character & wardrobe", open_wardrobe))
 	body.add_child(UI.button("Settings", open_settings))
 	body.add_child(UI.button("Cheats / testing", open_cheats))
 	body.add_child(UI.button("Controls", func() -> void:
@@ -677,6 +678,13 @@ func open_pause() -> void:
 		Game.paused = false
 		Game.ui_open = false
 		get_tree().root.get_node("Main").quit_to_menu()))
+
+func open_wardrobe() -> void:
+	var body := _open_modal("wardrobe", "Character & wardrobe", null, 840.0)
+	Game.paused = true
+	Profile.build_editor(body, func() -> void:
+		Game.notify("Character and username saved")
+		close_modal())
 
 func open_cheats() -> void:
 	var body := _open_modal("cheats", "Cheats & testing", null, 820.0)

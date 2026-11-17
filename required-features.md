@@ -1,3 +1,14 @@
+### November 17 multiplayer, character customization and gardening (1.15.0)
+
+- ✅ Create a Linux `server.sh` that downloads an engine if required and launches a headless ENet world with persistent state; server source in this same repository.
+- ✅ Join by public domain, IPv4 or bracketed IPv6 address with optional UDP port. Forward/open UDP 24680 by default (ENet is UDP, not HTTP/WebSocket).
+- ✅ Show all connected player puppets using server-relayed transform/appearance updates, not direct client-only RPCs. Dedicated server has no visible host character.
+- ✅ Ask for a username on first app launch, with random default `Human ###`; store it on-device and allow later edits.
+- ✅ Character creation includes gender, body style, skin tone, hair/hair color, tops, pants/skirts, shoes, hats, glasses, bags, necklaces, earrings, makeup and palette choices. Live 3D preview; accessible from main menu and pause.
+- ✅ Cosmetic characters are visible to other multiplayer clients; these wardrobe options are free and separate from physical gameplay wearables.
+- ✅ Expand gardening with 32 new seed/crop pairs including vegetables, berries, herbs and flowers, and a larger buildable raised garden bed. Crops can be watered and harvested; holding seed selects planting variety.
+- 🔄 Further dedicated-server hardening, player-specific inventories/persistence, far-field streaming and on-device multi-client tests remain open.
+
 # No Man's Drive — required features
 
 ### Continued Nomad Drive-style survival expansion — v1.14.2

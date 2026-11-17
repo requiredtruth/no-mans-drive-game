@@ -269,6 +269,16 @@ func _overlay(n: Node, col: Color) -> void:
 func _build(id: String) -> Mesh:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(id)
+	var spec: Dictionary = load("res://scripts/data.gd").ITEMS.get(id, {})
+	if spec.get("kind", "") == "seed" and id.begins_with("seeds_"):
+		return _packet(spec.get("color", Color("8a9a5a")))
+	if spec.has("garden_type"):
+		var gtype: String = spec["garden_type"]
+		var col: Color = spec.get("color", Color("80a060"))
+		if gtype == "root": return _potato(col, rng)
+		if gtype == "vegetable": return _carrot() if id in ["green_beans", "cucumber", "zucchini"] else _berries_col(col)
+		if gtype in ["leaf", "herb"]: return _fiber(rng)
+		return _berries_col(col)
 	match id:
 		"axe": return _axe()
 		"pickaxe": return _pickaxe()

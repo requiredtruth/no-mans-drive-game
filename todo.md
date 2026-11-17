@@ -1,3 +1,11 @@
+## Multiplayer / social / farming after 1.15.0
+
+- [ ] Run simultaneous Android devices against a public Linux host, including WAN reconnect, DNS, roaming and driving tests; fix discoveries.
+- [ ] Move vehicle ownership, structures, harvesting and inventory to fully authoritative transactional server messages, with cheat/grief protections and server-side validation.
+- [ ] Character animations, more detailed layered garment meshes, saved outfit presets, and moving avatar/vehicle position smoothing.
+- [ ] Synchronize multiple vehicles, inventory transfers and animal states with server persistence and interest-based replication.
+- [ ] Expand gardens with crop beds per plant, shovel digging, soil fertility, fertilizer, seed selection UI, rain irrigation and flower arranging/cut bouquets.
+
 # To do
 
 What is still to be made. Finished work moves to `done.md`. Each item needs a real 3D model and texture, an entry in `game/scripts/data.gd`, a model in `game/scripts/items.gd` (or a structure in `structure.gd` for furniture), and a place in the loot tables, a recipe or a world drop. The full source lists are in `docs/item-backlog/`.

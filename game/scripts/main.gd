@@ -28,9 +28,36 @@ func _ready() -> void:
 			t.set_script(load("res://scripts/devtest.gd"))
 			add_child(t)
 			return
+	if "--dedicated" in args:
+		Net.dedicated = true
+		var server_seed := 4242
+		var server_map := "everything"
+		for a in args:
+			if a.begins_with("--port="):
+				Net.port = clampi(int(a.trim_prefix("--port=")), 1, 65535)
+			elif a.begins_with("--seed="):
+				server_seed = int(a.trim_prefix("--seed="))
+			elif a.begins_with("--map="):
+				server_map = a.trim_prefix("--map=")
+		var err := Net.host()
+		if err != "":
+			push_error(err)
+			get_tree().quit(1)
+			return
+		if Game.has_save():
+			_start_world(Game.load_game_data())
+		else:
+			Game.new_game(server_seed, "Normal")
+			Game.map_mode = "everything" if server_map == "everything" else "regular"
+			_start_world({})
+		print("Dedicated server ready on UDP %d" % Net.port)
+		return
 	if "--autostart" in args:
 		Game.new_game(4242, "Normal")
 		_start_world({})
+		return
+	if not Profile.created:
+		_show_profile(true)
 
 func _build_menu() -> void:
 	menu_layer = CanvasLayer.new()
@@ -109,7 +136,8 @@ func _show_main() -> void:
 	if Game.has_save():
 		content.add_child(UI.button("Continue journey", _continue))
 	content.add_child(UI.button("New journey", _show_new))
-	content.add_child(UI.button("Co-op (up to 4 players)", _show_coop))
+	content.add_child(UI.button("Online multiplayer / Join server", _show_coop))
+	content.add_child(UI.button("Character & wardrobe · %s" % Profile.appearance["username"], func() -> void: _show_profile(false)))
 	content.add_child(UI.button("Settings", func() -> void:
 		_clear()
 		UI.build_settings(content)
@@ -160,39 +188,41 @@ func _show_new() -> void:
 
 func _show_coop() -> void:
 	_clear()
-	content.add_child(UI.label("Co-op", 24, Color(1.0, 0.8, 0.5)))
-	content.add_child(UI.label("Play together on the same Wi-Fi/LAN or over the internet (forward UDP port %d on the host)." % Net.PORT, 14))
-	content.add_child(UI.label("Your name", 16))
-	var name_edit := LineEdit.new()
-	name_edit.text = Net.player_name
-	name_edit.custom_minimum_size = Vector2(0, 44)
-	content.add_child(name_edit)
-	content.add_child(UI.button("Host — continue my journey" if Game.has_save() else "Host — new journey", func() -> void:
-		Net.player_name = name_edit.text
+	content.add_child(UI.label("Online multiplayer", 24, Color(1.0, 0.8, 0.5)))
+	content.add_child(UI.label("Playing as %s. Everyone can see each other's customized character." % Profile.appearance["username"], 14))
+	content.add_child(UI.button("Change username / character", func() -> void: _show_profile(false)))
+	content.add_child(UI.label("Connect using a domain or IP (host:port optional). UDP, not HTTP. For internet hosting open UDP 24680.", 14))
+	content.add_child(UI.button("Host a game on this device", func() -> void:
+		var err := Net.host()
+		if err != "":
+			_show_message("Host error", err)
+			return
 		if Game.has_save():
-			var d := Game.load_game_data()
-			_start_world(d)
+			_start_world(Game.load_game_data())
 		else:
 			Game.new_game(randi() % 999999, "Normal")
 			_start_world({})
-		var err := Net.host()
+		Game.notify("Hosting. Friends join %s:%d" % [Net.local_ips(), Net.port])))
+	content.add_child(UI.label("Server domain / IP", 16))
+	var addr := LineEdit.new()
+	addr.placeholder_text = "play.example.com or 192.168.1.2:24680"
+	addr.text = ""
+	addr.custom_minimum_size = Vector2(0, 44)
+	content.add_child(addr)
+	content.add_child(UI.button("Connect to server", func() -> void:
+		var err := Net.join(addr.text)
 		if err != "":
-			Game.notify(err)
+			_show_message("Multiplayer", err)
 		else:
-			Game.notify("Hosting. Friends can join at %s" % Net.local_ips())))
-	content.add_child(UI.label("Host address", 16))
-	var ip := LineEdit.new()
-	ip.text = "192.168.1.2"
-	ip.custom_minimum_size = Vector2(0, 44)
-	content.add_child(ip)
-	content.add_child(UI.button("Join", func() -> void:
-		Net.player_name = name_edit.text
-		var err := Net.join(ip.text)
-		if err != "":
-			_show_message("Co-op", err)
-		else:
-			_show_message("Co-op", "Connecting to %s ..." % ip.text)))
+			_show_message("Multiplayer", "Connecting to %s ..." % addr.text)))
 	content.add_child(UI.button("Back", _show_main))
+
+func _show_profile(first_time: bool) -> void:
+	_clear()
+	content.add_child(UI.label("Create your character" if first_time else "Character & wardrobe", 24, Color(1.0, 0.8, 0.5)))
+	Profile.build_editor(content, func() -> void: _show_main())
+	if not first_time:
+		content.add_child(UI.button("Back", _show_main))
 
 func _continue() -> void:
 	var d := Game.load_game_data()

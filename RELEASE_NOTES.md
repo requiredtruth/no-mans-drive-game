@@ -1,14 +1,11 @@
-# No Man's Drive 1.14.2 — Extra-long RV and working interiors
+# No Man's Drive 1.15.0 — Dedicated multiplayer, dress-up and gardening
 
-- New separately selectable utility work truck and heavy six-wheel semi tractor, with original procedural cab/chassis models, repairable parts, working rear service access, cargo and fuel systems.
-- New double-length, six-wheel empty motorhome shell: a drivable, spacious bare RV to furnish yourself. It has a functioning rear door and persistent physical cargo.
-- The Everything start map now offers the work truck, semi and bare extra-long RV alongside the existing fleet. Semi tractors may spawn at truck stops; work trucks at farms.
-- All vehicles, including the extra-long bare RV, now accept installed beds, chairs and other furniture that stays attached while driving and survives save/load.
-- Compact and touring RVs now have independent sliding drawers with item storage and persistence.
-- Automated test fix: [E] now always opens/closes a drawer, and [G] deposits/retrieves an item. A filled drawer can be closed and later reopened.
-- Four independent sliding kitchen drawers inside the flagship RV. Open, deposit held items, retrieve stacks, and close them; drawer states and inventory persist in saved games.
-- Working dinette seating in the main RV and seating in compact/touring campers, with first-person seated viewpoint, energy recovery and exit control.
-- The flagship RV bed frame can now be used for sleep without requiring a separate mattress.
-- Expanded automated vehicle, door, cargo, drawer, seating and persistence quality checks.
+- New `./server.sh` boots a headless Godot ENet server on Linux, downloading the matching engine once if necessary. Use `PORT=24680 SEED=4242 MAP=everything ./server.sh`. Persistent server saves go to `server-data/`.
+- Join friends from Android with a server domain or IP, optionally followed by a UDP port. Forward the port on the server/router; the server script does not open your firewall itself.
+- Reliable host relay for player positions and character looks, and for world construction/plant edits. No longer dependent on direct client RPCs for seeing other players.
+- Create a persistent name (`Human 1`–`Human 999` randomized on first run). Change your username or character from the main menu and pause screen.
+- Original live 3D character creator with gender choices, many hairstyles and colors, shirts and dresses, trousers and skirts, footwear, hats, glasses, bags, jewelry, makeup, and skin palettes. Your visible multiplayer puppet reflects your choices.
+- 32 additional seed/crop pairs: vegetables, herbs, berries and ornamental flowers including roses, daisies, lavender, sunflowers and orchids. Raised garden bed is buildable, waterable and harvestable.
+- Existing vehicle repair, survival, world generation, saves, and full Everything start map retained.
 
-Android release is signed and built by GitHub Actions after engine parsing and scripted tests. Existing save compatibility is preserved. On-device playtesting is still recommended.
+**Known limits:** The original world network code was basic; this is its first dedicated-server expansion. Shared world changes are relayed but the server is not a secure public MMO, and 15-peer capacity is a configured limit, not a benchmark. On-device multiplayer performance and reliability still need testing.
