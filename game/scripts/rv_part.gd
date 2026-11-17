@@ -9,3 +9,6 @@ func get_prompt() -> String:
 
 func interact(player: Node) -> void:
 	rv.do_action(action, player)
+
+func transfer_info() -> Dictionary:
+	return rv.transfer_info(action) if rv.has_method("transfer_info") else {}

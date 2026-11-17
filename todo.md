@@ -4,25 +4,27 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 **Quality bar:** read `NOTES.md` before changing models, textures, the HUD, items or interactions. It lists the gap to the reference screenshots and the rules every new piece follows.
 
-## Quality pass (see NOTES.md)
+## Quality pass, round two (see NOTES.md)
 
-- [ ] Aim outline, floating name label at the cursor, and right-hand action hints with one key cap per row.
-- [ ] Liquids in litres for fuel, water and coolant, with a two-gauge transfer panel and a pump nozzle at fuel stations.
-- [ ] Texture and bevel pass on the van interior (cab, dashboard, seats, cupboards, floor), then houses.
-- [ ] Labelled consumables (cans, jars, bottles, spray paint) and slatted crates.
-- [ ] House cabinets and wardrobes as physical shelves with hinged doors.
-- [ ] Detailed first-person hand and sleeve; bigger held items.
-- [ ] Ambient occlusion and grime in interiors.
-- [ ] A light objective track (destinations along the road) in a top-right card.
+1.9.0 closed the eight items from the first quality list (see `done.md`). What's still short of the reference shots:
+
+- [ ] Hold-to-pour: liquid moves over a second or two while [E] is held, with a pouring sound and the gauges filling, instead of all at once.
+- [ ] Liquids everywhere: water bottles, juice and milk as part-drinkable litres; a jerry-can-to-jerry-can transfer; coolant top-up for the other cars.
+- [ ] Jars with lids and visible contents on shelves (preserves, pickles, honey), labelled like the cans.
+- [ ] Potted palm and plants with leaf cards; more detailed decor (camera, flashlight on a shelf, battery).
+- [ ] Texture and bevel pass on the remaining flat-coloured parts outside the van interior: exterior trim, cab door cards, house fixtures (toilet, tub, stove), gas station shop.
+- [ ] Hotbar slots styled like the reference (textured, with the key number on a cap); an option for a minimal HUD (health and stamina only).
+- [ ] Left hand for two-handed items (big boxes, the engine block, a jerry can), and a pick-up and put-down animation.
+- [ ] Cupboard doors in the van with the same raised-panel look and handles as the new house cupboards.
 
 ## Testing phase
 
 - [ ] The test depot (every item at the start of a new game) stays on until everything has been checked; turn it off with `TEST_DEPOT` in `game/scripts/world.gd` for a normal start.
-- [ ] Make the built-in house cabinets, wardrobes and fridges movable too (they are searchable containers today).
+- [ ] Make the built-in house cabinets, wardrobes and fridges movable too (since 1.9 they are physical cupboards with doors, but they stay where the house put them).
 
-## Next up (1.9)
+## Next up (1.10)
 
-- [ ] Vehicle performance parts and add-ons for the other cars (they take the turbo and ram plow at the hood today; the rest is van-only).
+- [ ] Body add-ons for the other cars (roof rack, cargo box, roof tent, snorkel, winch, panniers). Since 1.9 they take every engine, suspension and tire upgrade at the hood; the body add-ons and engine heat are still van-only.
 - [ ] Base building pieces: metal and concrete walls, metal floor, metal door with code lock, window barricades, weapon rack, mannequin, tanning rack, anvil bench, hydroponic tray, industrial crate.
 - [ ] Power: generators, batteries, solar array, wind turbine, power hub, battery monitor, with lights and appliances that need power.
 - [ ] Machines: smelter, crusher, chemistry station, coolant still, water filtration, 3D printer, fabricator.
@@ -64,9 +66,6 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 ### Survival Consumables, Agriculture and Cooking
 
-- [ ] canteen (empty) (`canteen_empty`)
-- [ ] canteen (half) (`canteen_half`)
-- [ ] canteen (full) (`canteen_full`)
 - [ ] dead bird (`dead_bird`)
 - [ ] rabbit food (`rabbit_food`)
 - [ ] livestock feed mix (`livestock_feed`)
@@ -169,11 +168,6 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 - [ ] modular storage sofa corner piece (`mod_storage_sofa_corner`)
 - [ ] battery monitoring console (`mod_battery_monitor`)
 - [ ] lighting pack (table lamp, ceiling light, string lights, camping lantern, neon signs) (`mod_lighting_pack`)
-
-### Vehicle Simulator and Engine Parts
-
-- [ ] canteen 2l (`mod_canteen_2l`)
-- [ ] coffee flask 3l (`mod_coffee_flask_3l`)
 
 ### Base Building and Structural Components
 

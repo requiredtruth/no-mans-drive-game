@@ -94,6 +94,56 @@ func box(parent: Node3D, pos: Vector3, size: Vector3, material: Material, solid 
 		mi.add_child(sb)
 	return mi
 
+var _grime_mat: StandardMaterial3D
+
+## Baked contact shadow and grime along a corner (the Compatibility renderer has no SSAO): a strip
+## from the edge p0-p1 reaching `width` toward `inward`, darkest at the edge. Lay it on the floor
+## along a wall (inward = away from the wall) or up a wall from the floor (inward = up).
+func grime_strip(parent: Node3D, p0: Vector3, p1: Vector3, inward: Vector3, width := 0.22, lift := 0.004) -> MeshInstance3D:
+	if _grime_mat == null:
+		_grime_mat = StandardMaterial3D.new()
+		_grime_mat.albedo_texture = tex("grime_edge")
+		_grime_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_grime_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_grime_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_grime_mat.texture_repeat = true
+		_grime_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	var along := p1 - p0
+	var len := along.length()
+	var inn := inward.normalized()
+	var n := along.normalized().cross(inn).normalized()
+	var off := -n * lift if n.dot(inn.cross(along)) < 0.0 else n * lift
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var a := p0 + off
+	var b := p1 + off
+	var c := p1 + inn * width + off
+	var d := p0 + inn * width + off
+	var u := len / 1.2
+	_tri(st, [a, b, c], [n, n, n], [Vector2(0, 0), Vector2(u, 0), Vector2(u, 1)])
+	_tri(st, [a, c, d], [n, n, n], [Vector2(0, 0), Vector2(u, 1), Vector2(0, 1)])
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _grime_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	return mi
+
+## Grime round the inside of a rectangular room: on the floor along every wall and a little way up
+## each wall. lo/hi are the inner floor corners (y = floor height).
+func room_grime(parent: Node3D, lo: Vector3, hi: Vector3, floor_w := 0.28, wall_h := 0.14) -> void:
+	var y := lo.y
+	var c := [Vector3(lo.x, y, lo.z), Vector3(hi.x, y, lo.z), Vector3(hi.x, y, hi.z), Vector3(lo.x, y, hi.z)]
+	var center := Vector3((lo.x + hi.x) * 0.5, y, (lo.z + hi.z) * 0.5)
+	for i in range(4):
+		var p0: Vector3 = c[i]
+		var p1: Vector3 = c[(i + 1) % 4]
+		var mid := (p0 + p1) * 0.5
+		var inward := (center - mid) * Vector3(1, 0, 1)
+		inward = Vector3(signf(inward.x), 0, 0) if absf(p0.z - p1.z) > 0.01 else Vector3(0, 0, signf(inward.z))
+		grime_strip(parent, p0, p1, inward, floor_w)
+		grime_strip(parent, p0 + inward * 0.003, p1 + inward * 0.003, Vector3.UP, wall_h, 0.0)
+
 ## Box mesh with softened (bevelled, smooth-shaded) edges. Cached by size.
 func rounded_box(size: Vector3, bevel := -1.0) -> Mesh:
 	var r := bevel

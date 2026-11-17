@@ -27,6 +27,9 @@ var is_driver := false
 var crouching := false
 var dead := false
 var look_target: Object = null
+var look_name := "" # short name of what you aim at, shown at the cursor
+var look_sub := "" # second line under the name (e.g. "3.81/5.00 L")
+var transfer := {} # two-gauge liquid transfer panel for the held container and the aimed tank
 var prompt := ""
 
 var _cooldown := 0.0
@@ -361,6 +364,10 @@ func _update_prompt() -> void:
 	prompt = ""
 	if driving:
 		_set_highlight(null)
+		_set_outline(null)
+		look_name = ""
+		look_sub = ""
+		transfer = {}
 		var spd: float = absf(vehicle.speed_kmh())
 		prompt = "[E] Exit vehicle" if spd < 12.0 else ""
 		return
@@ -373,6 +380,10 @@ func _update_prompt() -> void:
 			elif t.has_meta("res_kind"):
 				prompt = _resource_prompt(t)
 	_set_highlight(look_target)
+	_set_outline(_outline_node(look_target))
+	look_name = _target_name(look_target)
+	look_sub = _target_sub(look_target)
+	transfer = look_target.transfer_info() if look_target and is_instance_valid(look_target) and look_target.has_method("transfer_info") else {}
 	if prompt == "" and ray.is_colliding():
 		var rc: Object = ray.get_collider()
 		var in_van: bool = Game.rv != null and Game.rv.is_inside(global_position)
@@ -426,6 +437,84 @@ func _interact() -> void:
 		Net.mark_removed(look_target.get_meta("res_key"), true)
 
 var _hl_node: Node = null
+
+const PART_NAMES := {"drive": "Driver's seat", "passenger": "Passenger seat", "stove": "Stove", "sink": "Sink", "coffee": "Coffee maker",
+	"radio": "Radio", "fridge": "Fridge", "cargo_box": "Roof cargo box", "roof_tent": "Roof tent", "spare_mount": "Spare tire mount",
+	"winch": "Winch", "battery": "Battery tray", "bed": "Bed", "toilet": "Toilet", "lights": "Light switch", "door": "Sliding door",
+	"rear_door": "Back doors", "hood": "Hood", "fuel": "Fuel cap", "hitch": "Tow hitch", "tank_valve": "Tank valve"}
+
+## A short name for the aim label at the cursor.
+func _target_name(t: Object) -> String:
+	if t == null or not is_instance_valid(t):
+		return ""
+	var n := t as Node
+	if n.is_in_group("world_item"):
+		return Data.item_name(n.id) + ((" ×%d" % n.amount) if n.amount > 1 else "")
+	if n.get_script() == RvPart:
+		var a: String = str(n.action)
+		if a.begins_with("mount:"):
+			var k := a.substr(6)
+			return str(Data.VAN_SLOTS.get(k, {}).get("name", k.capitalize())) + " spot"
+		if a.begins_with("wheel"):
+			return "Wheel"
+		return PART_NAMES.get(a, a.capitalize())
+	if n.has_meta("res_kind"):
+		match str(n.get_meta("res_kind")):
+			"tree": return "Tree"
+			"rock": return "Rock"
+			"pickup": return "Branch" if n.get_meta("item") == "wood" else "Stone"
+			"bush": return {"fiber": "Wild grass", "berry": "Berry bush", "mushroom": "Mushrooms"}.get(str(n.get_meta("bush_kind")), "Bush")
+	if "species" in n and "state" in n:
+		return str(n.species).capitalize() + (" carcass" if n.state == "dead" else "")
+	if "label" in n and n.get("label") is String and str(n.get("label")) != "":
+		return str(n.get("label")).capitalize() if str(n.get("label")) == str(n.get("label")).to_lower() else str(n.get("label"))
+	if "type" in n and n.get("type") is String:
+		var tp: String = n.get("type")
+		if Data.PIECES.has(tp):
+			return str(Data.PIECES[tp]["name"])
+		if Data.ITEMS.has(tp):
+			return Data.item_name(tp)
+		return tp.replace("_", " ").capitalize()
+	return ""
+
+## The second line under the name: litres in a liquid container, the level of a tank.
+func _target_sub(t: Object) -> String:
+	if t == null or not is_instance_valid(t):
+		return ""
+	var n := t as Node
+	if n.is_in_group("world_item") and Data.is_liquid(n.id):
+		return Data.litre_text(n.id, n.litres)
+	return ""
+
+## What gets the white outline: the item, furniture, container or carcass itself, never a whole
+## vehicle, tree or rock (and not the invisible hotspots on the van).
+func _outline_node(t: Object) -> Node:
+	if t == null or not is_instance_valid(t):
+		return null
+	var n := t as Node
+	if n.get_script() == RvPart or n.is_in_group("rv") or n.is_in_group("vehicle") or n is VehicleBody3D:
+		return null
+	if n.has_meta("res_kind") and str(n.get_meta("res_kind")) in ["tree", "rock"]:
+		return null
+	if "state" in n and "species" in n and n.state != "dead":
+		return null
+	if ray.is_colliding():
+		var c := ray.get_collider() as Node
+		if c and c.has_meta("door_of"):
+			return c
+	if "type" in n and str(n.get("type")) in ["foundation", "floor", "wall", "doorway", "window", "roof", "roof_slope", "stairs", "fence"]:
+		return null
+	return n
+
+var _ol_node: Node = null
+func _set_outline(n: Node) -> void:
+	if n == _ol_node:
+		return
+	if _ol_node and is_instance_valid(_ol_node):
+		Items.set_outline(_ol_node, false)
+	_ol_node = n
+	if n:
+		Items.set_outline(n, true)
 
 func _set_highlight(t: Object) -> void:
 	var n: Node = t as Node if t and (t as Node).is_in_group("world_item") else null
@@ -512,7 +601,10 @@ func throw_held() -> void:
 	if s["id"] == "":
 		return
 	var fwd := -camera.global_transform.basis.z
-	var it = Game.spawn_item(s["id"], int(s["n"]), camera.global_position + fwd * 0.7 + Vector3(0, -0.25, 0), fwd * 4.0)
+	if s["id"] == "pump_nozzle":
+		Game.return_nozzle()
+		return
+	var it = Game.spawn_item(s["id"], int(s["n"]), camera.global_position + fwd * 0.7 + Vector3(0, -0.25, 0), fwd * 4.0, float(s.get("l", -1.0)))
 	if it and s.has("c"):
 		it.contents = s["c"]
 	Audio.play("click", -8.0, 0.7)
@@ -646,10 +738,13 @@ func place_held() -> void:
 	if not _place_valid:
 		Game.notify("Aim at a flat surface within reach to place it")
 		return
+	if Game.equipped() == "pump_nozzle":
+		Game.return_nozzle()
+		return
 	var s := Game.take_held()
 	if s["id"] == "":
 		return
-	Game.place_item(s["id"], int(s["n"]), _place_xf, _place_host, s.get("c", []))
+	Game.place_item(s["id"], int(s["n"]), _place_xf, _place_host, s.get("c", []), float(s.get("l", -1.0)))
 	Audio.play_at("pickup", _place_xf.origin, -6.0, 0.8)
 
 func enter_vehicle(rv: Node, as_driver: bool) -> void:
@@ -694,9 +789,10 @@ func exit_vehicle() -> void:
 # ------------------------------------------------------------------ tools
 func _refresh_viewmodel() -> void:
 	var id := Game.equipped()
-	if id == _vm_kind:
+	var vk := id + "|" + str(Game.worn.keys())
+	if vk == _vm_kind:
 		return
-	_vm_kind = id
+	_vm_kind = vk
 	_binocs = false
 	for c in viewmodel.get_children():
 		c.queue_free()
@@ -744,8 +840,11 @@ func _refresh_viewmodel() -> void:
 			if grip == "" and not Data.ITEMS.get(id, {}).has("light"):
 				var bb: AABB = Items.bounds(id)
 				var big := maxf(bb.size.x, maxf(bb.size.y, bb.size.z))
-				var k := clampf(0.2 / maxf(big, 0.01), 0.35, 1.5)
-				pose = [Vector3(-0.1 - big * k * 0.25, -0.05, -0.08 - big * k * 0.2), Vector3(0.15, 0.5, 0.0), k]
+				# held big and close, like the can in the reference shots
+				var k := clampf(0.27 / maxf(big, 0.01), 0.35, 1.9)
+				# the fist grips the item's right side, about halfway up
+				var half_w := maxf(bb.size.x, bb.size.z) * k * 0.5
+				pose = [Vector3(-half_w - 0.015, -bb.size.y * k * 0.42 - bb.position.y * k, -0.03), Vector3(0.08, 0.35, 0.0), k]
 	if id != "":
 		var item := Items.instance(id)
 		item.position = pose[0]
@@ -754,7 +853,13 @@ func _refresh_viewmodel() -> void:
 		_set_no_shadow(item)
 		viewmodel.add_child(item)
 	var arm := MeshInstance3D.new()
-	arm.mesh = Items.arm_mesh()
+	# the sleeve matches the jacket you wear
+	var sleeve := ["canvas", Color(0.62, 0.66, 0.5)]
+	for w in Game.worn:
+		var wd: Dictionary = Data.ITEMS.get(w, {})
+		if wd.get("kind", "") == "wear" and str(wd.get("slot", "")) in ["body", "torso", "jacket", "top"]:
+			sleeve = ["denim" if "denim" in w or "blue" in w else ("leather" if "leather" in w else "canvas"), Color(wd.get("color", Color(0.6, 0.6, 0.55))).lightened(0.15)]
+	arm.mesh = Items.arm_mesh(sleeve[0], sleeve[1], Game.wears_flag("watch"))
 	arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	arm.rotation = Vector3(0.0, 0.0, 0.25 if id != "" else 0.0)
 	viewmodel.add_child(arm)
@@ -915,6 +1020,9 @@ func use_primary() -> void:
 			if it.get("kind", "") in ["food", "medical", "purify"]:
 				Game.consume(id)
 				_cooldown = 0.8
+			elif Data.LIQUID.get(id, {}).get("drink", false):
+				Game.sip()
+				_cooldown = 0.7
 			elif it.get("kind", "") == "wear":
 				Game.wear(id)
 				_cooldown = 0.5

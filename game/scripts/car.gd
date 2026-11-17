@@ -29,6 +29,7 @@ var battery := 40.0
 var parts := {"engine": 40.0, "tires": 50.0, "battery": 40.0, "body": 50.0}
 var missing := {}
 var upgrades := {}
+var nitrous := 100.0 # % in the bottle, when a nitrous kit is fitted
 var paint := 0
 var water := 0.0
 var odometer := 0.0
@@ -420,7 +421,7 @@ func _build() -> void:
 func _apply_visuals() -> void:
 	if _paint_mat:
 		_paint_mat.albedo_color = COLORS[paint % COLORS.size()]
-	var grip: float = float(spec["grip"]) * (1.15 if upgrades.has("offroad_tires") else 1.0) * lerpf(0.6, 1.0, parts["tires"] / 100.0)
+	var grip: float = float(spec["grip"]) * (1.15 if upgrades.has("offroad_tires") else 1.0) * (1.12 if upgrades.has("suspension") else 1.0) * (1.08 if upgrades.has("sand_tires") else 1.0) * lerpf(0.6, 1.0, parts["tires"] / 100.0 if not upgrades.has("solid_tires") else 1.0)
 	Mounts.apply_wheels(self, grip)
 	if _battery_vis:
 		_battery_vis.visible = not missing.has("battery")
@@ -561,8 +562,15 @@ func _physics_process(delta: float) -> void:
 		handbrake = Input.is_action_pressed("jump")
 	var fwd := linear_velocity.dot(global_transform.basis.z)
 	var tow := 0.75 if trailer and is_instance_valid(trailer) else 1.0
-	var power: float = float(spec["power"]) * (1.3 if upgrades.has("engine_tune") else 1.0) * (1.25 if upgrades.has("turbo") else 1.0) * lerpf(0.6, 1.0, parts["engine"] / 100.0) * tow * maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
-	var top: float = spec["top"]
+	var power: float = float(spec["power"]) * (1.3 if upgrades.has("engine_tune") else 1.0) * (1.25 if upgrades.has("turbo") else 1.0) * (1.2 if upgrades.has("supercharger") else 1.0) * lerpf(0.6, 1.0, parts["engine"] / 100.0) * tow * maxf(1.0 - 0.3 * Mounts.missing_count(self), 0.1)
+	# nitrous: hold sprint (NOS on touch) with the throttle down for a burst; the bottle refills slowly
+	var boosting := upgrades.has("nitrous") and is_driven_locally() and Input.is_action_pressed("sprint") and throttle > 0.3 and nitrous > 0.0 and engine_on
+	if boosting:
+		power *= 1.6
+		nitrous = maxf(nitrous - delta * 9.0, 0.0)
+	elif upgrades.has("nitrous"):
+		nitrous = minf(nitrous + delta * 0.8, 100.0)
+	var top: float = float(spec["top"]) * (1.15 if boosting else 1.0)
 	var force := 0.0
 	var brk := 0.0
 	if engine_on and fuel > 0.0:
@@ -601,7 +609,7 @@ func _physics_process(delta: float) -> void:
 	var spd := linear_velocity.length()
 	if engine_on:
 		fuel = maxf(fuel - (0.0018 + 0.05 * throttle * clampf(spd / 22.0, 0.25, 1.0)) * Game.diff("fuel") * delta * (mass / 2500.0), 0.0)
-		battery = minf(battery + delta * 0.5, 100.0)
+		battery = minf(battery + delta * (1.5 if upgrades.has("alternator") else 0.5), 100.0)
 		if fuel <= 0.0:
 			stop_engine()
 			Game.notify("Out of fuel.")
@@ -609,11 +617,12 @@ func _physics_process(delta: float) -> void:
 		_engine_audio.pitch_scale = lerpf(_engine_audio.pitch_scale, rpm * (1.25 if kind == "sedan" else 1.0), delta * 4.0)
 	odometer += spd * delta
 	var dist := spd * delta
-	parts["tires"] = maxf(parts["tires"] - dist / 1000.0 * 0.5, 0.0)
+	if not upgrades.has("solid_tires"):
+		parts["tires"] = maxf(parts["tires"] - dist / 1000.0 * (0.35 if upgrades.has("offroad_tires") else 0.5), 0.0)
 	parts["engine"] = maxf(parts["engine"] - dist / 1000.0 * 0.3, 0.0)
 	var dv := (_prev_vel - linear_velocity).length()
 	if dv > 7.0 and driver != 0:
-		var dmg := (dv - 7.0) * 2.5 * Game.diff("damage") * (0.4 if upgrades.has("bullbar") else 1.0) * (0.5 if upgrades.has("ram_plow") else 1.0)
+		var dmg := (dv - 7.0) * 2.5 * Game.diff("damage") * (0.4 if upgrades.has("bullbar") else 1.0) * (0.5 if upgrades.has("ram_plow") else 1.0) * (0.75 if upgrades.has("leaf_springs") else 1.0)
 		parts["body"] = maxf(parts["body"] - dmg, 0.0)
 		parts["engine"] = maxf(parts["engine"] - dmg * 0.5, 0.0)
 		Audio.play_at("hit", global_position, 6.0, 0.7)
@@ -632,8 +641,16 @@ func prompt_for(action: String) -> String:
 		"drive": return "[E] Drive %s" % spec["name"] if driver == 0 else "Occupied"
 		"passenger": return "[E] Ride as passenger"
 		"hood": return Mounts.car_hood_prompt(self)
-		"fuel": return "[E] Refuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
+		"fuel":
+			if Data.liquid_kind(Game.equipped()) == "Gasoline":
+				return "Fuel cap   [E] Transfer"
+			return "Fuel cap — %.1f/%d L. Carry a fuel can or a pump nozzle here" % [fuel, int(fuel_capacity())]
 	return ""
+
+func transfer_info(action: String) -> Dictionary:
+	if action == "fuel" and Data.liquid_kind(Game.equipped()) == "Gasoline":
+		return Game.held_panel("Fuel Tank", "Gasoline", fuel, fuel_capacity())
+	return {}
 
 func do_action(action: String, player: Node) -> void:
 	if action == "battery" or action.begins_with("wheel") or action == "hood":
@@ -648,15 +665,15 @@ func do_action(action: String, player: Node) -> void:
 		"hood":
 			Mounts.car_hood(self)
 		"fuel":
-			if Game.equipped() != "fuel_can":
-				Game.notify("Carry a full Fuel Can here to pour it in")
-			elif fuel > fuel_capacity() - 1.0:
+			if Data.liquid_kind(Game.equipped()) != "Gasoline":
+				Game.notify("Carry a fuel can or a pump nozzle here to fill the tank")
+			elif fuel > fuel_capacity() - 0.05:
 				Game.notify("The tank is full")
 			else:
-				Game.remove_item("fuel_can", 1)
-				Game.add_item("fuel_can_empty", 1, true)
-				fuel = minf(fuel + 10.0, fuel_capacity())
+				var mv := Game.pour_held_into(fuel, fuel_capacity())
+				fuel = minf(fuel + mv, fuel_capacity())
 				Audio.play_at("splash", global_position, -8.0, 0.7)
+				Game.notify("Transferred %.2f L — tank %.2f/%.2f L" % [mv, fuel, fuel_capacity()])
 
 func set_paint(i: int) -> void:
 	paint = i
@@ -666,4 +683,18 @@ func paint_palette() -> Array:
 	return COLORS
 
 func upgrade_list() -> Array:
-	return ["engine_tune", "offroad_tires", "big_tank", "bullbar", "turbo", "ram_plow"]
+	return ["engine_tune", "offroad_tires", "big_tank", "bullbar", "turbo", "ram_plow", "supercharger", "nitrous", "suspension",
+		"leaf_springs", "sand_tires", "solid_tires", "alternator"]
+
+## Extra dashboard line (fitted performance parts).
+func dash_extra() -> String:
+	var t := ""
+	if upgrades.has("nitrous"):
+		t += "Nitrous %d%%" % int(nitrous)
+	var fitted := []
+	for u in ["turbo", "supercharger", "suspension", "sand_tires", "solid_tires", "alternator"]:
+		if upgrades.has(u):
+			fitted.append(str(Data.RV_UPGRADES[u]["name"]).split(" (")[0])
+	if not fitted.is_empty():
+		t += ("   " if t != "" else "") + ", ".join(fitted)
+	return t

@@ -67,6 +67,41 @@ func _col(pos: Vector3, size: Vector3, rot := Vector3.ZERO) -> CollisionShape3D:
 	add_child(cs)
 	return cs
 
+## A slatted wooden crate like a fruit or bottle crate: corner posts, rough-sawn slats with real gaps
+## between them on all four sides, a slatted floor and hand-hold cut-outs on the short ends.
+static func slatted_crate(parent: Node3D, size: Vector3, rows := 4) -> void:
+	var wood := Lib.mat("crate_wood", Color(1, 1, 1), 1.6, false, 0.9)
+	var post := Lib.mat("crate_wood", Color(0.82, 0.78, 0.72), 1.6, false, 0.9)
+	var t := 0.018
+	var p := 0.045
+	var hx := size.x * 0.5
+	var hz := size.z * 0.5
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			Lib.box(parent, Vector3(sx * (hx - p * 0.5), size.y * 0.5, sz * (hz - p * 0.5)), Vector3(p, size.y, p), post, false, Vector3.ZERO, 0.006)
+	var slat_h := (size.y - 0.02) / (rows * 1.45)
+	var gap := slat_h * 0.45
+	for r in range(rows):
+		var y := 0.02 + slat_h * 0.5 + r * (slat_h + gap)
+		if r == rows - 1:
+			y = size.y - slat_h * 0.5
+		for sz in [-1.0, 1.0]:
+			Lib.box(parent, Vector3(0, y, sz * (hz - t * 0.5)), Vector3(size.x - 0.004, slat_h, t), wood, false, Vector3(0, 0, randf_range(-0.004, 0.004)), 0.004)
+		for sx in [-1.0, 1.0]:
+			if r == rows - 1:
+				# hand-hold: two short slats leave a gap in the middle of the top board
+				for k in [-1.0, 1.0]:
+					var seg := (size.z - 2.0 * p) * 0.32
+					Lib.box(parent, Vector3(sx * (hx - t * 0.5), y, k * (hz - p - seg * 0.5)), Vector3(t, slat_h, seg), wood, false, Vector3.ZERO, 0.004)
+			else:
+				Lib.box(parent, Vector3(sx * (hx - t * 0.5), y, 0), Vector3(t, slat_h, size.z - 2.0 * p), wood, false, Vector3.ZERO, 0.004)
+	var floor_n := maxi(int(size.x / 0.12), 3)
+	var fw := (size.x - 0.02) / floor_n
+	for i in range(floor_n):
+		Lib.box(parent, Vector3(-hx + 0.01 + fw * (i + 0.5), 0.012, 0), Vector3(fw * 0.78, 0.016, size.z - 0.01), wood, false, Vector3.ZERO, 0.003)
+	for sx in [-1.0, 1.0]:
+		Lib.box(parent, Vector3(sx * (hx - 0.06), 0.0, 0), Vector3(0.05, 0.02, size.z), post, false, Vector3.ZERO, 0.003)
+
 func _solid(pos: Vector3, size: Vector3, m: Material, rot := Vector3.ZERO) -> void:
 	Lib.box(self, pos, size, m, false, rot)
 	_col(pos, size, rot)
@@ -173,14 +208,11 @@ func _build() -> void:
 		"crate":
 			# open-top crate: things you put in it physically sit inside and come along
 			# when you carry the crate
-			_solid(Vector3(0, 0.05, 0), Vector3(1.1, 0.1, 0.7), planks)
+			slatted_crate(self, Vector3(1.1, 0.8, 0.7), 5)
+			_col(Vector3(0, 0.05, 0), Vector3(1.1, 0.1, 0.7))
 			for sx in [-1.0, 1.0]:
-				_solid(Vector3(sx * 0.525, 0.4, 0), Vector3(0.05, 0.8, 0.7), planks)
-				_solid(Vector3(0, 0.4, sx * 0.325), Vector3(1.0, 0.8, 0.05), planks)
-				Lib.box(self, Vector3(sx * 0.53, 0.4, 0), Vector3(0.08, 0.82, 0.74), dark)
-			for y in [0.06, 0.78]:
-				for sz in [-1.0, 1.0]:
-					Lib.box(self, Vector3(0, y, sz * 0.34), Vector3(1.12, 0.06, 0.04), dark)
+				_col(Vector3(sx * 0.525, 0.4, 0), Vector3(0.05, 0.8, 0.7))
+				_col(Vector3(0, 0.4, sx * 0.325), Vector3(1.0, 0.8, 0.05))
 			if persistent and data.has("items") and not (data["items"] as Dictionary).is_empty():
 				call_deferred("_spill_legacy")
 		"planter":
@@ -723,7 +755,7 @@ func _set_on_grill() -> void:
 			continue
 		var s := Game.take_held()
 		var bb: AABB = Items.display_bounds(s["id"])
-		Game.place_item(s["id"], int(s["n"]), Transform3D(global_transform.basis, gp - Vector3(0, bb.position.y, 0)), get_meta("host") if has_meta("host") else null)
+		Game.place_item(s["id"], int(s["n"]), Transform3D(global_transform.basis, gp - Vector3(0, bb.position.y, 0)), get_meta("host") if has_meta("host") else null, [], float(s.get("l", -1.0)))
 		Audio.play_at("pickup", gp, -8.0, 0.8)
 		return
 	Game.notify("The grill is full")

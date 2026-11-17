@@ -82,6 +82,11 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ Put a steering wheel next to the tires.
 - ✅ Remove the trees and grass where all the test items are laid out.
 
+### Requests after 1.8 (addressed in 1.9)
+
+- ✅ Post to `main` is approved; re-release the release APK.
+- ✅ Check all the `.md` files and complete as much of what they list, in as much detail and quality, as possible. 1.9.0 delivers the whole first quality list in `NOTES.md` (aim outline and action hints, litres with a transfer panel and pump nozzle, labelled consumables, slatted crates, textured van interior with contact grime, physical house cupboards, a detailed hand and sleeve, a road-trip objective), the canteen and coffee-flask backlog items, and performance parts for the other cars. What's left is in `todo.md`.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.

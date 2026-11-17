@@ -27,6 +27,13 @@ const ITEMS := {
 	"bottle_empty": {"name": "Empty Bottle", "color": Color("c8e0f0"), "kind": "container"},
 	"fuel_can_empty": {"name": "Empty Fuel Can", "color": Color("903028"), "kind": "container"},
 	"paint_can": {"name": "Spray Paint", "color": Color("4f8fbf"), "kind": "paint"},
+	# Liquid containers measured in litres (see LIQUID): sip, pour and top up a bit at a time
+	"canteen_empty": {"name": "Empty Canteen", "color": Color("6a7a4a"), "kind": "liquid"},
+	"canteen_half": {"name": "Canteen", "color": Color("6a7a4a"), "kind": "liquid"},
+	"canteen_full": {"name": "Canteen", "color": Color("6a7a4a"), "kind": "liquid"},
+	"mod_canteen_2l": {"name": "Field Canteen (2 L)", "color": Color("4a6a8a"), "kind": "liquid"},
+	"mod_coffee_flask_3l": {"name": "Coffee Flask (3 L)", "color": Color("8a3a2a"), "kind": "liquid"},
+	"pump_nozzle": {"name": "Pump Nozzle", "color": Color("d0a020"), "kind": "liquid"},
 	# Van modules: carry them to their spot on the van and press [E] to fit them. [G] takes them out again.
 	"engine_block": {"name": "Engine Block", "color": Color("5a5e64"), "kind": "module"},
 	"steering_wheel": {"name": "Steering Wheel", "color": Color("2a2a2a"), "kind": "module"},
@@ -627,7 +634,10 @@ const VAN_SLOTS := {
 }
 
 ## Upgrades that cars accept at the hood (carry the part there and press [E]).
-const CAR_UPGRADE_ITEMS := {"tune_kit": "engine_tune", "bull_bar": "bullbar", "fuel_tank_xl": "big_tank", "vehicle_turbocharger": "turbo", "vehicle_mod_ram_plow": "ram_plow"}
+const CAR_UPGRADE_ITEMS := {"tune_kit": "engine_tune", "bull_bar": "bullbar", "fuel_tank_xl": "big_tank", "vehicle_turbocharger": "turbo", "vehicle_mod_ram_plow": "ram_plow",
+	"vehicle_supercharger": "supercharger", "vehicle_nos_kit": "nitrous", "vehicle_suspension_part": "suspension", "vehicle_leaf_spring": "leaf_springs",
+	"vehicle_tire_sand": "sand_tires", "vehicle_tire_solid": "solid_tires", "vehicle_alternator": "alternator",
+	"offroad_tire": "offroad_tires"}
 
 ## How each engine, radiator and tire changes the van. Engines: power and top-speed multipliers,
 ## fuel use, heat. Radiators: cooling. Tires: grip on road, grip off road, wear.
@@ -710,6 +720,13 @@ const RV_UPGRADES := {
 	"ram_plow": {"name": "Ram Plow (-50% crash damage)"},
 	"heater": {"name": "Cabin Heater"},
 	"water_tank": {"name": "Water Tank (60 L)"},
+	"supercharger": {"name": "Supercharger (+20% power)"},
+	"nitrous": {"name": "Nitrous Kit (hold Shift / NOS for a burst)"},
+	"suspension": {"name": "Sport Suspension (+12% grip)"},
+	"leaf_springs": {"name": "Heavy Leaf Springs (rides higher, -25% crash damage)"},
+	"sand_tires": {"name": "Sand Tires (+20% grip off the road)"},
+	"solid_tires": {"name": "Solid Tires (never wear)"},
+	"alternator": {"name": "High-Output Alternator (charges 3x faster)"},
 }
 
 const RV_PAINTS := [Color("e9e2cf"), Color("7d9a6a"), Color("c26b3c"), Color("4f6f8f"), Color("d9b44a"), Color("8f3b3b"), Color("3d3d3d"), Color("9a9c98")]
@@ -730,6 +747,83 @@ const DIFFICULTY := {
 	"Normal": {"drain": 1.0, "damage": 1.0, "fuel": 1.0, "loot": 1.0},
 	"Hard": {"drain": 1.5, "damage": 1.6, "fuel": 1.4, "loot": 0.7},
 }
+
+## The road trip's destinations, in order, measured along the road from the starting lot (the
+## road runs toward -Z). The HUD shows the next one in a card; each has a sign and a supply crate.
+const OBJECTIVES := [
+	["Pinecrest Junction", 900.0],
+	["Old Quarry Road", 2200.0],
+	["Copper Creek", 3800.0],
+	["Saltflat Diner", 5600.0],
+	["Redrock Bend", 7600.0],
+	["Lantern Lake", 9800.0],
+	["Hollow Pines", 12200.0],
+	["Grey Mesa", 14800.0],
+	["Frostline Pass", 17600.0],
+]
+
+## Liquids in litres. Each container has a capacity and holds a current amount ("l" on the hand
+## slot, `litres` on the world item). Families swap item id with the level (an empty fuel can
+## and a full one stay different items so recipes and loot keep working); "keep" containers stay
+## the same item when empty; the rest are used up when they run dry.
+## Per litre drunk: "per_l" stat changes.
+const LIQUID := {
+	"fuel_can": {"liq": "Gasoline", "cap": 10.0, "empty": "fuel_can_empty", "full": "fuel_can"},
+	"fuel_can_empty": {"liq": "Gasoline", "cap": 10.0, "empty": "fuel_can_empty", "full": "fuel_can"},
+	"coolant_t1": {"liq": "Coolant", "cap": 5.0},
+	"mod_coolant_jug_20l": {"liq": "Coolant", "cap": 20.0},
+	"canteen_empty": {"liq": "Water", "cap": 1.0, "empty": "canteen_empty", "part": "canteen_half", "full": "canteen_full", "drink": true},
+	"canteen_half": {"liq": "Water", "cap": 1.0, "empty": "canteen_empty", "part": "canteen_half", "full": "canteen_full", "drink": true, "start": 0.5},
+	"canteen_full": {"liq": "Water", "cap": 1.0, "empty": "canteen_empty", "part": "canteen_half", "full": "canteen_full", "drink": true},
+	"mod_canteen_2l": {"liq": "Water", "cap": 2.0, "keep": true, "drink": true, "start": 0.0},
+	"mod_coffee_flask_3l": {"liq": "Coffee", "cap": 3.0, "keep": true, "drink": true, "start": 0.0},
+	"pump_nozzle": {"liq": "Gasoline", "cap": 50.0, "keep": true},
+}
+const SIP := 0.25 # litres per drink from a canteen or flask
+const PER_LITRE := {
+	"Water": {"water": 60.0},
+	"Coffee": {"water": 45.0, "energy": 80.0, "warmth": 40.0},
+}
+const RADIATOR_L := 8.0 # the van's cooling system, in litres
+
+static func is_liquid(id: String) -> bool:
+	return LIQUID.has(id)
+
+static func liquid_cap(id: String) -> float:
+	return float(LIQUID.get(id, {}).get("cap", 0.0))
+
+static func liquid_kind(id: String) -> String:
+	return str(LIQUID.get(id, {}).get("liq", ""))
+
+## How much a container holds when it first appears (in loot, from a recipe, from the cheats menu).
+static func start_litres(id: String) -> float:
+	var d: Dictionary = LIQUID.get(id, {})
+	if d.is_empty():
+		return 0.0
+	if d.has("start"):
+		return float(d["start"])
+	if d.get("empty", "") == id:
+		return 0.0
+	return float(d["cap"])
+
+## The item id that matches a fill level ("" when a use-up container runs dry).
+static func liquid_id(id: String, l: float) -> String:
+	var d: Dictionary = LIQUID.get(id, {})
+	if d.is_empty():
+		return id
+	if l <= 0.005:
+		if d.has("empty"):
+			return d["empty"]
+		return id if d.get("keep", false) else ""
+	if d.has("part") and l < float(d["cap"]) - 0.005:
+		return d["part"]
+	if d.has("full"):
+		return d["full"]
+	return id
+
+static func litre_text(id: String, l: float) -> String:
+	var k := liquid_kind(id)
+	return "%s%.2f/%.2f L" % ["" if l <= 0.005 else k + "  ", maxf(l, 0.0), liquid_cap(id)]
 
 static func item_name(id: String) -> String:
 	return ITEMS[id]["name"] if ITEMS.has(id) else id.capitalize()

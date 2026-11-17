@@ -115,7 +115,7 @@ func start(loaded: Dictionary) -> void:
 		tp.y = gen.height(tp.x, tp.z) + 0.6
 		spawn_vehicle("trl_start", "flatbed", tp, Vector3(0, rv.rotation.y, 0), {})
 	for r in Game.pending_items:
-		var it = Game.spawn_item(str(r["id"]), int(r["n"]), Game.v3(r["pos"]))
+		var it = Game.spawn_item(str(r["id"]), int(r["n"]), Game.v3(r["pos"]), Vector3.ZERO, float(r.get("l", -1.0)))
 		if it:
 			it.global_rotation = Game.v3(r["rot"])
 			if r.has("c"):
@@ -692,6 +692,12 @@ func _instantiate(d: Dictionary) -> void:
 	if not poi.is_empty() and _chunk_of(poi["pos"]) == key:
 		Pois.build(root, poi)
 		_poi_vehicles(poi)
+	# road-trip destinations: a sign and a supply crate at the roadside
+	for i in range(Data.OBJECTIVES.size()):
+		var oz := -float(Data.OBJECTIVES[i][1])
+		var dp := Vector3(gen.road_x(oz), gen.road_h(oz), oz)
+		if _chunk_of(dp) == key:
+			Pois.destination(root, dp, gen.road_dir(oz), i, gen)
 
 # ------------------------------------------------------------------ resources
 func _find_res(key: String) -> Array:

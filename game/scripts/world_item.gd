@@ -7,15 +7,18 @@ var id := ""
 var amount := 1
 var placed := false # set down on purpose: frozen in place
 var contents: Array = [] # a carried crate's contents (unused for most items)
+var litres := -1.0 # what a liquid container holds (Data.LIQUID); -1 for everything else
 var _check := 0.0
 var _attached := false
 var _model: Node3D
 var _hl := false
 var _label: Label3D
 
-func setup(p_id: String, n: int) -> void:
+func setup(p_id: String, n: int, p_litres := -1.0) -> void:
 	id = p_id
 	amount = n
+	if Game.Data.is_liquid(id):
+		litres = p_litres if p_litres >= 0.0 else Game.Data.start_litres(id)
 	collision_layer = 32
 	collision_mask = 1 | 16 | 32
 	mass = 2.0
@@ -51,16 +54,37 @@ func set_highlight(on: bool) -> void:
 	if on == _hl:
 		return
 	_hl = on
-	_label.visible = on
-	Items.set_glow(_model, on)
+	# the name now shows at the cursor and the item gets the white aim outline (player.gd);
+	# the floating 3D label stays only for co-op clients without the cursor HUD
+	_label.visible = false
 
 func get_prompt() -> String:
 	var nm := "%s%s" % [Game.Data.item_name(id), (" ×%d" % amount) if amount > 1 else ""]
+	var held: String = Game.equipped()
+	if held == "pump_nozzle" and Game.Data.liquid_kind(id) == "Gasoline":
+		return "%s   [E] Transfer" % nm
 	if Game.hands_full_for(id):
 		return "%s — hands full ([G] place / [Q] drop what you hold)" % nm
 	return "[E] Pick up %s" % nm
 
+func transfer_info() -> Dictionary:
+	if Game.equipped() == "pump_nozzle" and Game.Data.liquid_kind(id) == "Gasoline":
+		return Game.held_panel(Game.Data.item_name(id), "Gasoline", litres, Game.Data.liquid_cap(id))
+	return {}
+
 func interact(_player: Node) -> void:
+	if Game.equipped() == "pump_nozzle" and Game.Data.liquid_kind(id) == "Gasoline":
+		if Game.held_litres() <= 0.01:
+			Game.notify("The pump is dry")
+			return
+		var mv: float = Game.pour_held_into(litres, Game.Data.liquid_cap(id))
+		if mv <= 0.0:
+			Game.notify("The %s is full" % Game.Data.item_name(id).to_lower())
+			return
+		set_litres(litres + mv)
+		Audio.play_at("splash", global_position, -8.0, 0.8)
+		Game.notify("Transferred %.2f L — %s %.2f/%.2f L" % [mv, Game.Data.item_name(id).to_lower(), litres, Game.Data.liquid_cap(id)])
+		return
 	if Game.pick_up(self):
 		Audio.play_at("pickup", global_position, -4.0)
 
@@ -165,4 +189,20 @@ func save_record() -> Dictionary:
 		r["placed"] = true
 	if not contents.is_empty():
 		r["c"] = contents
+	if litres >= 0.0:
+		r["l"] = snappedf(litres, 0.01)
 	return r
+
+## Change what this container holds (filled from a pump nozzle, poured out); swaps the model
+## when an empty can becomes a full one.
+func set_litres(l: float) -> void:
+	l = clampf(l, 0.0, Game.Data.liquid_cap(id))
+	litres = l
+	var nid: String = Game.Data.liquid_id(id, l)
+	if nid != "" and nid != id:
+		id = nid
+		if _model:
+			_model.queue_free()
+		_model = Items.display_instance(id)
+		add_child(_model)
+	refresh_label()

@@ -42,6 +42,7 @@ var playing := false
 var paused := false
 var ui_open := false
 var god_mode := false
+var objective := 0 # index into Data.OBJECTIVES of the destination you're driving to
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -245,7 +246,7 @@ func count(id: String) -> int:
 	return carried(id) + nearby(id) + (1 if worn.has(id) else 0)
 
 ## Put items into your hands. What doesn't fit is dropped in front of you as a physical pile.
-func add_item(id: String, n: int = 1, quiet := false) -> void:
+func add_item(id: String, n: int = 1, quiet := false, litres := -1.0) -> void:
 	if n <= 0:
 		return
 	var left := n
@@ -263,10 +264,12 @@ func add_item(id: String, n: int = 1, quiet := false) -> void:
 		if left > 0 and slots[i]["id"] == "":
 			var k := mini(lim, left)
 			slots[i] = {"id": id, "n": k}
+			if Data.is_liquid(id):
+				slots[i]["l"] = litres if litres >= 0.0 else Data.start_litres(id)
 			left -= k
 	if left > 0 and player and world:
 		var fwd: Vector3 = -player.camera.global_transform.basis.z * Vector3(1, 0, 1)
-		drop_pile(id, left, player.global_position + fwd.normalized() * 0.7 + Vector3(0, 0.6, 0))
+		drop_pile(id, left, player.global_position + fwd.normalized() * 0.7 + Vector3(0, 0.6, 0), [], litres)
 		if not quiet:
 			notify("Hands full — %d %s set down at your feet" % [left, Data.item_name(id)])
 	if not quiet and left < n:
@@ -334,6 +337,139 @@ func take_held() -> Dictionary:
 		_changed()
 	return s
 
+# ---------------------------------------------------------------- objectives
+## Where the current destination is (on the road), or Vector3.INF once you've reached them all.
+func objective_point() -> Vector3:
+	if objective >= Data.OBJECTIVES.size() or world == null:
+		return Vector3.INF
+	var z: float = -float(Data.OBJECTIVES[objective][1])
+	return Vector3(world.gen.road_x(z), world.gen.road_h(z), z)
+
+## Called a few times a second: arriving near the destination ticks it off.
+func check_objective(pos: Vector3) -> void:
+	var p := objective_point()
+	if p == Vector3.INF:
+		return
+	if Vector2(pos.x - p.x, pos.z - p.z).length() < 45.0:
+		var nm: String = Data.OBJECTIVES[objective][0]
+		objective += 1
+		Audio.play("pickup", 0.0, 0.7)
+		if objective >= Data.OBJECTIVES.size():
+			notify("You made it to %s — the end of the road trip. The road goes on if you do." % nm)
+		else:
+			notify("Reached %s (%d/%d). Next: %s" % [nm, objective, Data.OBJECTIVES.size(), Data.OBJECTIVES[objective][0]])
+
+# ---------------------------------------------------------------- liquids (litres)
+func slot_litres(s: Dictionary) -> float:
+	var id := str(s.get("id", ""))
+	if not Data.is_liquid(id):
+		return 0.0
+	return float(s.get("l", Data.start_litres(id)))
+
+func held_litres() -> float:
+	return slot_litres(held())
+
+## Set what the held container holds. Families swap to their empty/half/full item; a container
+## that is used up (a coolant bottle) is thrown away when it runs dry.
+func set_held_litres(l: float) -> void:
+	var s := held()
+	var id := str(s.get("id", ""))
+	if not Data.is_liquid(id):
+		return
+	l = clampf(l, 0.0, Data.liquid_cap(id))
+	if id == "pump_nozzle" and nozzle_pump and is_instance_valid(nozzle_pump):
+		nozzle_pump.draw_fuel(held_litres() - l)
+		# the hose keeps feeding from the underground tank
+		l = minf(nozzle_pump.pump_left(), Data.liquid_cap(id))
+	var nid := Data.liquid_id(id, l)
+	if nid == "":
+		_empty_slot(selected_slot)
+		notify("The %s is empty — you toss it" % Data.item_name(id))
+	else:
+		slots[selected_slot] = {"id": nid, "n": 1, "l": l}
+		for k in s:
+			if not k in ["id", "n", "l"]:
+				slots[selected_slot][k] = s[k]
+	_changed()
+
+## Pour from the container in your hands into a tank holding `current` of `cap` litres.
+## Returns the litres moved (the caller adds them to its tank).
+func pour_held_into(current: float, cap: float) -> float:
+	var l := held_litres()
+	var mv := minf(l, cap - current)
+	if mv < 0.01:
+		return 0.0
+	set_held_litres(l - mv)
+	return mv
+
+## Fill the container in your hands from a tank holding `available` litres. Returns the litres taken.
+func fill_held_from(available: float) -> float:
+	var id := equipped()
+	if not Data.is_liquid(id):
+		return 0.0
+	var l := held_litres()
+	var mv := minf(available, Data.liquid_cap(id) - l)
+	if mv < 0.01:
+		return 0.0
+	set_held_litres(l + mv)
+	return mv
+
+## The two-gauge transfer panel: what you hold (or the source) and the tank it goes into.
+func transfer_panel(a_name: String, a_liq: String, a_l: float, a_cap: float, b_name: String, b_liq: String, b_l: float, b_cap: float) -> Dictionary:
+	var status := "Ready for transfer!"
+	var ok := true
+	if a_l <= 0.01:
+		status = "%s is empty" % a_name
+		ok = false
+	elif b_l >= b_cap - 0.01:
+		status = "%s is full" % b_name
+		ok = false
+	elif b_liq != "" and a_liq != b_liq:
+		status = "Can't mix %s with %s" % [a_liq.to_lower(), b_liq.to_lower()]
+		ok = false
+	return {"a": [a_name, a_liq, a_l, a_cap], "b": [b_name, b_liq if b_liq != "" else a_liq, b_l, b_cap], "status": status, "ok": ok}
+
+## The panel for the container in your hands going into a tank.
+func held_panel(b_name: String, b_liq: String, b_l: float, b_cap: float) -> Dictionary:
+	var id := equipped()
+	if not Data.is_liquid(id):
+		return {}
+	return transfer_panel(Data.item_name(id), Data.liquid_kind(id), held_litres(), Data.liquid_cap(id), b_name, b_liq, b_l, b_cap)
+
+## Drink a sip from a canteen or flask in your hands.
+func sip() -> bool:
+	var id := equipped()
+	var d: Dictionary = Data.LIQUID.get(id, {})
+	if not d.get("drink", false):
+		return false
+	var l := held_litres()
+	if l <= 0.005:
+		notify("The %s is empty — fill it at the %s" % [Data.item_name(str(d.get("full", id))).to_lower(), "coffee maker" if d["liq"] == "Coffee" else "van's sink"])
+		Audio.play("click", -8.0)
+		return false
+	var take := minf(Data.SIP, l)
+	var per: Dictionary = Data.PER_LITRE.get(d["liq"], {})
+	for k in per:
+		stats[k] = clampf(stats[k] + float(per[k]) * take, 0.0, 100.0)
+	set_held_litres(l - take)
+	Audio.play("eat")
+	notify("Drank %.2f L of %s — %.2f L left" % [take, str(d["liq"]).to_lower(), maxf(l - take, 0.0)])
+	return true
+
+## The fuel pump's nozzle is on a hose: it goes back when you put it down, walk off or save.
+var nozzle_pump: Node = null
+
+func return_nozzle(quiet := false) -> void:
+	for i in range(slots.size()):
+		if slots[i]["id"] == "pump_nozzle":
+			_empty_slot(i)
+			_changed()
+	if nozzle_pump and is_instance_valid(nozzle_pump) and nozzle_pump.has_method("nozzle_returned"):
+		nozzle_pump.nozzle_returned()
+	nozzle_pump = null
+	if not quiet:
+		notify("The nozzle goes back on the pump")
+
 func select_slot(i: int) -> void:
 	selected_slot = wrapi(i, 0, slots.size())
 	hotbar_changed.emit()
@@ -348,7 +484,7 @@ func pick_up(it: Node) -> bool:
 		return false
 	var k := mini(room, int(it.amount))
 	it.amount -= k
-	add_item(id, k, true)
+	add_item(id, k, true, it.litres)
 	# what you just picked up is what you're now holding
 	if equipped() != id:
 		for i in range(slots.size()):
@@ -405,6 +541,8 @@ func diff(key: String) -> float:
 
 # ---------------------------------------------------------------- consume
 func consume(id: String) -> bool:
+	if Data.LIQUID.get(id, {}).get("drink", false) and equipped() == id:
+		return sip()
 	var it: Dictionary = Data.ITEMS.get(id, {})
 	if it.is_empty() or not (it["kind"] in ["food", "medical"]):
 		if not it.is_empty() and it["kind"] == "purify":
@@ -459,6 +597,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	rv_state = {}
 	pending_items = []
 	vehicles = {}
+	objective = 0
 
 func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
@@ -509,6 +648,7 @@ func apply_world_snapshot(d: Dictionary) -> void:
 func save_game() -> bool:
 	if not playing or not world:
 		return false
+	return_nozzle(true)
 	var d := world_snapshot()
 	d["version"] = 1
 	d["v17"] = true
@@ -519,6 +659,7 @@ func save_game() -> bool:
 	d["player_yaw"] = player.rotation.y if player else 0.0
 	d["in_rv"] = player.driving if player else false
 	d["spawn"] = arr(spawn_point) if spawn_point != null else null
+	d["objective"] = objective
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f == null:
 		notify("Could not save game")
@@ -542,8 +683,12 @@ func load_game_data() -> Dictionary:
 	slots = []
 	for s in d.get("slots", []):
 		var rec := {"id": str(s.get("id", "")), "n": int(s.get("n", 0))}
+		if rec["id"] == "pump_nozzle":
+			rec = {"id": "", "n": 0} # the hose springs back to its pump
 		if s.has("c"):
 			rec["c"] = s["c"]
+		if s.has("l"):
+			rec["l"] = float(s["l"])
 		slots.append(rec)
 	_fit_slots()
 	# saves from before 1.3 had an abstract inventory: it becomes a pile next to you
@@ -558,15 +703,16 @@ func load_game_data() -> Dictionary:
 	for k in st:
 		stats[k] = float(st[k])
 	spawn_point = v3(d["spawn"]) if d.get("spawn") != null else null
+	objective = int(d.get("objective", 0))
 	return d
 
 ## Drop a physical item into the world.
-func spawn_item(id: String, n: int, pos: Vector3, impulse := Vector3.ZERO) -> Node:
-	if world == null:
+func spawn_item(id: String, n: int, pos: Vector3, impulse := Vector3.ZERO, litres := -1.0) -> Node:
+	if world == null or id == "" or id == "pump_nozzle":
 		return null
 	var it := RigidBody3D.new()
 	it.set_script(WorldItem)
-	it.setup(id, n)
+	it.setup(id, n, litres)
 	world.add_child(it)
 	it.global_position = pos
 	it.rotation.y = randf() * TAU
@@ -575,13 +721,13 @@ func spawn_item(id: String, n: int, pos: Vector3, impulse := Vector3.ZERO) -> No
 	return it
 
 ## Drop a pile of items near a spot (harvest, butchering, overflow), split into hand-sized piles.
-func drop_pile(id: String, n: int, pos: Vector3, contents: Array = []) -> void:
+func drop_pile(id: String, n: int, pos: Vector3, contents: Array = [], litres := -1.0) -> void:
 	var lim := maxi(Data.stack(id), 1)
 	var piles := 0
 	while n > 0 and piles < 8:
 		var k := mini(n, lim * 2)
 		var off := Vector3(randf_range(-0.35, 0.35), piles * 0.15, randf_range(-0.35, 0.35))
-		var it := spawn_item(id, k, pos + off)
+		var it := spawn_item(id, k, pos + off, Vector3.ZERO, litres)
 		if it and not contents.is_empty():
 			it.contents = contents
 			contents = []
@@ -589,12 +735,12 @@ func drop_pile(id: String, n: int, pos: Vector3, contents: Array = []) -> void:
 		piles += 1
 
 ## Place an item exactly (it stays put). host: a vehicle/trailer to glue it to, or null for the world.
-func place_item(id: String, n: int, xf: Transform3D, host: Node = null, contents: Array = []) -> Node:
-	if world == null:
+func place_item(id: String, n: int, xf: Transform3D, host: Node = null, contents: Array = [], litres := -1.0) -> Node:
+	if world == null or id == "" or id == "pump_nozzle":
 		return null
 	var it := RigidBody3D.new()
 	it.set_script(WorldItem)
-	it.setup(id, n)
+	it.setup(id, n, litres)
 	it.contents = contents
 	world.add_child(it)
 	it.global_transform = xf

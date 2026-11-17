@@ -567,8 +567,19 @@ func _build_exterior() -> void:
 	bm.scale = Vector3.ONE * 1.6
 	_battery_vis.add_child(bm)
 	_part(tray + Vector3(-0.02, 0.15, 0), Vector3(0.5, 0.42, 0.62), "battery")
-	# fuel filler flap just ahead of the rear wheel
-	Lib.box(vis, Vector3(-SKIN - 0.006, 1.12, -1.45), Vector3(0.02, 0.2, 0.2), paint_m, false, Vector3.ZERO, 0.03)
+	# fuel filler just ahead of the rear wheel: a recessed pocket with a round screw cap on a tether,
+	# behind a flap hinged at its front edge that swings open when you bring fuel to it
+	Lib.box(vis, Vector3(-SKIN + 0.01, 1.12, -1.45), Vector3(0.02, 0.19, 0.19), Lib.mat("plastic", Color(0.1, 0.1, 0.1), 4.0, false, 0.6), false, Vector3.ZERO, 0.02)
+	Lib.cyl(vis, Vector3(-SKIN - 0.004, 1.12, -1.45), 0.045, 0.045, 0.03, steel, Vector3(0, 0, PI * 0.5), 16)
+	Lib.cyl(vis, Vector3(-SKIN - 0.02, 1.12, -1.45), 0.038, 0.04, 0.02, Lib.mat("plastic", Color(0.12, 0.12, 0.13), 4.0, false, 0.5), Vector3(0, 0, PI * 0.5), 16)
+	for k in range(8):
+		var a := TAU * k / 8.0
+		Lib.box(vis, Vector3(-SKIN - 0.025, 1.12 + sin(a) * 0.037, -1.45 + cos(a) * 0.037), Vector3(0.012, 0.008, 0.008), Lib.mat("plastic", Color(0.12, 0.12, 0.13), 4.0, false, 0.5))
+	_fuel_flap = Node3D.new()
+	_fuel_flap.position = Vector3(-SKIN - 0.012, 1.12, -1.355)
+	vis.add_child(_fuel_flap)
+	Lib.box(_fuel_flap, Vector3(0, 0, -0.095), Vector3(0.012, 0.2, 0.2), paint_m, false, Vector3.ZERO, 0.03)
+	Lib.box(_fuel_flap, Vector3(0.008, 0, -0.005), Vector3(0.01, 0.06, 0.014), steel)
 	_strip(seam, Vector2(-1.56, 1.01), Vector2(-1.34, 1.01), 0.01, -SKIN - 0.004, -1.0)
 	_part(Vector3(-W * 0.5 - 0.1, 1.12, -1.45), Vector3(0.25, 0.4, 0.4), "fuel")
 	_hood_part = _part(Vector3(0, 1.68, FRONT_Z + 0.85), Vector3(W, 0.3, 0.9), "hood")
@@ -789,6 +800,21 @@ func _wall_x(parent: Node3D, x: float, m: Material, holes: Array, z_a := REAR_Z,
 
 var _doors := {} # action -> {"pivot": Node3D, "open": bool}
 var _battery_vis: Node3D
+var _fuel_flap: Node3D
+var _flap_open := false
+var _flap_until := 0.0
+
+## Swing the fuel flap open while someone with fuel is at the filler, shut again after.
+func _hold_flap_open() -> void:
+	_flap_until = Time.get_ticks_msec() / 1000.0 + 1.2
+	if not _flap_open and _fuel_flap:
+		_flap_open = true
+		create_tween().tween_property(_fuel_flap, "rotation:y", 1.7, 0.35).set_trans(Tween.TRANS_BACK)
+
+func _update_flap() -> void:
+	if _flap_open and _fuel_flap and Time.get_ticks_msec() / 1000.0 > _flap_until:
+		_flap_open = false
+		create_tween().tween_property(_fuel_flap, "rotation:y", 0.0, 0.3)
 
 ## Materials: the bare shell is ribbed sheet metal and primer; fitted panels bring off-white wall
 ## board, vinyl planks, laminate cabinetry and quilted upholstery.
@@ -796,18 +822,18 @@ func _interior_mats() -> Dictionary:
 	return {
 		"bare": Lib.mat("ribbed_metal", Color(0.85, 0.85, 0.85), 1.2, false, 0.6, 0.5),
 		"bare_floor": Lib.mat("ribbed_metal", Color(0.55, 0.55, 0.56), 1.0, false, 0.7, 0.5),
-		"wall": Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8),
+		"wall": Lib.mat("paint_grime", Color(1.0, 0.98, 0.94), 0.9, false, 0.8),
 		"insul": Lib.mat("insulation", Color.WHITE, 1.5, false, 0.6, 0.5),
-		"ceiling": Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9),
+		"ceiling": Lib.mat("plastic", Color(0.95, 0.94, 0.92), 1.5, false, 0.9),
 		"floor": Lib.mat("vinyl", Color.WHITE, 0.9, false, 0.55),
 		"cab": Lib.mat("laminate", Color.WHITE, 1.4, false, 0.45),
-		"cab_trim": Lib.color_mat(Color(0.36, 0.35, 0.34), 0.5),
+		"cab_trim": Lib.mat("plastic", Color(0.4, 0.39, 0.38), 3.0, false, 0.5),
 		"counter": Lib.mat("concrete", Color(0.55, 0.55, 0.56), 1.0, false, 0.35),
 		"fabric": Lib.mat("upholstery", Color.WHITE, 0.45, false, 0.95),
 		"fabric2": Lib.mat("plaid", Color(0.75, 0.75, 0.78), 2.0, false, 0.95),
-		"metal": Lib.color_mat(Color(0.72, 0.72, 0.74), 0.3, 0.8),
-		"plastic": Lib.color_mat(Color(0.14, 0.14, 0.15), 0.55),
-		"black": Lib.color_mat(Color(0.06, 0.06, 0.06), 0.5),
+		"metal": Lib.mat("metal", Color(0.85, 0.85, 0.87), 4.0, false, 0.3, 0.8),
+		"plastic": Lib.mat("plastic", Color(0.17, 0.17, 0.18), 3.0, false, 0.55),
+		"black": Lib.mat("plastic", Color(0.07, 0.07, 0.07), 3.0, false, 0.5),
 	}
 
 ## A cupboard or fridge whose front faces +X, with shelves you can put things on and a
@@ -893,7 +919,7 @@ func _build_interior() -> void:
 	# moulded dashboard, gauges, centre console
 	var dash_c := Vector3(0, FLOOR_Y + 0.75, FRONT_Z + 0.02)
 	Lib.box(vis, dash_c, Vector3(W - 0.15, 0.5, 0.64), M["plastic"], false, Vector3.ZERO, 0.06)
-	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.03), Vector3(W - 0.2, 0.03, 0.58), Lib.color_mat(Color(0.2, 0.2, 0.21), 0.7))
+	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.03), Vector3(W - 0.2, 0.03, 0.58), Lib.mat("plastic", Color(0.23, 0.23, 0.24), 4.0, false, 0.75), false, Vector3.ZERO, 0.012)
 	_shape(dash_c, Vector3(W - 0.15, 0.5, 0.64))
 	var cluster := Lib.box(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.31), Vector3(0.5, 0.18, 0.04), Lib.color_mat(Color(0.05, 0.05, 0.06), 0.3))
 	cluster.rotation.x = -0.3
@@ -913,6 +939,9 @@ func _build_interior() -> void:
 	# light switch
 	Lib.box(vis, Vector3(W * 0.5 - 0.1, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.03, 0.12, 0.08), Lib.color_mat(Color(0.9, 0.9, 0.85)))
 	_part(Vector3(W * 0.5 - 0.12, FLOOR_Y + 1.4, DOOR_Z0 - 0.12), Vector3(0.1, 0.25, 0.2), "lights")
+	# contact shadow and grime where the floor meets the walls, and round the cab footwell
+	Lib.room_grime(vis, Vector3(-W * 0.5 + 0.09, FLOOR_Y + 0.012, REAR_Z + 0.08), Vector3(W * 0.5 - 0.09, FLOOR_Y + 0.012, CAB_Z), 0.3, 0.16)
+	Lib.room_grime(vis, Vector3(-W * 0.5 + 0.1, FLOOR_Y + 0.012, CAB_Z), Vector3(W * 0.5 - 0.1, FLOOR_Y + 0.012, FRONT_Z - 0.3), 0.25, 0.12)
 	_interior_light = Lib.light(vis, Vector3(0, ROOF_Y - 0.3, -0.5), Color(1.0, 0.86, 0.66), 1.4, 6.0, false)
 	_interior_light.visible = false
 	_build_modules(vis, M)
@@ -1930,6 +1959,7 @@ func remote_transform(xf: Transform3D) -> void:
 	_remote_has = true
 
 func _process(delta: float) -> void:
+	_update_flap()
 	if cam_tp.current:
 		var target := global_position + Vector3(0, 2.4, 0)
 		var behind := -global_transform.basis.z
@@ -2095,12 +2125,16 @@ func prompt_for(action: String) -> String:
 				return "Sink — no water tank fitted under the van" + take
 			if held == "bottle_empty":
 				return "[E] Fill the bottle (tank %d/%d L)" % [int(water), int(water_capacity())]
+			if Data.liquid_kind(held) == "Water":
+				return "Sink   [E] Transfer"
 			if held in ["water_clean", "water_dirty"]:
 				return "[E] Pour the water into the tank (%d/%d L)" % [int(water), int(water_capacity())]
 			return "[E] Drink from the tap (tank %d/%d L)%s" % [int(water), int(water_capacity()), take]
 		"coffee":
 			if held == "coffee_beans":
 				return "[E] Brew coffee (uses 1 L from the tank)"
+			if held == "mod_coffee_flask_3l":
+				return "[E] Brew into the flask (1 bean, 1 L of water)" if Game.count("coffee_beans") > 0 else "Coffee maker — set Coffee Beans within reach to fill the flask"
 			return "Coffee maker — hold Coffee Beans to brew%s" % take
 		"radio":
 			return "[E] Radio %s%s" % ["next station / off" if radio_on else "on", take]
@@ -2146,8 +2180,8 @@ func prompt_for(action: String) -> String:
 				if modules.has(hs):
 					return "There's already a %s fitted — [G] with empty hands takes the hood parts out" % Data.VAN_SLOTS[hs]["name"].to_lower()
 				return mount_prompt(hs)
-			if held in ["coolant_t1", "mod_coolant_jug_20l"]:
-				return "[E] Top up the coolant (%d%%, engine %d°C)" % [int(coolant), int(engine_heat)]
+			if Data.liquid_kind(held) == "Coolant":
+				return "Radiator — engine %d°C   [E] Transfer" % int(engine_heat)
 			if held == "paint_can":
 				return "[E] Spray-paint the van"
 			var mp := Mounts.prompt(self, "hood")
@@ -2159,10 +2193,27 @@ func prompt_for(action: String) -> String:
 				out = "   [G] Hoist the engine out" if hslot == "engine" else "   [G] Take out the %s" % Data.item_name(slot_item(hslot))
 			return "[E] Check the van over (%d°C, coolant %d%%)%s" % [int(engine_heat), int(coolant), out]
 		"fuel":
-			if held == "fuel_can":
-				return "[E] Pour in the fuel (%d/%d L)" % [int(fuel), int(fuel_capacity())]
-			return "Fuel cap (%d/%d L) — carry a full Fuel Can here" % [int(fuel), int(fuel_capacity())]
+			if Data.liquid_kind(held) == "Gasoline":
+				_hold_flap_open()
+				return "Fuel cap   [E] Transfer"
+			return "Fuel cap — %.1f/%d L. Carry a fuel can or a pump nozzle here" % [fuel, int(fuel_capacity())]
 	return ""
+
+## The two-gauge transfer panel for what you hold at this hotspot (empty when there's none).
+func transfer_info(action: String) -> Dictionary:
+	var held := Game.equipped()
+	match action:
+		"fuel":
+			if Data.liquid_kind(held) == "Gasoline":
+				return Game.held_panel("Fuel Tank", "Gasoline", fuel, fuel_capacity())
+		"hood":
+			if modules.has("engine") and Data.liquid_kind(held) == "Coolant":
+				return Game.held_panel("Radiator", "Coolant", coolant / 100.0 * Data.RADIATOR_L, Data.RADIATOR_L)
+		"sink":
+			if Data.liquid_kind(held) == "Water" and water_capacity() > 0.0:
+				var p := Game.transfer_panel("Water Tank", "Water", water, water_capacity(), Data.item_name(held), "Water", Game.held_litres(), Data.liquid_cap(held))
+				return p
+	return {}
 
 func do_action(action: String, player: Node) -> void:
 	var held := Game.equipped()
@@ -2195,7 +2246,20 @@ func do_action(action: String, player: Node) -> void:
 		"sink":
 			_use_sink()
 		"coffee":
-			if held != "coffee_beans":
+			if held == "mod_coffee_flask_3l":
+				if Game.count("coffee_beans") <= 0:
+					Game.notify("Set some Coffee Beans within reach first")
+				elif water < 1.0:
+					Game.notify("The water tank is empty")
+				elif Game.held_litres() > Data.liquid_cap(held) - 0.05:
+					Game.notify("The flask is full")
+				else:
+					Game.remove_item("coffee_beans", 1)
+					var got := Game.fill_held_from(1.0)
+					water -= got
+					Audio.play("pickup")
+					Game.notify("Brewed %.2f L into the flask (%.2f/3.00 L)" % [got, Game.held_litres()])
+			elif held != "coffee_beans":
 				Game.notify("Hold Coffee Beans to brew coffee")
 			elif water < 1.0:
 				Game.notify("The water tank is empty")
@@ -2256,7 +2320,7 @@ func do_action(action: String, player: Node) -> void:
 				else:
 					install_module(hs)
 				return
-			if held in ["coolant_t1", "mod_coolant_jug_20l"]:
+			if Data.liquid_kind(held) == "Coolant":
 				_top_up_coolant(held)
 				return
 			if held == "paint_can":
@@ -2268,16 +2332,17 @@ func do_action(action: String, player: Node) -> void:
 				return
 			_report()
 		"fuel":
-			if held != "fuel_can":
-				Game.notify("Carry a full Fuel Can here to pour it in")
-			elif fuel > fuel_capacity() - 1.0:
+			if Data.liquid_kind(held) != "Gasoline":
+				Game.notify("Carry a fuel can or a pump nozzle here to fill the tank")
+			elif fuel > fuel_capacity() - 0.05:
 				Game.notify("The tank is full")
+			elif Game.held_litres() <= 0.01:
+				Game.notify("The %s is empty" % Data.item_name(held).to_lower())
 			else:
-				Game.remove_item("fuel_can", 1)
-				Game.add_item("fuel_can_empty", 1, true)
-				fuel = minf(fuel + 10.0, fuel_capacity())
+				var mv := Game.pour_held_into(fuel, fuel_capacity())
+				fuel = minf(fuel + mv, fuel_capacity())
 				Audio.play_at("splash", global_position, -8.0, 0.7)
-				Game.notify("Refueled: %d L" % int(fuel))
+				Game.notify("Transferred %.2f L — tank %.2f/%.2f L" % [mv, fuel, fuel_capacity()])
 
 ## Hold a cookable item at the stove: it goes onto a free burner.
 func _set_on_burner(_player: Node) -> void:
@@ -2297,7 +2362,7 @@ func _set_on_burner(_player: Node) -> void:
 			continue
 		var s := Game.take_held()
 		var bb: AABB = Items.display_bounds(s["id"])
-		Game.place_item(s["id"], int(s["n"]), global_transform * Transform3D(Basis.IDENTITY, lp - Vector3(0, bb.position.y, 0)), self)
+		Game.place_item(s["id"], int(s["n"]), global_transform * Transform3D(Basis.IDENTITY, lp - Vector3(0, bb.position.y, 0)), self, [], float(s.get("l", -1.0)))
 		Audio.play_at("pickup", global_position, -8.0, 0.8)
 		if not stove_on:
 			Game.notify("Light the stove [E] with an empty hand to start cooking")
@@ -2308,6 +2373,15 @@ func _use_sink() -> void:
 	var held := Game.equipped()
 	if water_capacity() <= 0.0:
 		Game.notify("No water tank is fitted under the van")
+		return
+	if Data.liquid_kind(held) == "Water":
+		var got := Game.fill_held_from(water)
+		if got <= 0.0:
+			Game.notify("The tank is empty" if water < 0.01 else "The %s is full" % Data.item_name(held).to_lower())
+			return
+		water -= got
+		Audio.play_at("splash", global_position, -10.0, 1.4)
+		Game.notify("Transferred %.2f L — %s %.2f/%.2f L" % [got, Data.item_name(Game.equipped()).to_lower(), Game.held_litres(), Data.liquid_cap(Game.equipped())])
 		return
 	if held == "bottle_empty":
 		if water < 1.0:
@@ -2367,16 +2441,21 @@ func _intake_flooded() -> bool:
 	return gen.is_water(p.x, p.z, 0.0) and p.y < gen.water_level(p.x, p.z)
 
 ## Pour coolant in at the hood.
-func _top_up_coolant(held: String) -> void:
-	if coolant >= 99.0 and engine_heat < 60.0:
-		Game.notify("The coolant is full (%d°C)" % int(engine_heat))
+func _top_up_coolant(_held: String) -> void:
+	var cur := coolant / 100.0 * Data.RADIATOR_L
+	if cur >= Data.RADIATOR_L - 0.05:
+		Game.notify("The radiator is full (%.2f/%.2f L, engine %d°C)" % [cur, Data.RADIATOR_L, int(engine_heat)])
 		return
-	Game.remove_item(held, 1)
-	coolant = minf(coolant + (100.0 if held == "mod_coolant_jug_20l" else 50.0), 100.0)
-	engine_heat = minf(engine_heat, 60.0)
-	_overheated = false
+	var mv := Game.pour_held_into(cur, Data.RADIATOR_L)
+	if mv <= 0.0:
+		Game.notify("The bottle is empty")
+		return
+	coolant = minf((cur + mv) / Data.RADIATOR_L * 100.0, 100.0)
+	# fresh coolant pulls the temperature down in proportion to how much went in
+	engine_heat = lerpf(engine_heat, minf(engine_heat, 60.0), clampf(mv / 3.0, 0.2, 1.0))
+	_overheated = engine_heat > 100.0
 	Audio.play_at("splash", global_position, -6.0, 1.2)
-	Game.notify("Coolant topped up — %d%%, engine down to %d°C" % [int(coolant), int(engine_heat)])
+	Game.notify("Transferred %.2f L of coolant — radiator %.2f/%.2f L, engine %d°C" % [mv, cur + mv, Data.RADIATOR_L, int(engine_heat)])
 
 ## The winch hauls a stuck or ditched van back toward the road.
 func _winch_out() -> void:

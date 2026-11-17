@@ -9,6 +9,11 @@ var bars := {}
 var clock: Label
 var info: Label
 var prompt_label: Label
+var aim_name: Label
+var aim_sub: Label
+var aim_info: Label
+var hint_box: VBoxContainer
+var _hint_cache := ""
 var crosshair: Control
 var hotbar_box: HBoxContainer
 var notes: VBoxContainer
@@ -39,6 +44,7 @@ func _ready() -> void:
 	_build_overlays()
 	_build_stats()
 	_build_top_right()
+	_build_objective()
 	_build_center()
 	_build_hotbar()
 	_build_notes()
@@ -122,6 +128,34 @@ func _build_center() -> void:
 	prompt_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	prompt_label.add_theme_constant_override("outline_size", 6)
 	root.add_child(prompt_label)
+	prompt_label.visible = false
+	# name of what you aim at, right under the cursor
+	var aim := VBoxContainer.new()
+	aim.set_anchors_preset(Control.PRESET_CENTER)
+	aim.position = Vector2(-260, 16)
+	aim.custom_minimum_size = Vector2(520, 0)
+	aim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	aim.add_theme_constant_override("separation", 0)
+	root.add_child(aim)
+	aim_name = UI.label("", 17)
+	aim_sub = UI.label("", 14, Color(0.72, 0.92, 1.0))
+	aim_info = UI.label("", 13, Color(0.88, 0.86, 0.8))
+	for l in [aim_name, aim_sub, aim_info]:
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+		l.add_theme_constant_override("outline_size", 5)
+		aim.add_child(l)
+	# context actions on the right: one row per action with its key cap
+	hint_box = VBoxContainer.new()
+	hint_box.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	hint_box.position = Vector2(-430, 30)
+	hint_box.custom_minimum_size = Vector2(400, 0)
+	hint_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+	hint_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint_box.add_theme_constant_override("separation", 6)
+	root.add_child(hint_box)
+	_build_transfer()
 	build_info = UI.label("", 17, Color(0.7, 1.0, 0.75))
 	build_info.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	build_info.position = Vector2(-400, -150)
@@ -186,6 +220,21 @@ func _refresh_hotbar() -> void:
 			t.position = Vector2(6, 6)
 			b.add_child(t)
 			b.tooltip_text = Data.item_name(id)
+			if Data.is_liquid(id):
+				# a thin level gauge along the bottom of the slot
+				var frac := clampf(Game.slot_litres(sl) / maxf(Data.liquid_cap(id), 0.01), 0.0, 1.0)
+				var bg := ColorRect.new()
+				bg.color = Color(0, 0, 0, 0.6)
+				bg.position = Vector2(8, tile - 10)
+				bg.size = Vector2(tile - 16, 5)
+				bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				b.add_child(bg)
+				var fg := ColorRect.new()
+				fg.color = _liquid_color(Data.liquid_kind(id))
+				fg.position = bg.position
+				fg.size = Vector2((tile - 16) * frac, 5)
+				fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				b.add_child(fg)
 		var tag := UI.label(("BAG %d" % (i - Game.BASE_SLOTS + 1)) if i >= Game.BASE_SLOTS else str(i + 1), 11, Color(1, 1, 1, 0.55))
 		tag.position = Vector2(6, 2)
 		b.add_child(tag)
@@ -197,6 +246,8 @@ func _refresh_hotbar() -> void:
 		hotbar_box.add_child(b)
 	var held := Game.equipped()
 	held_label.text = (Data.item_name(held) + ((" ×%d" % int(Game.held()["n"])) if int(Game.held()["n"]) > 1 else "")) if held != "" else "Empty hand"
+	if Data.is_liquid(held):
+		held_label.text += "   " + Data.litre_text(held, Game.held_litres())
 	var worn_txt := []
 	for k in Game.worn:
 		worn_txt.append(Data.item_name(k).split(" (")[0])
@@ -268,7 +319,14 @@ func _draw_compass() -> void:
 		var d := wrapf(ra - heading, -PI, PI)
 		var x := clampf(w * 0.5 + d / 1.2 * w * 0.5, 6, w - 6)
 		compass.draw_rect(Rect2(x - 5, 2, 10, 8), Color(1.0, 0.75, 0.3))
-		compass.draw_string(font, Vector2(x - 12, 40), "RV %dm" % int(to.length()), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.8, 0.4))
+		compass.draw_string(font, Vector2(x - 12, 40), "VAN %dm" % int(to.length()), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.8, 0.4))
+	# the next destination: a white diamond
+	var op := Game.objective_point()
+	if op != Vector3.INF:
+		var to2 := op - p.global_position
+		var d2 := wrapf(atan2(to2.x, -to2.z) - heading, -PI, PI)
+		var x2 := clampf(w * 0.5 + d2 / 1.2 * w * 0.5, 6, w - 6)
+		compass.draw_colored_polygon(PackedVector2Array([Vector2(x2, 2), Vector2(x2 + 6, 9), Vector2(x2, 16), Vector2(x2 - 6, 9)]), Color(1, 1, 1, 0.95))
 	compass.draw_line(Vector2(w * 0.5, 0), Vector2(w * 0.5, 30), Color(1, 1, 1, 0.5), 1.0)
 
 # ------------------------------------------------------------------ update
@@ -293,7 +351,9 @@ func _process(delta: float) -> void:
 		info.text = "%s · %s · %d°C" % [w.gen.biome_name(p.global_position.x, p.global_position.z), Game.weather.capitalize(), int(round(p.effective_temp()))]
 		if Game.wears_flag("altimeter"):
 			info.text += " · Alt %d m" % int(round(p.global_position.y))
-		prompt_label.text = p.prompt
+		_show_prompt(p)
+		_update_objective(p, delta)
+		_show_transfer(p.transfer if not p.driving else {})
 		var b = p.builder
 		if b.active and not p.driving:
 			var pc: String = b.piece()
@@ -311,7 +371,7 @@ func _process(delta: float) -> void:
 			var spd: float = rv.speed_kmh()
 			dash_label.text = "%3d km/h   %s   Fuel %d/%d L   Battery %d%%   Engine %d%%   Tires %d%%%s" % [int(absf(spd)), "R" if spd < -0.5 else "D",
 				int(rv.fuel), int(rv.fuel_capacity()), int(rv.battery), int(rv.parts["engine"]), int(rv.parts["tires"]), "   LIGHTS" if rv.headlights else ""]
-			if rv.has_method("dash_extra"):
+			if rv.has_method("dash_extra") and rv.dash_extra() != "":
 				dash_label.text += "\n" + rv.dash_extra()
 			if not rv.engine_on and p.is_driver:
 				dash_label.text += "\nEngine off — press USE (left click / RT) to start"
@@ -335,6 +395,249 @@ func _process(delta: float) -> void:
 		_icon_dirty = false
 		_icon_timer = 0.5
 		_refresh_hotbar()
+
+# ------------------------------------------------------------------ objective card
+var obj_card: PanelContainer
+var obj_title: Label
+var obj_dist: Label
+var obj_pips: Control
+var _obj_timer := 0.0
+
+func _build_objective() -> void:
+	obj_card = PanelContainer.new()
+	obj_card.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	obj_card.position = Vector2(-300, 74)
+	obj_card.custom_minimum_size = Vector2(282, 0)
+	obj_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.05, 0.06, 0.06, 0.62)
+	sb.set_corner_radius_all(8)
+	sb.border_width_left = 3
+	sb.border_color = Color(1.0, 0.78, 0.35, 0.9)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 10
+	sb.content_margin_top = 7
+	sb.content_margin_bottom = 8
+	obj_card.add_theme_stylebox_override("panel", sb)
+	root.add_child(obj_card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 2)
+	obj_card.add_child(v)
+	v.add_child(UI.label("MAIN OBJECTIVE", 11, Color(1.0, 0.8, 0.45)))
+	obj_title = UI.label("", 17)
+	v.add_child(obj_title)
+	obj_dist = UI.label("", 13, Color(0.85, 0.85, 0.8))
+	v.add_child(obj_dist)
+	obj_pips = Control.new()
+	obj_pips.custom_minimum_size = Vector2(250, 12)
+	obj_pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	obj_pips.draw.connect(func() -> void:
+		var n: int = Data.OBJECTIVES.size()
+		for i in range(n):
+			var r := Rect2(i * 24.0, 3.0, 18.0, 6.0)
+			obj_pips.draw_rect(r, Color(1.0, 0.78, 0.35) if i < Game.objective else (Color(1, 1, 1, 0.75) if i == Game.objective else Color(1, 1, 1, 0.22)), true))
+	v.add_child(obj_pips)
+
+func _update_objective(p: Node3D, delta: float) -> void:
+	_obj_timer -= delta
+	if _obj_timer > 0.0:
+		return
+	_obj_timer = 0.4
+	Game.check_objective(p.global_position)
+	var n: int = Data.OBJECTIVES.size()
+	if Game.objective >= n:
+		obj_title.text = "Free roam — every stop reached"
+		obj_dist.text = "%d/%d" % [n, n]
+	else:
+		var t := Game.objective_point()
+		var dist := Vector2(p.global_position.x - t.x, p.global_position.z - t.z).length()
+		obj_title.text = "Reach %s" % Data.OBJECTIVES[Game.objective][0]
+		obj_dist.text = ("%.1f km" % (dist / 1000.0) if dist >= 1000.0 else "%d m" % int(dist)) + " up the road   %d/%d" % [Game.objective, n]
+	obj_pips.queue_redraw()
+
+# ------------------------------------------------------------------ liquid transfer panel
+var transfer_panel: PanelContainer
+var _tp_cols: Array = [] # [name, liquid, gauge, amount] for each side
+var _tp_status: Label
+
+static func _liquid_color(liq: String) -> Color:
+	match liq:
+		"Gasoline": return Color(0.95, 0.72, 0.2)
+		"Coolant": return Color(0.3, 0.9, 0.45)
+		"Water": return Color(0.4, 0.7, 1.0)
+		"Coffee": return Color(0.65, 0.42, 0.25)
+	return Color(0.8, 0.8, 0.8)
+
+func _build_transfer() -> void:
+	transfer_panel = PanelContainer.new()
+	transfer_panel.set_anchors_preset(Control.PRESET_CENTER)
+	transfer_panel.position = Vector2(-230, 70)
+	transfer_panel.custom_minimum_size = Vector2(460, 0)
+	transfer_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.07, 0.07, 0.78)
+	sb.set_corner_radius_all(8)
+	sb.border_color = Color(1, 1, 1, 0.18)
+	sb.set_border_width_all(1)
+	sb.set_content_margin_all(12)
+	transfer_panel.add_theme_stylebox_override("panel", sb)
+	root.add_child(transfer_panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	transfer_panel.add_child(v)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	v.add_child(h)
+	for i in range(2):
+		if i == 1:
+			var arrow := UI.label("➜", 26, Color(1, 1, 1, 0.7))
+			arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			h.add_child(arrow)
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.add_theme_constant_override("separation", 3)
+		h.add_child(col)
+		var nm := UI.label("", 16)
+		var liq := UI.label("", 13, Color(0.8, 0.8, 0.75))
+		var gauge := ProgressBar.new()
+		gauge.show_percentage = false
+		gauge.custom_minimum_size = Vector2(0, 12)
+		var amt := UI.label("", 15)
+		for c in [nm, liq, gauge, amt]:
+			col.add_child(c)
+		_tp_cols.append([nm, liq, gauge, amt])
+	_tp_status = UI.label("", 15, Color(0.55, 1.0, 0.6))
+	_tp_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(_tp_status)
+	transfer_panel.visible = false
+
+func _show_transfer(t: Dictionary) -> void:
+	transfer_panel.visible = not t.is_empty()
+	if t.is_empty():
+		return
+	for i in range(2):
+		var side: Array = t["a"] if i == 0 else t["b"]
+		var col: Array = _tp_cols[i]
+		col[0].text = str(side[0])
+		col[1].text = str(side[1])
+		var g: ProgressBar = col[2]
+		g.max_value = maxf(float(side[3]), 0.01)
+		g.value = float(side[2])
+		var fill := StyleBoxFlat.new()
+		fill.bg_color = _liquid_color(str(side[1]))
+		fill.set_corner_radius_all(3)
+		g.add_theme_stylebox_override("fill", fill)
+		col[3].text = "%.2f/%.2f L" % [float(side[2]), float(side[3])]
+	_tp_status.text = str(t["status"])
+	_tp_status.add_theme_color_override("font_color", Color(0.55, 1.0, 0.6) if t.get("ok", false) else Color(1.0, 0.65, 0.45))
+
+# ------------------------------------------------------------------ aim label and action hints
+static var _re_key: RegEx
+static var _re_gap: RegEx
+
+## Split a prompt such as "[E] Pick up Fuel Can   [G] Place   Fuel cap (20/50 L) — carry a can"
+## into a title ("Fuel cap"), info lines, and action rows ([key, text]).
+static func parse_prompt(p: String) -> Dictionary:
+	if _re_key == null:
+		_re_key = RegEx.create_from_string("\\[([^\\]]+)\\]")
+		_re_gap = RegEx.create_from_string("\\s{3,}")
+	var rows: Array = []
+	var info: Array = []
+	var title := ""
+	for line in p.split("\n", false):
+		for seg in _re_gap.sub(line, "\u0001", true).split("\u0001", false):
+			seg = seg.strip_edges()
+			if seg == "":
+				continue
+			var dash := seg.find(" — ")
+			if dash > 0 and _re_key.search(seg.substr(0, dash)) == null:
+				var head := seg.substr(0, dash).strip_edges()
+				if title == "":
+					title = head
+				else:
+					info.append(head)
+				seg = seg.substr(dash + 3).strip_edges()
+			var ms := _re_key.search_all(seg)
+			if ms.is_empty():
+				if title == "":
+					title = seg
+				else:
+					info.append(seg)
+				continue
+			var m: RegExMatch = ms[0]
+			if ms.size() == 1 and (m.get_start() == 0 or m.get_end() == seg.length()):
+				var txt := (seg.substr(0, m.get_start()) + seg.substr(m.get_end())).strip_edges()
+				txt = txt.trim_suffix("!").strip_edges()
+				if txt.length() > 0:
+					txt = txt[0].to_upper() + txt.substr(1)
+				rows.append([m.get_string(1), txt])
+			else:
+				info.append(seg)
+	return {"title": title, "info": info, "rows": rows}
+
+static func key_cap_text(k: String) -> String:
+	if Game.use_touch():
+		# name the on-screen button instead of the keyboard key
+		var tmap := {"Use": "USE", "USE": "USE", "G": "PLACE", "R": "ROT", "R/ROT": "ROT", "Space / JUMP": "JUMP", "B": "BUILD", "B/BUILD": "BUILD", "Q": "THROW"}
+		return tmap.get(k, k)
+	var map := {"Use": "LMB", "USE": "LMB", "Space / JUMP": "Space"}
+	return map.get(k, k)
+
+func _show_prompt(p: Node) -> void:
+	var pr: Dictionary = parse_prompt(p.prompt)
+	var nm: String = p.look_name
+	var title: String = pr["title"]
+	if nm == "":
+		nm = title
+	var info: Array = pr["info"].duplicate()
+	if title != "" and title != nm and not nm.to_lower() in title.to_lower():
+		info.push_front(title)
+	aim_name.text = nm
+	aim_sub.text = p.look_sub
+	aim_info.text = "\n".join(info)
+	var key := JSON.stringify(pr["rows"])
+	if key == _hint_cache:
+		return
+	# on phones the right edge holds the action buttons: list the hints just right of the crosshair
+	hint_box.set_anchors_preset(Control.PRESET_CENTER if Game.use_touch() else Control.PRESET_CENTER_RIGHT)
+	hint_box.position = Vector2(-460, 40) if Game.use_touch() else Vector2(-430, 30)
+	_hint_cache = key
+	for ch in hint_box.get_children():
+		ch.queue_free()
+	for r in pr["rows"]:
+		hint_box.add_child(_hint_row(str(r[1]), key_cap_text(str(r[0]))))
+
+func _hint_row(text: String, key: String) -> Control:
+	var h := HBoxContainer.new()
+	h.alignment = BoxContainer.ALIGNMENT_END
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_theme_constant_override("separation", 10)
+	var l := UI.label(text, 17)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", 5)
+	l.custom_minimum_size = Vector2(0, 30)
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	h.add_child(l)
+	var cap := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.08, 0.72)
+	sb.border_color = Color(0.95, 0.95, 0.92, 0.9)
+	sb.set_border_width_all(2)
+	sb.border_width_bottom = 3
+	sb.set_corner_radius_all(5)
+	sb.content_margin_left = 8
+	sb.content_margin_right = 8
+	sb.content_margin_top = 1
+	sb.content_margin_bottom = 1
+	cap.add_theme_stylebox_override("panel", sb)
+	cap.custom_minimum_size = Vector2(30, 30)
+	var kl := UI.label(key, 15)
+	kl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	kl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cap.add_child(kl)
+	h.add_child(cap)
+	return h
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):

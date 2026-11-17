@@ -733,3 +733,209 @@ def rug_woven():
 
 
 run([rug_persian, rug_braided, rug_wave, cowhide, rug_woven])
+
+
+# --- 1.9 quality pass: labels, plastics, grime, furniture wood, tiles ------
+def _font(size, bold=True):
+    from PIL import ImageFont
+    for path in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                 "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"]:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default(size=size)
+
+
+# Our own made-up brands. One label per row of the atlas: (brand, product, background, ink, accent, motif)
+LABELS = [
+    ("PRAIRIE GOLD", "Baked Beans in Sauce", "c8902a", "3a1a0a", "8a2f22", "beans"),
+    ("FIZZWELL", "Classic Cola", "b8241e", "f6f0e4", "f0c040", "stripes"),
+    ("CLEARSPRING", "Mountain Water 500 ml", "e8f2f8", "1e4a7a", "4a9ad8", "peaks"),
+    ("ROADSIDE ROAST", "Dark Coffee", "3a2416", "e8d0a0", "c07a3a", "sun"),
+    ("KESTREL", "Spray Enamel  400 ml", "202428", "f0f0f0", "e05a20", "bird"),
+    ("RIDGELINE", "Peach Halves in Syrup", "f0a050", "4a2010", "6a8a30", "peach"),
+    ("HOTROD", "Franks  8 Count", "d8c8a0", "8a1a12", "c04020", "flames"),
+    ("TUNDRA", "Engine Coolant  Ready Mix", "2aa050", "ffffff", "103a20", "drops"),
+    ("NUTHOUSE", "Roasted Salted Cashews", "d8b070", "2a2a5a", "2a4a8a", "beans"),
+    ("MOCHA COLA", "Coffee Cola", "5a3220", "f0e0c8", "e8d8c0", "sun"),
+    ("BYTE", "Digital Soda", "1a8ad8", "ffffff", "f0f0f0", "stripes"),
+    ("MATRIX", "Lime Cola", "0e140e", "40e060", "20a040", "stripes"),
+    ("WHISKERS", "Feline Feast  Fish Supper", "8a4aa0", "fff4c0", "f0d040", "drops"),
+    ("CANINE CHOW", "Beef Dinner for Dogs", "a05a20", "fff8e8", "f0e8d0", "peaks"),
+    ("BERRYPATCH", "Wild Berry Juice", "6a1a50", "f8e0f0", "c04090", "beans"),
+    ("CRIMSON CHAOS", "Energy Drink", "1a1a1a", "e02030", "b01020", "flames"),
+]
+
+
+def labels():
+    from PIL import ImageDraw
+    rows = len(LABELS)
+    w, h = 1024, 128
+    img = Image.new("RGB", (w, h * rows))
+    rng = np.random.default_rng(900)
+    for i, (brand, product, bg, ink, acc, motif) in enumerate(LABELS):
+        tile = Image.new("RGB", (w, h), "#" + bg)
+        d = ImageDraw.Draw(tile)
+        # accent bands top and bottom
+        d.rectangle([0, 0, w, 10], fill="#" + acc)
+        d.rectangle([0, h - 10, w, h], fill="#" + acc)
+        # the label wraps round the can: print the design twice so there's always a face toward you
+        for rep in range(2):
+            x0 = rep * w // 2
+            xo = x0 + 70
+            if motif == "stripes":
+                for k in range(6):
+                    d.polygon([(xo + 300 + k * 30, 10), (xo + 318 + k * 30, 10), (xo + 258 + k * 30, h - 10), (xo + 240 + k * 30, h - 10)], fill="#" + acc)
+            elif motif == "peaks":
+                d.polygon([(xo + 330, h - 12), (xo + 380, 40), (xo + 430, h - 12)], fill="#" + acc)
+                d.polygon([(xo + 380, 40), (xo + 395, 62), (xo + 365, 62)], fill="#ffffff")
+            elif motif == "sun":
+                d.ellipse([xo + 340, 30, xo + 410, 100], fill="#" + acc)
+            elif motif == "bird":
+                d.polygon([(xo + 330, 70), (xo + 380, 40), (xo + 430, 60), (xo + 380, 55)], fill="#" + acc)
+            elif motif == "peach":
+                d.ellipse([xo + 340, 34, xo + 410, 104], fill="#e86a30")
+                d.ellipse([xo + 378, 22, xo + 404, 40], fill="#" + acc)
+            elif motif == "flames":
+                for k in range(5):
+                    d.polygon([(xo + 320 + k * 22, h - 12), (xo + 331 + k * 22, 40 + (k % 2) * 18), (xo + 342 + k * 22, h - 12)], fill="#" + acc)
+            elif motif == "drops":
+                for k in range(3):
+                    cx = xo + 340 + k * 34
+                    d.ellipse([cx, 58, cx + 24, 86], fill="#" + acc)
+                    d.polygon([(cx + 2, 66), (cx + 12, 40), (cx + 22, 66)], fill="#" + acc)
+            elif motif == "beans":
+                for k in range(7):
+                    cx = xo + 330 + (k % 4) * 22
+                    cy = 50 + (k // 4) * 24
+                    d.ellipse([cx, cy, cx + 20, cy + 14], fill="#" + acc)
+            d.text((x0 + 22, 24), brand, font=_font(36), fill="#" + ink)
+            d.text((x0 + 24, 72), product, font=_font(21, False), fill="#" + ink)
+        arr = np.asarray(tile).astype(np.float64) / 255.0
+        # print wear: faint scuffs and fading
+        scuff = band(128, 20, 60, 901 + i)
+        scuff = np.tile(scuff, (1, 8))[:h, :w]
+        arr *= (0.9 + 0.1 * scuff)[..., None]
+        img.paste(Image.fromarray(np.clip(arr * 255, 0, 255).astype(np.uint8)), (0, i * h))
+    img.save(os.path.join(OUT, "labels.png"), optimize=True)
+
+
+def plastic():
+    fine = band(N, 200, 512, 910)
+    large = spectral(N, 2.0, 911)
+    col = np.ones((N, N, 3)) * (0.86 + 0.08 * large + 0.04 * fine)[..., None]
+    save_rgb("plastic", col)
+    save_normal("plastic", fine * 0.3, 2)
+
+
+def paint_grime():
+    """Off-white painted sheet metal with road grime, drip streaks, scratches and dirt."""
+    large = spectral(N, 1.9, 920)
+    grime = np.clip((spectral(N, 1.5, 921) - 0.5) * 2.0, 0, 1)
+    streaks = band(N, 3, 50, 922, aniso=(1.0, 20.0))
+    scratches = np.clip((band(N, 200, 512, 923, aniso=(12.0, 1.0)) - 0.82) * 6, 0, 1)
+    speck = np.clip((band(N, 300, 512, 924) - 0.85) * 5, 0, 1)
+    base = np.ones((N, N, 3)) * np.array(rgb("ecebe6"))
+    base *= (0.93 + 0.07 * large)[..., None]
+    base = lerp(base, np.array(rgb("7a6e5c")), np.clip(grime * 0.45 + np.clip(streaks - 0.62, 0, 1) * 1.4, 0, 0.7))
+    base = lerp(base, np.array(rgb("5a5248")), speck * 0.6)
+    base = lerp(base, np.array(rgb("9a9a98")), scratches * 0.7)
+    save_rgb("paint_grime", base)
+    save_normal("paint_grime", large * 0.2 - scratches * 0.4, 3)
+
+
+def wood_grain():
+    """Furniture-grade oak veneer: long, gently wavering grain lines, pores and soft figure."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    warp = spectral(N, 2.4, 930, aniso=(6.0, 1.0)) * 0.35
+    lines = np.sin((yy + warp) * np.pi * 2 * 18)
+    lines = 0.5 + 0.5 * np.sign(lines) * np.abs(lines) ** 3
+    streak = band(N, 6, 90, 933, aniso=(24.0, 1.0))
+    pores = band(N, 150, 500, 931, aniso=(20.0, 1.0))
+    figure = spectral(N, 1.8, 932, aniso=(4.0, 1.0))
+    t = 0.25 * lines + 0.35 * streak + 0.15 * pores + 0.25 * figure
+    col = ramp(t, [(0, rgb("7a5232")), (0.45, rgb("a07448")), (0.8, rgb("ba8e5c")), (1, rgb("cfa474"))])
+    save_rgb("wood_grain", col)
+    save_normal("wood_grain", streak * 0.25 + pores * 0.3, 3)
+    # upright panels (doors, cupboard sides) want the grain running up and down
+    save_rgb("wood_grain_v", np.transpose(col, (1, 0, 2)))
+    save_normal("wood_grain_v", np.transpose(streak * 0.25 + pores * 0.3), 3)
+
+
+def tiles_cracked():
+    """Grey concrete floor tiles with grout lines, hairline cracks, chips and dirt in the corners."""
+    yy, xx = np.mgrid[0:N, 0:N]
+    n = 4
+    s = N // n
+    grout = ((yy % s) < 6) | ((xx % s) < 6)
+    rng = np.random.default_rng(940)
+    tint = rng.uniform(0.85, 1.08, size=(n, n))[yy // s, xx // s]
+    large = spectral(N, 1.8, 941)
+    fine = band(N, 150, 512, 942)
+    cr = band(N, 8, 40, 943)
+    cracks = np.abs(cr - 0.5) < 0.006
+    dirt = np.clip((spectral(N, 1.4, 944) - 0.55) * 2.5, 0, 1)
+    col = ramp(0.5 * large + 0.5 * fine, [(0, rgb("75736e")), (1, rgb("b5b1a8"))]) * tint[..., None]
+    col = lerp(col, np.array(rgb("4a453c")), dirt * 0.55)
+    col[cracks] *= 0.45
+    col[grout] = np.array(rgb("4a4842")) * (0.8 + 0.3 * fine[grout])[..., None]
+    save_rgb("tiles_cracked", col)
+    h = fine * 0.3
+    h[grout] = -0.6
+    h[cracks] = -0.4
+    save_normal("tiles_cracked", h, 6)
+
+
+def seat_fabric():
+    """Woven automotive seat cloth: a fine herringbone in charcoal and blue-grey."""
+    yy, xx = np.mgrid[0:N, 0:N]
+    k = 128
+    herring = np.sin((xx + np.where(((yy // 16) % 2) == 0, yy, -yy)) / N * 2 * np.pi * k)
+    fine = band(N, 300, 512, 950)
+    large = spectral(N, 1.8, 951)
+    t = 0.45 * (herring * 0.5 + 0.5) + 0.3 * fine + 0.25 * large
+    col = ramp(t, [(0, rgb("2a2e34")), (0.6, rgb("4a5260")), (1, rgb("6a7280"))])
+    save_rgb("seat_fabric", col)
+    save_normal("seat_fabric", herring * 0.3 + fine * 0.3, 4)
+
+
+def crate_wood():
+    """Rough-sawn pine for slatted crates: saw marks, knots and grey weathering."""
+    yy, xx = np.mgrid[0:N, 0:N] / N
+    grain = band(N, 4, 60, 960, aniso=(1.0, 16.0))
+    saw = np.sin(yy * np.pi * 160 + 3 * spectral(N, 2.0, 961)) * 0.5 + 0.5
+    weather = spectral(N, 1.6, 962)
+    knots = np.zeros((N, N))
+    rng = np.random.default_rng(963)
+    for _ in range(5):
+        cx, cy = rng.uniform(0, 1, 2)
+        d = np.sqrt(((xx - cx + 0.5) % 1 - 0.5) ** 2 * 4 + ((yy - cy + 0.5) % 1 - 0.5) ** 2)
+        knots = np.maximum(knots, np.clip(1 - d * 30, 0, 1))
+    t = 0.6 * grain + 0.15 * saw + 0.25 * weather
+    col = ramp(t, [(0, rgb("8a6a44")), (0.5, rgb("c09a68")), (1, rgb("dcc090"))])
+    col = lerp(col, np.array(rgb("8a8478")), np.clip(weather - 0.55, 0, 1) * 1.2)
+    col = lerp(col, np.array(rgb("4a2e18")), knots)
+    save_rgb("crate_wood", col)
+    save_normal("crate_wood", grain * 0.3 + saw * 0.15 - knots * 0.4, 5)
+
+
+run([labels, plastic, paint_grime, wood_grain, tiles_cracked, seat_fabric, crate_wood])
+
+
+def grime_edge():
+    """Contact-shadow and grime strip for corners: dark at the wall (v=0), fading out (v=1)."""
+    w, h = 512, 128
+    yy, xx = np.mgrid[0:h, 0:w]
+    v = yy / (h - 1)
+    big = band(512, 2, 24, 970)[:h, :w]
+    fine = band(512, 40, 200, 971)[:h, :w]
+    fade = (1 - v) ** 2.2
+    a = np.clip(fade * (0.55 + 0.35 * big + 0.15 * fine) + np.clip(fine - 0.75, 0, 1) * fade * 0.8, 0, 0.9)
+    rgba = np.zeros((h, w, 4))
+    rgba[..., 0] = 0.09 + 0.05 * big
+    rgba[..., 1] = 0.075 + 0.04 * big
+    rgba[..., 2] = 0.06
+    rgba[..., 3] = a
+    save_rgba("grime_edge", rgba)
+
+
+run([grime_edge])

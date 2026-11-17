@@ -14,10 +14,10 @@ const TABLES := {
 		["tinned_hotdogs", 1, 2], ["can_of_cashews", 1, 2], ["peaches_oreilly", 1, 2], ["berry_juice", 1, 2], ["mocha_cola", 1, 2],
 		["emergency_ration_pack", 1, 1], ["jason_s_choccy_block", 1, 2]],
 	"backroom": [["multi_tool_wrench", 1, 1], ["saw", 1, 1], ["metal_hammer", 1, 1], ["sledge_hammer", 1, 1], ["elec_circuit_board", 1, 2], ["elec_fuse", 1, 3], ["elec_relay_switch", 1, 2], ["elec_microchip", 1, 2], ["elec_copper_spool", 1, 1], ["industrial_solvent", 1, 1], ["brake_fluid", 1, 1], ["coolant_t1", 1, 1], ["mod_coolant_jug_20l", 1, 1], ["hazard_triangle", 1, 1], ["construction_clothes", 1, 1], ["tactical_headlamp", 1, 1], ["mod_weather_station", 1, 1], ["mod_retro_gps", 1, 1], ["fire_axe", 1, 1], ["toolkit", 1, 1], ["engine_parts", 1, 2], ["car_battery", 1, 1], ["scrap", 2, 5], ["rope", 1, 3], ["fuel_can", 1, 1],
-		["wire", 1, 3], ["bolts", 3, 8], ["pipe", 1, 2], ["fuel_can_empty", 1, 1], ["headlight", 1, 1], ["water_tank", 1, 1], ["tune_kit", 1, 1],
+		["wire", 1, 3], ["bolts", 3, 8], ["pipe", 1, 2], ["fuel_can_empty", 1, 1], ["canteen_empty", 1, 1], ["headlight", 1, 1], ["water_tank", 1, 1], ["tune_kit", 1, 1],
 		["duct_tape", 1, 2], ["crowbar", 1, 1], ["tire", 1, 1]],
 	"kitchen": [["kitchen_knife", 1, 1], ["camp_cast_iron_skillet", 1, 1], ["camp_cooking_pot", 1, 1], ["camp_coffee_percolator", 1, 1], ["camp_insulated_thermos", 1, 1], ["salvage_bent_spoon", 1, 3], ["sterling_organic_milk", 1, 1], ["spoiled_milk", 1, 1], ["carrot", 1, 3], ["corn_cob", 1, 2], ["empty_glass_jar", 1, 2], ["mocha_cola", 1, 1], ["tommy_s_crunch", 1, 1], ["feline_feast_cat_food", 1, 2], ["canned_food", 1, 3], ["water_clean", 1, 2], ["coffee_beans", 1, 3], ["seeds_potato", 1, 2], ["seeds_tomato", 1, 2], ["soda", 1, 2],
-		["stove_unit", 1, 1], ["sink_unit", 1, 1], ["coffee_maker", 1, 1], ["fridge_unit", 1, 1], ["kitchen_unit", 1, 1], ["bottle_empty", 1, 2], ["glass", 1, 1],
+		["stove_unit", 1, 1], ["sink_unit", 1, 1], ["coffee_maker", 1, 1], ["fridge_unit", 1, 1], ["kitchen_unit", 1, 1], ["bottle_empty", 1, 2], ["glass", 1, 1], ["mod_coffee_flask_3l", 1, 1], ["canteen_empty", 1, 1],
 		["bread", 1, 1], ["apple", 1, 3], ["instant_noodles", 1, 2], ["chips", 1, 1], ["table", 1, 1], ["tinned_hotdogs", 1, 1], ["peaches_oreilly", 1, 1], ["berry_juice", 1, 1]],
 	"wardrobe": [["ripped_t_shirt", 1, 1], ["survivor_clothes", 1, 1], ["red_jacket", 1, 1], ["blue_jacket", 1, 1], ["leather_vest", 1, 1], ["gear_wool_poncho", 1, 1], ["gear_rain_poncho", 1, 1], ["brown_rucksack", 1, 1], ["hiking_backpack", 1, 1], ["makeshift_bag", 1, 1], ["nav_wristwatch", 1, 1], ["salvage_wire_hanger", 1, 3], ["heavy_canvas", 1, 2], ["camp_canvas_bedroll", 1, 1], ["mod_rug_woven", 1, 1], ["gear_sandstorm_goggles", 1, 1], ["cloth", 2, 5], ["rope", 1, 2], ["bandage", 1, 2], ["jacket", 1, 1], ["medkit", 1, 1], ["foam", 1, 3], ["mattress", 1, 1],
 		["cupboard_unit", 1, 1], ["overhead_unit", 1, 1], ["bed_frame", 1, 1], ["rug", 1, 1]],
@@ -36,7 +36,7 @@ const TABLES := {
 		["car_seat", 1, 1], ["steering_wheel", 1, 1], ["headlight", 1, 1], ["radio", 1, 1], ["wire", 1, 2], ["glass", 1, 1], ["fuel_can_empty", 1, 1],
 		["duct_tape", 1, 1], ["energy_bar", 1, 2], ["chips", 1, 1], ["vehicle_tow_hitch", 1, 1], ["vehicle_mod_mud_flaps", 1, 1], ["coolant_t1", 1, 1]],
 	"camp": [["camp_folding_chair", 1, 1], ["camp_canvas_bedroll", 1, 1], ["deployable_tarp", 1, 1], ["camp_folding_lantern", 1, 1], ["camp_cast_iron_skillet", 1, 1], ["camp_cooking_pot", 1, 1], ["camp_coffee_percolator", 1, 1], ["camp_spork", 1, 2], ["camp_insulated_thermos", 1, 1], ["camp_waterproof_matches", 1, 2], ["camp_handcrank_radio", 1, 1], ["torch", 1, 1], ["stone_hatchet", 1, 1], ["machete", 1, 1], ["combat_knife", 1, 1], ["compound_bow", 1, 1], ["hiking_backpack", 1, 1], ["expedition_pack", 1, 1], ["military_backpack", 1, 1], ["nav_survival_watch", 1, 1], ["nav_pocket_compass", 1, 1], ["nav_paper_roadmap", 1, 1], ["hunt_sinew_cord", 1, 2], ["hunt_bone_needle", 1, 2], ["hunt_deer_antlers", 1, 1], ["hunt_predator_skull", 1, 1], ["gear_wool_poncho", 1, 1], ["gear_space_blanket", 1, 1], ["water_purification_tablets", 1, 2], ["emergency_ration_pack", 1, 1], ["mod_decor_dreamcatcher", 1, 1], ["rope", 1, 3], ["cloth", 1, 3], ["arrow", 3, 8], ["bow", 1, 1], ["canned_food", 1, 2], ["fishing_rod", 1, 1], ["feather", 2, 4],
-		["bottle_empty", 1, 2], ["foam", 1, 2], ["toilet_unit", 1, 1], ["jerky", 1, 2], ["binoculars", 1, 1], ["chair", 1, 1]],
+		["bottle_empty", 1, 2], ["foam", 1, 2], ["toilet_unit", 1, 1], ["canteen_half", 1, 1], ["canteen_full", 1, 1], ["mod_canteen_2l", 1, 1], ["jerky", 1, 2], ["binoculars", 1, 1], ["chair", 1, 1]],
 	"farm": [["carrot_seeds", 1, 3], ["corn_seeds", 1, 3], ["carrot", 1, 4], ["corn_cob", 1, 3], ["heavy_canvas", 1, 2], ["animal_fat", 1, 2], ["sterling_organic_milk", 1, 2], ["saw", 1, 1], ["stone_pickaxe", 1, 1], ["canine_chow_dog_food", 1, 2], ["seasoned_hardwood", 1, 3], ["cured_leather", 1, 2], ["mod_rug_cowhide", 1, 1], ["camp_folding_lantern", 1, 1], ["hunt_wolf_pelt", 1, 1], ["saltpeter", 1, 3], ["charcoal", 1, 3], ["seeds_potato", 1, 3], ["seeds_tomato", 1, 3], ["seeds_coffee", 1, 1], ["potato", 1, 4], ["fiber", 2, 6], ["rope", 1, 2], ["hide", 1, 2],
 		["pipe", 1, 2], ["water_tank", 1, 1], ["bed_frame", 1, 1], ["wood", 2, 3], ["bolts", 2, 6], ["apple", 2, 5], ["bread", 1, 1]],
 	"scrap_pile": [["salvage_license_plate", 1, 1], ["salvage_bent_spoon", 1, 2], ["salvage_vintage_can", 1, 3], ["salvage_old_magazine", 1, 2], ["salvage_rusted_spring", 1, 3], ["salvage_wire_hanger", 1, 2], ["salvage_empty_aerosol", 1, 2], ["salvage_shattered_glass", 1, 2], ["salvage_broken_watch", 1, 1], ["vehicle_hubcap", 1, 1], ["vehicle_taillight", 1, 1], ["vehicle_side_mirror", 1, 1], ["vehicle_alternator", 1, 1], ["vehicle_radiator", 1, 1], ["elec_circuit_board", 1, 1], ["elec_fuse", 1, 2], ["copper_ore", 1, 2], ["lead_ore", 1, 2], ["cured_rubber_sheet", 1, 1], ["crude_oil", 1, 1], ["scrap", 3, 7], ["engine_parts", 1, 1], ["tire", 1, 1], ["cloth", 1, 2], ["wire", 1, 2], ["bolts", 2, 6], ["pipe", 1, 1], ["glass", 1, 1],
@@ -56,8 +56,12 @@ const GUARANTEED := {
 var key := ""
 var label := "Cabinet"
 var table := "shelf"
-var mode := "loot" # loot | box | pump | well | bed
+var mode := "loot" # loot | box | cupboard | pump | well | bed
 var flaps: Array = [] # cardboard box flaps (open when searched)
+var doors: Array = [] # cupboard doors: [pivot, open angle]
+var shelves: Array = [] # cupboard shelf tops (local y) that found items stand on
+var inner := Vector3.ZERO # cupboard inside size (local), front facing +Z
+var is_open := false
 
 func setup(p_key: String, p_label: String, p_table: String, p_mode := "loot") -> void:
 	key = p_key
@@ -65,23 +69,44 @@ func setup(p_key: String, p_label: String, p_table: String, p_mode := "loot") ->
 	table = p_table
 	mode = p_mode
 	collision_layer = 1
+	set_process(false)
 
 func get_prompt() -> String:
 	match mode:
 		"pump":
 			var left := pump_left()
+			var held := Game.equipped()
+			if held == "pump_nozzle":
+				return "Fuel pump — %.1f L left   [E] Hang up the nozzle" % left
 			if left <= 0.0:
 				return "Fuel pump (dry)"
-			return "[E] Use fuel pump (%d L left)" % int(left)
+			if Data.liquid_kind(held) == "Gasoline":
+				return "Fuel pump   [E] Transfer"
+			if held == "":
+				return "Fuel pump — %.1f L left   [E] Take the nozzle" % left
+			return "Fuel pump — %.1f L left. Empty your hands to take the nozzle" % left
 		"well":
 			return "[E] Fill the bottle from the well" if Game.equipped() == "bottle_empty" else "Well — hold an Empty Bottle to draw water"
 		"bed":
 			return "[E] Sleep in old bed"
+	if mode == "cupboard":
+		return "%s   [E] %s" % [label.capitalize() if label == label.to_lower() else label, "Close" if is_open else "Open"]
 	if Game.removed.has(key):
 		return "%s (searched)" % label
 	if mode == "box":
 		return "[E] Open %s" % label
 	return "[E] Search %s" % label
+
+## Swing every door of a cupboard open or shut on its own hinge.
+func set_open(open: bool, animate := true) -> void:
+	is_open = open
+	for d in doors:
+		var pivot: Node3D = d[0]
+		var target: float = float(d[1]) if open else 0.0
+		if animate and is_inside_tree():
+			create_tween().tween_property(pivot, "rotation:y", target, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		else:
+			pivot.rotation.y = target
 
 func pump_left() -> float:
 	return float(Game.removed.get(key, 120.0 if hash(key) % 2 == 0 else 70.0))
@@ -103,6 +128,12 @@ func interact(_player: Node) -> void:
 		"bed":
 			Game.world.sleep(global_position + Vector3(0, 0.6, 0))
 			return
+		"cupboard":
+			set_open(not is_open)
+			Audio.play_at("door", global_position, -8.0, 1.3 if is_open else 1.1)
+			# the first time it's opened, what's inside sits on the shelves for you to take
+			if not is_open or Game.removed.has(key):
+				return
 	if Game.removed.has(key):
 		Game.notify("Nothing left here")
 		return
@@ -154,6 +185,23 @@ func _reveal(found: Array, rng: RandomNumberGenerator) -> void:
 		var lp: Vector3
 		var spread := (i - (found.size() - 1) * 0.5)
 		var big := maxf(bb.size.x, bb.size.z) > 0.5 or bb.size.y > 0.6
+		if mode == "cupboard" and not big and not shelves.is_empty():
+			# on the shelves inside, spread along each shelf, front to back a little
+			var lvl: int = i % shelves.size()
+			var per := ceili(float(found.size()) / shelves.size())
+			var slot := i / shelves.size()
+			var span := inner.x - 0.12
+			var x := -span * 0.5 + span * (slot + 0.5) / maxf(per, 1)
+			var gap: float = (float(shelves[lvl + 1]) - float(shelves[lvl])) if lvl + 1 < shelves.size() else inner.y
+			if bb.size.y > gap - 0.03:
+				lvl = 0
+			lp = Vector3(x, float(shelves[lvl]) + 0.004, rng.randf_range(-inner.z * 0.22, inner.z * 0.1))
+			var xf0 := global_transform * Transform3D(Basis(Vector3.UP, rng.randf_range(-0.5, 0.5)), lp - Vector3(0, bb.position.y, 0))
+			var l0 := -1.0
+			if Data.is_liquid(id) and Data.start_litres(id) > 0.0 and not Data.LIQUID[id].has("part"):
+				l0 = snappedf(Data.liquid_cap(id) * rng.randf_range(0.3, 1.0), 0.01)
+			Game.place_item(id, n, xf0, null, [], l0)
+			continue
 		if big:
 			# furniture and van parts are too big for a box or shelf: they stand in front of it
 			var across0 := Vector3(front.z, 0, front.x)
@@ -167,7 +215,11 @@ func _reveal(found: Array, rng: RandomNumberGenerator) -> void:
 			var across := Vector3(front.z, 0, front.x)
 			lp = front * ((size.x if front.x != 0.0 else size.z) * 0.5 + 0.3) + across * spread * 0.35
 		var xf := global_transform * Transform3D(Basis(Vector3.UP, rng.randf() * TAU), lp - Vector3(0, bb.position.y, 0))
-		Game.place_item(id, n, xf)
+		# containers you find are rarely full: a part-used coolant bottle, a can with a few litres left
+		var l := -1.0
+		if Data.is_liquid(id) and Data.start_litres(id) > 0.0 and not Data.LIQUID[id].has("part"):
+			l = snappedf(Data.liquid_cap(id) * rng.randf_range(0.3, 1.0), 0.01)
+		Game.place_item(id, n, xf, null, [], l)
 
 func open_flaps(animate := false) -> void:
 	for f in flaps:
@@ -177,32 +229,129 @@ func open_flaps(animate := false) -> void:
 		else:
 			f.set_indexed("rotation:" + str(f.get_meta("axis")), target)
 
+## The pump: take the nozzle off its holster and carry it to a fuel cap (the hose follows you),
+## or hold a fuel can here and fill it. Everything is measured in litres.
 func _pump() -> void:
 	var left := pump_left()
+	var held := Game.equipped()
+	if held == "pump_nozzle":
+		Game.return_nozzle()
+		return
 	if left <= 0.0:
 		Game.notify("The underground tank is empty")
 		return
-	var rv := Game.rv
-	if rv and rv.global_position.distance_to(global_position) < 14.0:
-		var need: float = rv.fuel_capacity() - rv.fuel
-		var amount := minf(need, left)
-		if amount < 0.5:
-			Game.notify("The van's tank is already full")
+	if Data.liquid_kind(held) == "Gasoline":
+		var got := Game.fill_held_from(left)
+		if got <= 0.0:
+			Game.notify("The %s is full" % Data.item_name(held).to_lower())
 			return
-		rv.fuel += amount
-		left -= amount
-		Game.notify("Pumped %.0f L into the van" % amount)
-	elif Game.equipped() == "fuel_can_empty":
-		var cans := mini(int(left / 10.0), int(Game.held()["n"]))
-		if cans <= 0:
-			Game.notify("Not enough fuel left for a can")
-			return
-		Game.remove_item("fuel_can_empty", cans)
-		Game.add_item("fuel_can", cans, true)
-		left -= cans * 10.0
-		Game.notify("Filled the fuel can. Park the van next to the pump to fill it directly.")
-	else:
-		Game.notify("Hold an Empty Fuel Can to fill it, or park the van next to the pump")
+		Net.mark_removed(key, left - got)
+		Audio.play_at("splash", global_position, -10.0, 0.6)
+		Game.notify("Transferred %.2f L — %s %.2f/%.2f L" % [got, Data.item_name(Game.equipped()).to_lower(), Game.held_litres(), Data.liquid_cap(Game.equipped())])
 		return
-	Audio.play_at("splash", global_position, -10.0, 0.6)
-	Net.mark_removed(key, left)
+	if held != "":
+		Game.notify("Empty your hands to take the nozzle")
+		return
+	if Game.nozzle_pump and is_instance_valid(Game.nozzle_pump):
+		Game.return_nozzle(true)
+	Game.add_item("pump_nozzle", 1, true, minf(left, Data.liquid_cap("pump_nozzle")))
+	for i in range(Game.slots.size()):
+		if Game.slots[i]["id"] == "pump_nozzle":
+			Game.select_slot(i)
+	Game.nozzle_pump = self
+	_nozzle_out(true)
+	Audio.play_at("click", global_position, -4.0, 0.7)
+	Game.notify("You lift the nozzle off the pump. Carry it to the fuel cap and press [E]")
+
+## Fuel drawn through the nozzle comes out of this pump's underground tank.
+func draw_fuel(amount: float) -> void:
+	Net.mark_removed(key, maxf(pump_left() - amount, 0.0))
+	if amount > 0.0:
+		Audio.play_at("splash", global_position, -12.0, 0.6)
+
+func transfer_info() -> Dictionary:
+	if mode != "pump":
+		return {}
+	var held := Game.equipped()
+	if Data.liquid_kind(held) == "Gasoline" and held != "pump_nozzle":
+		return Game.transfer_panel("Pump", "Gasoline", pump_left(), 120.0, Data.item_name(held), "Gasoline", Game.held_litres(), Data.liquid_cap(held))
+	return {}
+
+func nozzle_returned() -> void:
+	_nozzle_out(false)
+
+var _hose: MeshInstance3D
+var _hose_mesh: ImmediateMesh
+
+func _nozzle_out(out: bool) -> void:
+	var holster := get_node_or_null("Holster")
+	if holster:
+		holster.visible = not out
+	var hang := get_node_or_null("Hose")
+	if hang:
+		hang.visible = not out
+	if out and _hose == null:
+		_hose_mesh = ImmediateMesh.new()
+		_hose = MeshInstance3D.new()
+		_hose.mesh = _hose_mesh
+		_hose.material_override = Lib.mat("rubber", Color(0.25, 0.25, 0.25), 3.0, false, 0.85)
+		_hose.top_level = true
+		_hose.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_hose)
+	if _hose:
+		_hose.visible = out
+	set_process(out)
+
+## Draw the hose from the pump to the nozzle in your hand, sagging under its own weight.
+func _process(_delta: float) -> void:
+	if mode != "pump" or _hose == null:
+		set_process(false)
+		return
+	var pl: Node3D = Game.player
+	if Game.nozzle_pump != self or pl == null or Game.carried("pump_nozzle") <= 0:
+		if Game.nozzle_pump == self:
+			Game.return_nozzle(true)
+		_nozzle_out(false)
+		return
+	var a: Vector3 = to_global(Vector3(0.45, 0.75, -0.12))
+	var b: Vector3 = pl.camera.global_transform * Vector3(0.22, -0.32, -0.45)
+	if Game.equipped() != "pump_nozzle":
+		b = pl.global_position + pl.global_transform.basis * Vector3(0.25, 0.9, 0.1)
+	var dist := a.distance_to(b)
+	if dist > 7.5:
+		Game.return_nozzle(true)
+		Game.notify("The hose won't reach that far — the nozzle snaps back onto the pump")
+		_nozzle_out(false)
+		return
+	var sag := clampf(5.0 - dist, 0.3, 2.5) * 0.35
+	_hose_mesh.clear_surfaces()
+	_hose_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segs := 14
+	var sides := 6
+	var r := 0.02
+	var pts: Array[Vector3] = []
+	for i in range(segs + 1):
+		var t := float(i) / segs
+		var p := a.lerp(b, t)
+		p.y -= sin(t * PI) * sag
+		var ground: float = Game.world.gen.height(p.x, p.z) + 0.03 if Game.world and Game.world.gen else -INF
+		p.y = maxf(p.y, ground)
+		pts.append(p)
+	for i in range(segs):
+		var d := (pts[i + 1] - pts[i]).normalized()
+		var side := d.cross(Vector3.UP)
+		if side.length() < 0.01:
+			side = Vector3.RIGHT
+		side = side.normalized()
+		var up := side.cross(d).normalized()
+		for k in range(sides):
+			var a0 := TAU * k / sides
+			var a1 := TAU * (k + 1) / sides
+			var n0 := side * cos(a0) + up * sin(a0)
+			var n1 := side * cos(a1) + up * sin(a1)
+			var quad := [pts[i] + n0 * r, pts[i] + n1 * r, pts[i + 1] + n1 * r, pts[i + 1] + n0 * r]
+			var nn := [n0, n1, n1, n0]
+			for idx in [0, 1, 2, 0, 2, 3]:
+				_hose_mesh.surface_set_normal(nn[idx])
+				_hose_mesh.surface_add_vertex(quad[idx])
+	_hose_mesh.surface_end()

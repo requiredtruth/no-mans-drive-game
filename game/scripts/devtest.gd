@@ -1,6 +1,7 @@
 extends Node
 ## Automated smoke test & screenshot tour. Run: godot --path game -- --devtest=<out_dir>
 
+const Pois = preload("res://scripts/pois.gd")
 var out := "user://shots"
 var log_lines: Array[String] = []
 
@@ -1669,7 +1670,260 @@ func _drive18() -> void:
 func RV_W() -> float:
 	return Game.rv.W
 
+func _hold19(id: String, litres := -1.0) -> void:
+	Game.slots[0] = {"id": id, "n": 1}
+	if Game.Data.is_liquid(id):
+		Game.slots[0]["l"] = litres if litres >= 0.0 else Game.Data.start_litres(id)
+	Game.select_slot(0)
+	Game._changed()
+
+func _hud19(tag: String) -> void:
+	var pl = Game.player
+	pl._update_prompt()
+	var pr: Dictionary = Game.world.hud.parse_prompt(pl.prompt)
+	_log("%s: name='%s' sub='%s' rows=%s info=%s transfer=%s" % [tag, pl.look_name, pl.look_sub, str(pr["rows"]), str(pr["info"]),
+		str(pl.transfer.get("status", "-")) + (" a=%s b=%s" % [str(pl.transfer["a"]), str(pl.transfer["b"])] if not pl.transfer.is_empty() else "")])
+
+## 1.9 quality pass: aim outline and labels, right-hand hints, litres and transfers, the pump nozzle.
+func _v19() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	w.hud.close_modal()
+	Game.time_of_day = 11.0
+	Game.weather = "clear"
+	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
+	await _settle(pl.global_position)
+	rv.modules = rv._all_modules()
+	rv.modules["water_tank"] = true
+	rv.missing = {}
+	for k in rv.parts:
+		rv.parts[k] = 100.0
+	rv.battery = 100.0
+	rv.fuel = 26.19
+	# clear the test depot away from the fuel cap side so the aim reaches the van
+	for it in get_tree().get_nodes_in_group("world_item"):
+		if it.global_position.distance_to(rv.global_position) < 9.0 and it.get_parent() == w:
+			it.queue_free()
+	rv.water = 20.0
+	rv._apply_visuals()
+	await _wait(0.4)
+	# --- a part-used fuel can on the ground: outline, name and litres at the cursor
+	var side: Vector3 = rv.to_global(Vector3(-rv.W * 0.5 - 1.6, 0, -1.2))
+	var gp := _ground(side.x, side.z)
+	var can = Game.place_item("fuel_can", 1, Transform3D(Basis.IDENTITY, gp - Vector3(0, 0.1 + Items.display_bounds("fuel_can").position.y, 0)), null, [], 6.5)
+	_player_at(gp + Vector3(1.4, 0, 1.4), 0.0)
+	_look_at_point(can.global_position + Vector3(0, 0.15, 0))
+	await _wait(0.3)
+	_hud19("aim fuel can")
+	_log("outlined meshes: %d" % Items._outline_count)
+	await _shot("y01_aim_fuel_can")
+	# --- pick it up and pour it into the van at the fuel cap
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	can.interact(pl)
+	_log("holding %s with %.2f L" % [Game.equipped(), Game.held_litres()])
+	var cap: Vector3 = rv.to_global(Vector3(-rv.W * 0.5 - 0.1, 1.12, -1.45))
+	var capstand: Vector3 = rv.to_global(Vector3(-rv.W * 0.5 - 1.1, 0, -0.9))
+	_player_at(_ground(capstand.x, capstand.z), 0.0)
+	_look_at_point(cap)
+	await _wait(0.3)
+	_hud19("fuel cap with can")
+	await _shot("y02_transfer_can")
+	rv.do_action("fuel", pl)
+	_log("after transfer: tank %.2f L, holding %s %.2f L" % [rv.fuel, Game.equipped(), Game.held_litres()])
+	# --- coolant from a part-used bottle into the radiator
+	rv.coolant = 40.0
+	rv.engine_heat = 95.0
+	_hold19("coolant_t1", 3.81)
+	var hood: Vector3 = rv.to_global(Vector3(0, 1.68, rv.FRONT_Z + 0.85))
+	var hp: Vector3 = rv.to_global(Vector3(0, 0, rv.FRONT_Z + 2.4))
+	_player_at(_ground(hp.x, hp.z), 0.0)
+	_look_at_point(hood)
+	await _wait(0.3)
+	_hud19("hood with coolant")
+	await _shot("y03_transfer_coolant")
+	rv.do_action("hood", pl)
+	_log("radiator %.1f%% (%.2f L), engine %d C, holding %s %.2f L" % [rv.coolant, rv.coolant / 100.0 * Game.Data.RADIATOR_L, int(rv.engine_heat), Game.equipped(), Game.held_litres()])
+	# --- canteen at the sink, then drink from it
+	_hold19("canteen_empty")
+	rv.do_action("sink", pl)
+	_log("canteen after sink: %s %.2f L, tank %.1f L" % [Game.equipped(), Game.held_litres(), rv.water])
+	Game.stats["water"] = 40.0
+	Game.consume(Game.equipped())
+	Game.consume(Game.equipped())
+	_log("after two sips: %s %.2f L, thirst %.1f" % [Game.equipped(), Game.held_litres(), Game.stats["water"]])
+	# flask at the coffee maker (beans within reach)
+	_hold19("mod_coffee_flask_3l")
+	Game.slots[1] = {"id": "coffee_beans", "n": 2}
+	rv.do_action("coffee", pl)
+	_log("flask: %.2f L, beans left %d" % [Game.held_litres(), Game.count("coffee_beans")])
+	Game.slots[1] = {"id": "", "n": 0}
+	# --- a fuel pump next to the van: take the nozzle, the hose follows, fill the van
+	var pp: Vector3 = rv.to_global(Vector3(-rv.W * 0.5 - 2.6, 0, -2.6))
+	var pump = Pois.loot(w, _ground(pp.x, pp.z) - Vector3(0, 0.1, 0), Vector3(0.8, 1.7, 0.55), Lib.mat("paint_grime", Color(0.95, 0.35, 0.28), 0.6), "devtest_pump", "Fuel pump", "", "pump", rv.rotation.y)
+	Pois.pump_details(pump)
+	await _wait(0.2)
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	_player_at(_ground(pp.x + 1.2, pp.z + 1.2), 0.0)
+	_look_at_point(pump.global_position + Vector3(0, 1.0, 0))
+	await _wait(0.3)
+	_hud19("pump empty-handed")
+	await _shot("y04_pump")
+	pump.interact(pl)
+	_log("took nozzle: holding %s %.2f L, pump left %.1f" % [Game.equipped(), Game.held_litres(), pump.pump_left()])
+	rv.fuel = 12.0
+	_player_at(_ground(capstand.x, capstand.z), 0.0)
+	_look_at_point(cap)
+	await _wait(0.4)
+	_hud19("fuel cap with nozzle")
+	await _shot("y05_nozzle_transfer")
+	rv.do_action("fuel", pl)
+	_log("after nozzle: tank %.2f L, pump left %.1f" % [rv.fuel, pump.pump_left()])
+	# look back at the pump to see the hose
+	_look_at_point(pump.global_position + Vector3(0, 0.8, 0))
+	await _wait(0.3)
+	await _shot("y06_hose")
+	# fill an empty can on the ground through the nozzle
+	var ecan = Game.place_item("fuel_can_empty", 1, Transform3D(Basis.IDENTITY, _ground(capstand.x - 0.4, capstand.z + 0.9) - Vector3(0, 0.1, 0)))
+	_look_at_point(ecan.global_position + Vector3(0, 0.12, 0))
+	await _wait(0.3)
+	_hud19("nozzle at empty can")
+	ecan.interact(pl)
+	_log("ground can now %s %.2f L" % [ecan.id, ecan.litres])
+	# walk away: the hose snaps back
+	pl.teleport(pl.global_position + Vector3(12, 0, 0))
+	await _wait(0.4)
+	_log("after walking off: holding '%s', nozzle pump %s" % [Game.equipped(), str(Game.nozzle_pump)])
+	# --- labelled consumables lined up on the van floor
+	var show := ["canned_food", "soda", "tinned_hotdogs", "peaches_oreilly", "can_of_cashews", "mocha_cola", "digital_soda", "matrix_cola",
+		"crimson_chaos_energy", "water_clean", "berry_juice", "paint_can", "coolant_t1", "mod_coolant_jug_20l", "feline_feast_cat_food", "canine_chow_dog_food",
+		"canteen_full", "mod_canteen_2l", "mod_coffee_flask_3l", "pump_nozzle"]
+	var base: Vector3 = rv.to_global(Vector3(rv.W * 0.5 + 1.2, 0, -2.5))
+	var g0 := _ground(base.x, base.z)
+	for i in range(show.size()):
+		var col := i % 5
+		var rowi := i / 5
+		var ip := g0 + Vector3(col * 0.3 - 0.6, -0.1, rowi * 0.3)
+		Game.place_item(show[i], 1, Transform3D(Basis(Vector3.UP, 0.3), ip - Vector3(0, Items.display_bounds(show[i]).position.y, 0)))
+	_player_at(g0 + Vector3(0, 0, 1.9), 0.0)
+	_look_at_point(g0 + Vector3(0, 0.05, 0.45))
+	await _wait(0.6)
+	await _shot("y07_labels")
+	_player_at(g0 + Vector3(-0.3, 0, 0.75), 0.0)
+	_look_at_point(g0 + Vector3(-0.45, 0.08, 0.0))
+	await _wait(0.4)
+	await _shot("y08_labels_close")
+	# --- inside the van: textured walls, contact grime, the hand and sleeve holding a can
+	_hold19("canned_food")
+	var inside: Vector3 = rv.to_global(Vector3(0.2, rv.FLOOR_Y + 0.1, -1.6))
+	_player_at(inside, rv.rotation.y)
+	_look_at_point(rv.to_global(Vector3(-0.2, rv.FLOOR_Y + 0.7, 1.5)))
+	await _wait(0.6)
+	await _shot("y09_van_inside_hand")
+	_look_at_point(rv.to_global(Vector3(0.0, rv.FLOOR_Y + 0.9, rv.FRONT_Z)))
+	await _wait(0.3)
+	await _shot("y10_cab_dash")
+	Game.worn["red_jacket"] = true
+	Game._changed()
+	pl._refresh_viewmodel()
+	_look_at_point(rv.to_global(Vector3(-0.6, rv.FLOOR_Y + 0.4, -2.5)))
+	await _wait(0.3)
+	await _shot("y11_sleeve_jacket")
+	Game.worn.erase("red_jacket")
+	Game._changed()
+	# --- the house up the road: kitchen cupboard with hinged doors and loot on its shelves
+	Game.slots[0] = {"id": "", "n": 0}
+	Game.select_slot(0)
+	var hpoi: Dictionary = w.gen.poi_for_row(1)
+	await _settle(hpoi["pos"])
+	var cabs := []
+	for n in w.find_children("*", "StaticBody3D", true, false):
+		if n.get("mode") == "cupboard":
+			cabs.append(n)
+	_log("cupboards in the world: %d (%s)" % [cabs.size(), ", ".join(cabs.map(func(c): return c.key))])
+	var kc = null
+	for c in cabs:
+		if c.key == "poi1_kitchen":
+			kc = c
+	if kc:
+		var front: Vector3 = kc.global_transform * Vector3(0, 0, 1.6)
+		_player_at(Vector3(front.x, kc.global_position.y + 0.05, front.z), 0.0)
+		_look_at_point(kc.global_transform * Vector3(0.3, 0.6, 0.3))
+		await _wait(0.3)
+		_hud19("kitchen cupboard closed")
+		await _shot("y12_cupboard_closed")
+		pl._interact()
+		await _wait(0.8)
+		_hud19("kitchen cupboard open")
+		var inside_items := 0
+		for it in get_tree().get_nodes_in_group("world_item"):
+			if it.global_position.distance_to(kc.global_position) < 1.6:
+				inside_items += 1
+		_log("items on the shelves: %d, doors %s" % [inside_items, str(kc.doors.map(func(d): return snappedf(d[0].rotation.y, 0.01)))])
+		_look_at_point(kc.global_transform * Vector3(0.0, 0.35, 0.0))
+		await _wait(0.2)
+		await _shot("y13_cupboard_open")
+	cabs = []
+	for n in w.find_children("*", "StaticBody3D", true, false):
+		if n.get("mode") == "cupboard":
+			cabs.append(n)
+	for c in cabs:
+		if is_instance_valid(c) and (c.key == "poi1_wardrobe" or c.key == "poi1_fridge"):
+			c.set_open(true, false)
+			var f2: Vector3 = c.global_transform * Vector3(0, 0, 1.8)
+			_player_at(Vector3(f2.x, c.global_position.y + 0.05, f2.z), 0.0)
+			_look_at_point(c.global_transform * Vector3(0, 1.0, 0))
+			await _wait(0.4)
+			await _shot("y14_%s" % c.key.substr(5))
+	# --- the first destination: sign, supply crate, objective ticks over
+	_log("objective before: %d (%s)" % [Game.objective, Game.Data.OBJECTIVES[Game.objective][0]])
+	var op: Vector3 = Game.objective_point()
+	await _settle(op)
+	var dirr: Vector3 = w.gen.road_dir(op.z)
+	var view: Vector3 = op - dirr * 18.0 + Vector3(-dirr.z, 0, dirr.x) * 2.0
+	_player_at(_ground(view.x, view.z), 0.0)
+	_look_at_point(op + Vector3(-dirr.z, 0, dirr.x) * 7.5 + Vector3(0, 2.0, 0))
+	await _wait(0.8)
+	Game.check_objective(pl.global_position)
+	await _shot("y15_destination_sign")
+	_log("objective after: %d" % Game.objective)
+
+	# --- performance parts on another car (pickup / sedan at the start)
+	var car = null
+	for v in get_tree().get_nodes_in_group("vehicle"):
+		if v.has_method("upgrade_list") and "kind" in v and v.get("spec") is Dictionary and not v.get("spec").is_empty():
+			car = v
+			break
+	if car:
+		Game.slots[1] = {"id": "toolkit", "n": 1}
+		for part in ["vehicle_supercharger", "vehicle_nos_kit", "vehicle_suspension_part", "vehicle_tire_solid", "vehicle_alternator"]:
+			_hold19(part)
+			var cp: String = car.prompt_for("hood")
+			car.do_action("hood", pl)
+			_log("car hood holding %s: '%s'" % [part, cp])
+		_log("%s upgrades: %s, dash '%s'" % [car.kind, str(car.upgrades.keys()), car.dash_extra()])
+		Game.slots[1] = {"id": "", "n": 0}
+
+	# save and reload keeps litres
+	_hold19("fuel_can", 3.25)
+	Game.save_game()
+	var d: Dictionary = Game.load_game_data()
+	_log("reloaded slot 0: %s" % str(Game.slots[0]))
+
 func _run() -> void:
+	if "--v19" in OS.get_cmdline_user_args():
+		var m19 := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		m19._start_world({})
+		await _wait(1.5)
+		await _v19()
+		var f19 := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		f19.store_string("\n".join(log_lines))
+		f19.close()
+		get_tree().quit()
+		return
 	if "--drive18" in OS.get_cmdline_user_args():
 		var md := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")

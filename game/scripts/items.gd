@@ -237,6 +237,37 @@ func display_instance(id: String) -> Node3D:
 
 var _glow_mat: StandardMaterial3D
 
+var _outline_mat: ShaderMaterial
+var _outline_count := 0
+
+## White aim outline (inverted hull) on every mesh under n, like the reference screenshots.
+## Any overlay already on a mesh is kept aside and put back when the outline comes off.
+func set_outline(n: Node, on: bool) -> void:
+	if _outline_mat == null:
+		_outline_mat = ShaderMaterial.new()
+		_outline_mat.shader = load("res://shaders/outline.gdshader")
+	_outline_count = 0
+	_outline_walk(n, on, 0)
+
+func _outline_walk(n: Node, on: bool, depth: int) -> void:
+	if n == null or depth > 7 or _outline_count > 48:
+		return
+	if n is GeometryInstance3D and not (n is Label3D) and (n as GeometryInstance3D).visible:
+		var g := n as GeometryInstance3D
+		if on:
+			if g.material_overlay != _outline_mat:
+				g.set_meta("pre_overlay", g.material_overlay)
+				g.material_overlay = _outline_mat
+				_outline_count += 1
+		elif g.material_overlay == _outline_mat:
+			g.material_overlay = g.get_meta("pre_overlay", null)
+			g.remove_meta("pre_overlay")
+	for ch in n.get_children():
+		# never outline whole vehicles or the world around a hotspot
+		if ch is VehicleBody3D or ch is Camera3D:
+			continue
+		_outline_walk(ch, on, depth + 1)
+
 func set_glow(n: Node, on: bool) -> void:
 	if _glow_mat == null:
 		_glow_mat = StandardMaterial3D.new()
@@ -280,9 +311,9 @@ func _build(id: String) -> Mesh:
 		"flashlight": return _flashlight()
 		"arrow": return _arrow()
 		"fuel_can": return _jerrycan()
-		"canned_food": return _can(Color("c8a24a"), Color("8a2f22"), 0.075, 0.115)
-		"soda": return _can(Color("c8302a"), Color("eeeeee"), 0.033, 0.12)
-		"water_clean": return _bottle(Color(0.55, 0.8, 1.0, 0.55), Color("2a6fb0"))
+		"canned_food": return _can(Color("c8a24a"), Color("8a2f22"), 0.075, 0.115, 0)
+		"soda": return _can(Color("c8302a"), Color("eeeeee"), 0.033, 0.12, 1)
+		"water_clean": return _bottle(Color(0.55, 0.8, 1.0, 0.55), Color("2a6fb0"), 2)
 		"water_dirty": return _bottle(Color(0.55, 0.5, 0.3, 0.75), Color("6a6a6a"))
 		"coffee": return _mug()
 		"coffee_beans": return _sack(Color("8a6a44"), Color("3a2414"))
@@ -380,11 +411,11 @@ func _build(id: String) -> Mesh:
 		"mod_underglow_neon_kit": return _underglow_kit()
 		"vehicle_tow_hitch": return _tow_hitch()
 		"chips": return _chips()
-		"tinned_hotdogs": return _can(Color("c84a2a"), Color("f0d040"), 0.06, 0.13)
-		"can_of_cashews": return _can(Color("d8b070"), Color("2a4a8a"), 0.05, 0.09)
-		"peaches_oreilly": return _can(Color("f0a050"), Color("3a8a3a"), 0.055, 0.11)
-		"berry_juice": return _bottle(Color(0.55, 0.12, 0.4, 0.8), Color("8a2a6a"))
-		"mocha_cola": return _can(Color("5a3220"), Color("e8d8c0"), 0.033, 0.12)
+		"tinned_hotdogs": return _can(Color("c84a2a"), Color("f0d040"), 0.06, 0.13, 6)
+		"can_of_cashews": return _can(Color("d8b070"), Color("2a4a8a"), 0.05, 0.09, 8)
+		"peaches_oreilly": return _can(Color("f0a050"), Color("3a8a3a"), 0.055, 0.11, 5)
+		"berry_juice": return _bottle(Color(0.55, 0.12, 0.4, 0.8), Color("8a2a6a"), 14)
+		"mocha_cola": return _can(Color("5a3220"), Color("e8d8c0"), 0.033, 0.12, 9)
 		"emergency_ration_pack": return _wrapper(Color("6a7a40"), Color("e8e0c0"), Vector3(0.16, 0.035, 0.1))
 		"jason_s_choccy_block": return _wrapper(Color("6a2a18"), Color("e8c040"), Vector3(0.15, 0.018, 0.07))
 		"energy_bar": return _wrapper(Color("2a64b8"), Color("f0c020"), Vector3(0.13, 0.022, 0.045))
@@ -694,27 +725,100 @@ func _jerrycan(col := Color(0.7, 0.1, 0.08)) -> Mesh:
 	lathe(spout, [Vector2(0.02, 0.33), Vector2(0.02, 0.37), Vector2(0.022, 0.37), Vector2(0.022, 0.38)], 14, Vector3(0, 0, 0.08))
 	return _mesh([[body, paint(col)], [spout, dark_steel()]])
 
-func _can(label: Color, band_col: Color, r: float, h: float) -> Mesh:
+## A tin or drink can. With a label row (see LABELS in tools/gen_textures.py) it gets a printed
+## wrap-around label, a ribbed lid with a rolled seam, and a pull tab on drink cans.
+func _can(label: Color, band_col: Color, r: float, h: float, row := -1) -> Mesh:
 	var rim := _st()
-	lathe(rim, [Vector2(r * 0.92, 0.0), Vector2(r, 0.006), Vector2(r, 0.012)], 24)
-	lathe(rim, [Vector2(r, h - 0.012), Vector2(r, h - 0.006), Vector2(r * 0.92, h)], 24)
+	var drink := r < 0.036
+	if drink:
+		# drink can: necked-in top, domed base
+		lathe(rim, [Vector2(r * 0.7, 0.0), Vector2(r * 0.95, 0.003), Vector2(r, 0.012)], 28)
+		lathe(rim, [Vector2(r, h - 0.016), Vector2(r * 0.86, h - 0.004), Vector2(r * 0.84, h), Vector2(r * 0.8, h)], 28, Vector3.ZERO, false, false)
+	else:
+		lathe(rim, [Vector2(r * 0.92, 0.0), Vector2(r, 0.006), Vector2(r, 0.012)], 28)
+		lathe(rim, [Vector2(r, h - 0.012), Vector2(r * 1.01, h - 0.006), Vector2(r * 1.01, h - 0.002), Vector2(r * 0.94, h)], 28, Vector3.ZERO, false, false)
+	var lid := _st()
+	var top := h - (0.004 if drink else 0.002)
+	var lr := r * (0.8 if drink else 0.94)
+	_disc(lid, Vector3(0, top - 0.002, 0), lr, Vector3.UP, 28)
+	# expansion rings pressed into the lid
+	for k in range(1 if drink else 3):
+		torus(lid, Vector3(0, top - 0.002, 0), lr * (0.55 + 0.15 * k), 0.0012, 28, 4)
+	if drink:
+		box(lid, Vector3(0, top - 0.0005, lr * 0.25), Vector3(lr * 0.35, 0.0015, lr * 0.7))
+		torus(lid, Vector3(0, top - 0.0005, lr * 0.45), lr * 0.13, 0.0015, 12, 4)
+	# vertical beads round a food tin
+	if not drink:
+		for k in range(4):
+			torus(rim, Vector3(0, h * (0.12 + 0.025 * k), 0), r * 1.003, 0.0012, 28, 4)
+			torus(rim, Vector3(0, h * (0.88 - 0.025 * k), 0), r * 1.003, 0.0012, 28, 4)
 	var lab := _st()
+	if row >= 0:
+		_label_band(lab, r * 1.002, 0.012, h - (0.016 if drink else 0.012), 28)
+		return _mesh([[rim, steel()], [lid, steel()], [lab, label_mat(row)]])
 	lathe(lab, [Vector2(r * 1.002, 0.012), Vector2(r * 1.002, h - 0.012)], 24, Vector3.ZERO, false, false)
 	var bnd := _st()
 	lathe(bnd, [Vector2(r * 1.004, h * 0.4), Vector2(r * 1.004, h * 0.6)], 24, Vector3.ZERO, false, false)
-	return _mesh([[rim, steel()], [lab, paint(label)], [bnd, paint(band_col)]])
+	return _mesh([[rim, steel()], [lid, steel()], [lab, paint(label)], [bnd, paint(band_col)]])
 
-func _bottle(liquid: Color, cap: Color) -> Mesh:
+const LABEL_ROWS := 16
+var _label_mats := {}
+
+## The printed label atlas (tools/gen_textures.py, LABELS): one made-up brand per row.
+func label_mat(row: int) -> StandardMaterial3D:
+	if _label_mats.has(row):
+		return _label_mats[row]
+	var lm := StandardMaterial3D.new()
+	lm.albedo_texture = Lib.tex("labels")
+	lm.uv1_scale = Vector3(1.0, 1.0 / LABEL_ROWS, 1.0)
+	lm.uv1_offset = Vector3(0.0, float(row) / LABEL_ROWS + 0.002, 0.0)
+	lm.roughness = 0.42
+	lm.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_label_mats[row] = lm
+	return lm
+
+## A cylindrical label band with 0..1 UVs (u around, v top to bottom) so the atlas prints the
+## right way round when you look at it from outside.
+func _label_band(st: SurfaceTool, r: float, y0: float, y1: float, segs := 24, offset := Vector3.ZERO) -> void:
+	for sgi in range(segs):
+		var t0 := TAU * sgi / segs
+		var t1 := TAU * (sgi + 1) / segs
+		var d0 := Vector3(cos(t0), 0, sin(t0))
+		var d1 := Vector3(cos(t1), 0, sin(t1))
+		var u0 := 1.0 - float(sgi) / segs
+		var u1 := 1.0 - float(sgi + 1) / segs
+		var p := [offset + d0 * r + Vector3(0, y0, 0), offset + d1 * r + Vector3(0, y0, 0), offset + d1 * r + Vector3(0, y1, 0), offset + d0 * r + Vector3(0, y1, 0)]
+		Lib._tri(st, [p[0], p[1], p[2]], [d0, d1, d1], [Vector2(u0, 0.98), Vector2(u1, 0.98), Vector2(u1, 0.0)])
+		Lib._tri(st, [p[0], p[2], p[3]], [d0, d1, d0], [Vector2(u0, 0.98), Vector2(u1, 0.0), Vector2(u0, 0.0)])
+
+## A flat printed label (front of a jug): a quad facing +Z with 0..1 UVs.
+func _label_quad(st: SurfaceTool, center: Vector3, w: float, h: float, u_span := 0.5) -> void:
+	var a := center + Vector3(-w * 0.5, -h * 0.5, 0)
+	var b := center + Vector3(w * 0.5, -h * 0.5, 0)
+	var c2 := center + Vector3(w * 0.5, h * 0.5, 0)
+	var d := center + Vector3(-w * 0.5, h * 0.5, 0)
+	var n := Vector3.BACK
+	Lib._tri(st, [a, b, c2], [n, n, n], [Vector2(0, 0.98), Vector2(u_span, 0.98), Vector2(u_span, 0)])
+	Lib._tri(st, [a, c2, d], [n, n, n], [Vector2(0, 0.98), Vector2(u_span, 0), Vector2(0, 0)])
+
+func _bottle(liquid: Color, cap: Color, row := -1) -> Mesh:
 	var body := _st()
 	lathe(body, [Vector2(0.0, 0.0), Vector2(0.034, 0.002), Vector2(0.036, 0.02), Vector2(0.036, 0.15), Vector2(0.03, 0.18), Vector2(0.014, 0.21), Vector2(0.013, 0.225)], 20, Vector3.ZERO, false, false)
 	var capst := _st()
 	lathe(capst, [Vector2(0.015, 0.222), Vector2(0.015, 0.245), Vector2(0.012, 0.248)], 14)
+	# ribbed screw cap
+	for k in range(14):
+		var a := TAU * k / 14.0
+		box(capst, Vector3(cos(a) * 0.0152, 0.234, sin(a) * 0.0152), Vector3(0.002, 0.02, 0.003), Basis(Vector3.UP, -a))
 	var label := _st()
-	lathe(label, [Vector2(0.0365, 0.05), Vector2(0.0365, 0.11)], 20, Vector3.ZERO, false, false)
+	if row >= 0:
+		_label_band(label, 0.0365, 0.05, 0.11, 24)
+	else:
+		lathe(label, [Vector2(0.0365, 0.05), Vector2(0.0365, 0.11)], 20, Vector3.ZERO, false, false)
 	var glass := Lib.color_mat(liquid, 0.05, 0.1)
 	glass = glass.duplicate()
 	glass.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return _mesh([[body, glass], [capst, c(cap, 0.5)], [label, paint(Color(0.95, 0.95, 0.9))]])
+	return _mesh([[body, glass], [capst, c(cap, 0.5)], [label, label_mat(row) if row >= 0 else paint(Color(0.95, 0.95, 0.9))]])
 
 func _mug() -> Mesh:
 	var mug := _st()
@@ -1062,8 +1166,12 @@ func _spray() -> Mesh:
 	var cap := _st()
 	lathe(cap, [Vector2(0.031, 0.165), Vector2(0.031, 0.2), Vector2(0.026, 0.21)], 18)
 	var lab := _st()
-	lathe(lab, [Vector2(0.0325, 0.04), Vector2(0.0325, 0.11)], 20, Vector3.ZERO, false, false)
-	return _mesh([[b, steel()], [cap, c(Color(0.25, 0.55, 0.8), 0.3)], [lab, paint(Color(0.9, 0.85, 0.2))]])
+	_label_band(lab, 0.0325, 0.02, 0.145, 24)
+	var nozzle := _st()
+	lathe(nozzle, [Vector2(0.007, 0.21), Vector2(0.007, 0.222), Vector2(0.005, 0.224)], 10)
+	box(nozzle, Vector3(0, 0.217, 0.007), Vector3(0.003, 0.003, 0.004))
+	torus(b, Vector3(0, 0.165, 0), 0.0255, 0.002, 20, 4)
+	return _mesh([[b, steel()], [cap, c(Color(0.25, 0.55, 0.8), 0.3)], [lab, label_mat(4)], [nozzle, white_plastic()]])
 
 func _engine_block() -> Mesh:
 	var blk := _st()
@@ -1112,7 +1220,7 @@ func _car_seat() -> Mesh:
 		box(frame, Vector3(sx, 0.07, 0.15), Vector3(0.03, 0.09, 0.03))
 		box(frame, Vector3(sx, 0.07, -0.15), Vector3(0.03, 0.09, 0.03))
 		box(frame, Vector3(sx, 0.81, -0.31), Vector3(0.012, 0.1, 0.012))
-	return _mesh([[cush, m("denim", Color(0.6, 0.62, 0.68), 2.5, 0.95)], [frame, dark_steel()]])
+	return _mesh([[cush, m("seat_fabric", Color(1.0, 1.0, 1.0), 6.0, 0.95)], [frame, dark_steel()]])
 
 func _van_door() -> Mesh:
 	var panel := _st()
@@ -1382,28 +1490,55 @@ func _tune_kit() -> Mesh:
 
 # ------------------------------------------------------------------ first-person arm
 ## Right forearm + hand gripping at the origin; the forearm runs back toward +Z/-Y.
-func arm_mesh() -> Mesh:
-	if _meshes.has("__arm"):
-		return _meshes["__arm"]
+## First-person right arm: a fist round the grip with knuckles, fingernails and a thumb, the wrist
+## (with a watch if you wear one) and a textured jacket sleeve with a buttoned cuff.
+func arm_mesh(sleeve_tex := "canvas", sleeve_col := Color(0.62, 0.66, 0.5), watch := false) -> Mesh:
+	var key := "__arm|%s|%s|%s" % [sleeve_tex, sleeve_col.to_html(), watch]
+	if _meshes.has(key):
+		return _meshes[key]
 	var skin := _st()
-	# closed fist around the grip: palm block, four knuckles and a thumb over the front
-	ellipsoid(skin, Vector3(0.012, -0.005, 0.012), Vector3(0.042, 0.052, 0.038), 8, 12)
+	# palm and back of the hand
+	ellipsoid(skin, Vector3(0.012, -0.005, 0.014), Vector3(0.043, 0.054, 0.04), 10, 14)
+	# four curled fingers: knuckle, middle joint and tip wrapping round the front of the grip
 	for i in range(4):
-		var y := 0.032 - i * 0.021
-		ellipsoid(skin, Vector3(-0.012, y, -0.03), Vector3(0.022, 0.012, 0.016), 5, 8)
-		ellipsoid(skin, Vector3(0.022, y, -0.022), Vector3(0.014, 0.011, 0.02), 5, 8)
-	Lib._tube(skin, Vector3(0.03, 0.035, 0.01), Vector3(0.0, 0.045, -0.035), 0.012, 0.01, 8)
-	Lib._tube(skin, Vector3(0, -0.02, 0.03), Vector3(0.0, -0.09, 0.15), 0.033, 0.036, 12)
+		var y := 0.033 - i * 0.0215
+		var fr := 0.0105 - i * 0.0008
+		Lib._tube(skin, Vector3(0.026, y, -0.012), Vector3(0.006, y, -0.036), fr, fr * 0.95, 10)
+		Lib._tube(skin, Vector3(0.006, y, -0.036), Vector3(-0.02, y - 0.002, -0.032), fr * 0.95, fr * 0.9, 10)
+		Lib._tube(skin, Vector3(-0.02, y - 0.002, -0.032), Vector3(-0.03, y - 0.003, -0.012), fr * 0.9, fr * 0.8, 10)
+		ellipsoid(skin, Vector3(0.026, y, -0.012), Vector3(fr * 1.15, fr * 1.05, fr * 1.15), 5, 8)
+		ellipsoid(skin, Vector3(0.006, y, -0.036), Vector3(fr, fr, fr), 5, 8)
+		ellipsoid(skin, Vector3(-0.03, y - 0.003, -0.012), Vector3(fr * 0.8, fr * 0.85, fr * 0.8), 5, 8)
+	# thumb over the front of the fingers
+	Lib._tube(skin, Vector3(0.03, 0.03, 0.02), Vector3(0.012, 0.05, -0.012), 0.014, 0.012, 10)
+	Lib._tube(skin, Vector3(0.012, 0.05, -0.012), Vector3(-0.004, 0.047, -0.04), 0.012, 0.0105, 10)
+	ellipsoid(skin, Vector3(-0.004, 0.047, -0.04), Vector3(0.0105, 0.01, 0.011), 5, 8)
+	# wrist and forearm up to the cuff
+	Lib._tube(skin, Vector3(0.004, -0.03, 0.035), Vector3(0.0, -0.06, 0.085), 0.034, 0.036, 14)
+	var nails := _st()
+	for i in range(4):
+		var y := 0.033 - i * 0.0215
+		ellipsoid(nails, Vector3(-0.0365, y - 0.003, -0.014), Vector3(0.0035, 0.0075, 0.007), 4, 6)
+	ellipsoid(nails, Vector3(-0.012, 0.0545, -0.044), Vector3(0.006, 0.003, 0.007), 4, 6)
 	var sleeve := _st()
-	Lib._tube(sleeve, Vector3(0.0, -0.08, 0.13), Vector3(0.02, -0.22, 0.42), 0.05, 0.065, 14)
-	var cuff_mesh := _mesh([[sleeve, m("plaid", Color.WHITE, 6.0, 0.9)]])
-	var out := _mesh([[skin, m("skin", Color(0.74, 0.6, 0.5), 8.0, 0.55)]])
-	var st := _st()
-	st.append_from(cuff_mesh, 0, Transform3D.IDENTITY)
-	st.generate_tangents()
-	st.commit(out)
-	out.surface_set_material(1, m("plaid", Color.WHITE, 6.0, 0.9))
-	_meshes["__arm"] = out
+	Lib._tube(sleeve, Vector3(0.0, -0.058, 0.075), Vector3(0.025, -0.24, 0.48), 0.05, 0.07, 18)
+	var cuff := _st()
+	Lib._tube(cuff, Vector3(0.0, -0.056, 0.072), Vector3(0.003, -0.07, 0.102), 0.053, 0.055, 18)
+	for k in range(2):
+		ellipsoid(cuff, Vector3(0.05, -0.064 - k * 0.012, 0.1 + k * 0.025), Vector3(0.004, 0.006, 0.006), 4, 6)
+	Lib._tube(cuff, Vector3(0.048, -0.09, 0.15), Vector3(0.058, -0.16, 0.3), 0.003, 0.003, 4) # seam
+	var parts := [[skin, m("skin", Color(0.76, 0.6, 0.5), 9.0, 0.55)], [nails, c(Color(0.86, 0.72, 0.68), 0.3)],
+		[sleeve, m(sleeve_tex, sleeve_col, 7.0, 0.92)], [cuff, m(sleeve_tex, sleeve_col.darkened(0.25), 8.0, 0.92)]]
+	if watch:
+		var strap := _st()
+		torus(strap, Vector3(0.002, -0.045, 0.06), 0.036, 0.006, 18, 6, Vector3(0, -0.03, 0.05).normalized())
+		var face := _st()
+		Lib._tube(face, Vector3(-0.035, -0.04, 0.058), Vector3(-0.044, -0.038, 0.057), 0.014, 0.014, 14)
+		_disc(face, Vector3(-0.044, -0.038, 0.057), 0.014, Vector3(-1, 0.1, 0).normalized(), 14)
+		parts.append([strap, leather()])
+		parts.append([face, brass()])
+	var out := _mesh(parts)
+	_meshes[key] = out
 	return out
 
 # ------------------------------------------------------------------ icons
@@ -1548,7 +1683,7 @@ func _build17(id: String, rng: RandomNumberGenerator) -> Mesh:
 		"hunt_animal_grease": return _jar(Color(0.92, 0.85, 0.6, 0.95), Color(0.55, 0.4, 0.25))
 		"industrial_solvent": return _chem_jug(Color(0.25, 0.45, 0.75), Color(0.95, 0.75, 0.1))
 		"brake_fluid": return _chem_bottle(Color(0.9, 0.9, 0.88), Color(0.85, 0.6, 0.1))
-		"coolant_t1": return _chem_jug(Color(0.2, 0.75, 0.35), Color(0.95, 0.95, 0.9))
+		"coolant_t1": return _chem_jug(Color(0.2, 0.75, 0.35), Color(0.95, 0.95, 0.9), 7)
 		"mod_coolant_jug_20l": return _big_jug(Color(0.2, 0.7, 0.35))
 		"crude_oil": return _drum_can(Color(0.08, 0.08, 0.08))
 		# hunting
@@ -1578,17 +1713,21 @@ func _build17(id: String, rng: RandomNumberGenerator) -> Mesh:
 		"carrot_seeds": return _packet(Color(0.9, 0.45, 0.12))
 		"corn_seeds": return _packet(Color(0.9, 0.78, 0.2))
 		# drinks and snacks
-		"crimson_chaos_energy": return _tall_can(Color(0.65, 0.04, 0.08), Color(0.1, 0.1, 0.1))
-		"digital_soda": return _can(Color(0.1, 0.55, 0.9), Color(0.95, 0.95, 0.95), 0.033, 0.12)
-		"matrix_cola": return _can(Color(0.06, 0.08, 0.06), Color(0.1, 0.85, 0.25), 0.033, 0.12)
+		"crimson_chaos_energy": return _can(Color(0.65, 0.04, 0.08), Color(0.1, 0.1, 0.1), 0.028, 0.165, 15)
+		"digital_soda": return _can(Color(0.1, 0.55, 0.9), Color(0.95, 0.95, 0.95), 0.033, 0.12, 10)
+		"matrix_cola": return _can(Color(0.06, 0.08, 0.06), Color(0.1, 0.85, 0.25), 0.033, 0.12, 11)
 		"zap_power_juice": return _bottle(Color(0.95, 0.88, 0.15, 0.85), Color("1a1a1a"))
 		"sterling_organic_milk": return _milk(Color(0.25, 0.5, 0.85), false)
 		"spoiled_milk": return _milk(Color(0.55, 0.6, 0.3), true)
 		"tommy_s_crunch": return _cereal_box(Color(0.9, 0.38, 0.1), Color(0.98, 0.85, 0.2))
-		"feline_feast_cat_food": return _can(Color(0.55, 0.3, 0.65), Color(0.95, 0.85, 0.3), 0.042, 0.04)
-		"canine_chow_dog_food": return _can(Color(0.65, 0.35, 0.12), Color(0.9, 0.9, 0.85), 0.05, 0.11)
+		"feline_feast_cat_food": return _can(Color(0.55, 0.3, 0.65), Color(0.95, 0.85, 0.3), 0.042, 0.04, 12)
+		"canine_chow_dog_food": return _can(Color(0.65, 0.35, 0.12), Color(0.9, 0.9, 0.85), 0.05, 0.11, 13)
 		"thermos_coffee": return _thermos(true)
 		"camp_insulated_thermos": return _thermos(false)
+		"pump_nozzle": return _pump_nozzle()
+		"canteen_empty", "canteen_half", "canteen_full": return _canteen(id)
+		"mod_canteen_2l": return _field_canteen()
+		"mod_coffee_flask_3l": return _coffee_flask()
 		# medical
 		"sterile_gauze": return _gauze()
 		"morphine_injector": return _injector(Color(0.25, 0.4, 0.75))
@@ -1855,7 +1994,7 @@ func _jar(fill: Color, lid: Color) -> Mesh:
 		parts.append([f, c(fill, 0.3)])
 	return _mesh(parts)
 
-func _chem_jug(col: Color, label: Color) -> Mesh:
+func _chem_jug(col: Color, label: Color, row := -1) -> Mesh:
 	var body := _st()
 	box(body, Vector3(0, 0.1, 0), Vector3(0.12, 0.2, 0.08))
 	lathe(body, [Vector2(0.02, 0.2), Vector2(0.02, 0.23)], 12, Vector3(0.03, 0, 0))
@@ -1865,8 +2004,14 @@ func _chem_jug(col: Color, label: Color) -> Mesh:
 	var cap := _st()
 	lathe(cap, [Vector2(0.024, 0.225), Vector2(0.024, 0.245), Vector2(0.02, 0.248)], 12, Vector3(0.03, 0, 0))
 	var lab := _st()
-	box(lab, Vector3(0.0, 0.1, 0.0405), Vector3(0.09, 0.1, 0.002))
-	return _mesh([[body, c(col, 0.4)], [handle, c(col, 0.4)], [cap, black_plastic()], [lab, paint(label)]])
+	var lab_mat: Material = paint(label)
+	if row >= 0:
+		_label_quad(lab, Vector3(0.0, 0.1, 0.0412), 0.11, 0.06)
+		lab_mat = label_mat(row)
+	else:
+		box(lab, Vector3(0.0, 0.1, 0.0405), Vector3(0.09, 0.1, 0.002))
+	var plastic_mat := m("plastic", col, 4.0, 0.4)
+	return _mesh([[body, plastic_mat], [handle, plastic_mat], [cap, black_plastic()], [lab, lab_mat]])
 
 func _chem_bottle(col: Color, label: Color) -> Mesh:
 	var b := _st()
@@ -1887,8 +2032,9 @@ func _big_jug(col: Color) -> Mesh:
 	var cap := _st()
 	lathe(cap, [Vector2(0.03, 0.375), Vector2(0.03, 0.41), Vector2(0.025, 0.415)], 14, Vector3(0.08, 0, 0))
 	var lab := _st()
-	box(lab, Vector3(0, 0.18, 0.0855), Vector3(0.2, 0.18, 0.002))
-	return _mesh([[body, c(col, 0.45)], [handle, c(col, 0.45)], [cap, c(Color(0.9, 0.85, 0.1), 0.4)], [lab, paint(Color(0.95, 0.95, 0.92))]])
+	_label_quad(lab, Vector3(0, 0.2, 0.0862), 0.22, 0.11)
+	var plastic_mat := m("plastic", col, 4.0, 0.45)
+	return _mesh([[body, plastic_mat], [handle, plastic_mat], [cap, c(Color(0.9, 0.85, 0.1), 0.4)], [lab, label_mat(7)]])
 
 func _drum_can(col: Color) -> Mesh:
 	var d := _st()
@@ -2102,6 +2248,116 @@ func _thermos(full: bool) -> Mesh:
 		ellipsoid(steam, Vector3(0, 0.33, 0), Vector3(0.02, 0.025, 0.02), 4, 8, 0.4, 3)
 		parts.append([steam, Lib.color_mat(Color(1, 1, 1, 0.25), 0.9)])
 	return _mesh(parts)
+
+# ---- liquid containers (litres)
+## A fuel pump nozzle: rubber-sleeved grip, trigger lever in a guard, an angled steel spout and the
+## swivel where the hose screws on.
+func _pump_nozzle() -> Mesh:
+	var body := _st()
+	# cast body over the trigger, tapering toward the spout
+	hexa(body, [Vector3(-0.022, 0.0, -0.03), Vector3(0.022, 0.0, -0.03), Vector3(0.022, 0.0, 0.05), Vector3(-0.022, 0.0, 0.05),
+		Vector3(-0.018, 0.05, -0.07), Vector3(0.018, 0.05, -0.07), Vector3(0.018, 0.05, 0.035), Vector3(-0.018, 0.05, 0.035)])
+	var grip := _st()
+	Lib._tube(grip, Vector3(0, 0.02, 0.045), Vector3(0, -0.02, 0.17), 0.019, 0.021, 14)
+	for k in range(5):
+		var t := 0.2 + k * 0.15
+		torus(grip, Vector3(0, 0.02, 0.045).lerp(Vector3(0, -0.02, 0.17), t), 0.0215, 0.0025, 14, 4, Vector3(0, -0.04, 0.125).normalized())
+	var guard := _st()
+	Lib._tube(guard, Vector3(0, -0.005, -0.02), Vector3(0, -0.045, 0.02), 0.004, 0.004, 6)
+	Lib._tube(guard, Vector3(0, -0.045, 0.02), Vector3(0, -0.05, 0.13), 0.004, 0.004, 6)
+	var trig := _st()
+	box(trig, Vector3(0, -0.025, 0.07), Vector3(0.012, 0.008, 0.1), Basis(Vector3.RIGHT, -0.2))
+	var spout := _st()
+	Lib._tube(spout, Vector3(0, 0.035, -0.06), Vector3(0, 0.03, -0.13), 0.011, 0.011, 12)
+	Lib._tube(spout, Vector3(0, 0.03, -0.13), Vector3(0, -0.01, -0.24), 0.009, 0.0085, 12)
+	torus(spout, Vector3(0, 0.032, -0.1), 0.0125, 0.002, 12, 4, Vector3.FORWARD)
+	var swivel := _st()
+	Lib._tube(swivel, Vector3(0, -0.02, 0.17), Vector3(0, -0.026, 0.205), 0.016, 0.016, 12)
+	Lib._tube(swivel, Vector3(0, -0.026, 0.205), Vector3(0, -0.03, 0.26), 0.02, 0.02, 10)
+	return _mesh([[body, m("paint", Color(0.92, 0.7, 0.12), 3.0, 0.45, 0.4)], [grip, rubber()], [guard, steel()], [trig, dark_steel()],
+		[spout, steel()], [swivel, m("rubber", Color(0.3, 0.3, 0.3), 4.0, 0.85)]])
+
+## A one-litre canteen: a flattened steel bottle in an olive canvas cover with a strap, a screw cap
+## on a little chain. The half and full ones show a darker, damp cover.
+func _canteen(id: String) -> Mesh:
+	var bottle := _st()
+	lathe(bottle, [Vector2(0.0, 0.0), Vector2(0.06, 0.004), Vector2(0.072, 0.03), Vector2(0.074, 0.11), Vector2(0.066, 0.15), Vector2(0.03, 0.172), Vector2(0.017, 0.18)], 22)
+	var cover := _st()
+	lathe(cover, [Vector2(0.061, 0.004), Vector2(0.0735, 0.03), Vector2(0.0755, 0.11), Vector2(0.067, 0.148)], 22, Vector3.ZERO, true, false)
+	var seam := _st()
+	for zs in [-1.0, 1.0]:
+		box(seam, Vector3(0, 0.075, 0.0745 * zs), Vector3(0.006, 0.14, 0.003))
+	torus(seam, Vector3(0, 0.148, 0), 0.067, 0.003, 22, 4)
+	var cap := _st()
+	lathe(cap, [Vector2(0.019, 0.176), Vector2(0.02, 0.2), Vector2(0.016, 0.203), Vector2(0.0, 0.204)], 14)
+	torus(cap, Vector3(0.024, 0.185, 0), 0.006, 0.0012, 8, 4, Vector3.FORWARD)
+	var strap := _st()
+	for xs in [-1.0, 1.0]:
+		torus(strap, Vector3(0.074 * xs, 0.14, 0), 0.008, 0.002, 8, 4, Vector3.FORWARD)
+	Lib._tube(strap, Vector3(-0.08, 0.14, 0), Vector3(-0.09, 0.26, 0), 0.006, 0.006, 4)
+	Lib._tube(strap, Vector3(-0.09, 0.26, 0), Vector3(0.09, 0.26, 0), 0.006, 0.006, 4)
+	Lib._tube(strap, Vector3(0.09, 0.26, 0), Vector3(0.08, 0.14, 0), 0.006, 0.006, 4)
+	var wet := 1.0 if id == "canteen_empty" else (0.85 if id == "canteen_half" else 0.72)
+	var canvas_mat := m("canvas", Color(0.55, 0.6, 0.38) * wet, 5.0, 0.95)
+	canvas_mat = canvas_mat.duplicate()
+	canvas_mat.albedo_color.a = 1.0
+	var out := _mesh([[bottle, steel()], [cover, canvas_mat], [seam, m("canvas", Color(0.35, 0.38, 0.24), 6.0, 0.95)], [cap, black_plastic()], [strap, m("canvas", Color(0.4, 0.42, 0.28), 6.0, 0.9)]])
+	return _flatten(out, Vector3(1.0, 1.0, 0.55))
+
+## A two-litre steel field canteen with a nested cup on the bottom and a wide screw cap.
+func _field_canteen() -> Mesh:
+	var body := _st()
+	lathe(body, [Vector2(0.0, 0.05), Vector2(0.075, 0.052), Vector2(0.086, 0.07), Vector2(0.088, 0.2), Vector2(0.078, 0.24), Vector2(0.034, 0.262), Vector2(0.026, 0.27)], 24)
+	var cup := _st()
+	lathe(cup, [Vector2(0.0, 0.0), Vector2(0.084, 0.002), Vector2(0.09, 0.01), Vector2(0.092, 0.072), Vector2(0.088, 0.075)], 24, Vector3.ZERO, true, false)
+	torus(cup, Vector3(0.11, 0.04, 0), 0.02, 0.004, 10, 4, Vector3.FORWARD)
+	var cap := _st()
+	lathe(cap, [Vector2(0.028, 0.266), Vector2(0.03, 0.295), Vector2(0.024, 0.3), Vector2(0.0, 0.301)], 18)
+	for k in range(12):
+		var a := TAU * k / 12.0
+		box(cap, Vector3(cos(a) * 0.03, 0.282, sin(a) * 0.03), Vector3(0.003, 0.024, 0.004), Basis(Vector3.UP, -a))
+	var band := _st()
+	lathe(band, [Vector2(0.0885, 0.1), Vector2(0.0885, 0.17)], 24, Vector3.ZERO, false, false)
+	var out := _mesh([[body, m("paint", Color(0.3, 0.42, 0.55), 4.0, 0.45, 0.5)], [cup, steel()], [cap, dark_steel()], [band, m("canvas", Color(0.75, 0.68, 0.5), 5.0, 0.9)]])
+	return _flatten(out, Vector3(1.0, 1.0, 0.62))
+
+## A three-litre pump-action coffee flask: tall red body, a steel collar and a hinged pour lid.
+func _coffee_flask() -> Mesh:
+	var body := _st()
+	lathe(body, [Vector2(0.0, 0.0), Vector2(0.07, 0.0), Vector2(0.074, 0.012), Vector2(0.074, 0.3), Vector2(0.068, 0.315)], 26)
+	var collar := _st()
+	lathe(collar, [Vector2(0.068, 0.312), Vector2(0.07, 0.315), Vector2(0.07, 0.345), Vector2(0.062, 0.35)], 26)
+	lathe(collar, [Vector2(0.0745, 0.0), Vector2(0.0745, 0.02)], 26, Vector3.ZERO, false, false)
+	var lid := _st()
+	lathe(lid, [Vector2(0.062, 0.35), Vector2(0.064, 0.37), Vector2(0.05, 0.385), Vector2(0.0, 0.388)], 22)
+	box(lid, Vector3(0, 0.392, 0), Vector3(0.05, 0.012, 0.03))
+	var spout := _st()
+	Lib._tube(spout, Vector3(0.05, 0.36, 0), Vector3(0.088, 0.355, 0), 0.012, 0.009, 10)
+	var handle := _st()
+	Lib._tube(handle, Vector3(-0.072, 0.29, 0), Vector3(-0.11, 0.27, 0), 0.011, 0.011, 8)
+	Lib._tube(handle, Vector3(-0.11, 0.27, 0), Vector3(-0.11, 0.1, 0), 0.012, 0.012, 8)
+	Lib._tube(handle, Vector3(-0.11, 0.1, 0), Vector3(-0.072, 0.08, 0), 0.011, 0.011, 8)
+	var lab := _st()
+	_label_band(lab, 0.0745, 0.12, 0.24, 26)
+	return _mesh([[body, m("paint", Color(0.62, 0.16, 0.12), 3.0, 0.4, 0.3)], [collar, steel()], [lid, black_plastic()], [spout, black_plastic()],
+		[handle, black_plastic()], [lab, label_mat(3)]])
+
+## Scale a finished mesh (to flatten a round canteen into an oval one).
+func _flatten(mesh_in: ArrayMesh, k: Vector3) -> ArrayMesh:
+	var out := ArrayMesh.new()
+	for si in range(mesh_in.get_surface_count()):
+		var arrays := mesh_in.surface_get_arrays(si)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var norms: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		for i in range(verts.size()):
+			verts[i] = verts[i] * k
+			norms[i] = (norms[i] / k).normalized()
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_NORMAL] = norms
+		arrays[Mesh.ARRAY_TANGENT] = null
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		out.surface_set_material(si, mesh_in.surface_get_material(si))
+	return out
 
 # ---- medical
 func _gauze() -> Mesh:
