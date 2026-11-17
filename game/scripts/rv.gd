@@ -796,9 +796,9 @@ func _interior_mats() -> Dictionary:
 	return {
 		"bare": Lib.mat("ribbed_metal", Color(0.85, 0.85, 0.85), 1.2, false, 0.6, 0.5),
 		"bare_floor": Lib.mat("ribbed_metal", Color(0.55, 0.55, 0.56), 1.0, false, 0.7, 0.5),
-		"wall": Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8),
+		"wall": Lib.mat("laminate", Color(1.0, 0.97, 0.91), 1.1, false, 0.83),
 		"insul": Lib.mat("insulation", Color.WHITE, 1.5, false, 0.6, 0.5),
-		"ceiling": Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9),
+		"ceiling": Lib.mat("upholstery", Color(1.42, 1.42, 1.33), 1.2, false, 0.95),
 		"floor": Lib.mat("vinyl", Color.WHITE, 0.9, false, 0.55),
 		"cab": Lib.mat("laminate", Color.WHITE, 1.4, false, 0.45),
 		"cab_trim": Lib.color_mat(Color(0.36, 0.35, 0.34), 0.5),
@@ -806,7 +806,7 @@ func _interior_mats() -> Dictionary:
 		"fabric": Lib.mat("upholstery", Color.WHITE, 0.45, false, 0.95),
 		"fabric2": Lib.mat("plaid", Color(0.75, 0.75, 0.78), 2.0, false, 0.95),
 		"metal": Lib.color_mat(Color(0.72, 0.72, 0.74), 0.3, 0.8),
-		"plastic": Lib.color_mat(Color(0.14, 0.14, 0.15), 0.55),
+		"plastic": Lib.mat("rubber", Color(1.0, 1.06, 1.15), 2.2, false, 0.62),
 		"black": Lib.color_mat(Color(0.06, 0.06, 0.06), 0.5),
 	}
 
@@ -893,7 +893,7 @@ func _build_interior() -> void:
 	# moulded dashboard, gauges, centre console
 	var dash_c := Vector3(0, FLOOR_Y + 0.75, FRONT_Z + 0.02)
 	Lib.box(vis, dash_c, Vector3(W - 0.15, 0.5, 0.64), M["plastic"], false, Vector3.ZERO, 0.06)
-	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.03), Vector3(W - 0.2, 0.03, 0.58), Lib.color_mat(Color(0.2, 0.2, 0.21), 0.7))
+	Lib.box(vis, dash_c + Vector3(0, 0.26, -0.03), Vector3(W - 0.2, 0.03, 0.58), M["plastic"], false, Vector3.ZERO, 0.01)
 	_shape(dash_c, Vector3(W - 0.15, 0.5, 0.64))
 	var cluster := Lib.box(vis, Vector3(-0.55, FLOOR_Y + 0.92, FRONT_Z - 0.31), Vector3(0.5, 0.18, 0.04), Lib.color_mat(Color(0.05, 0.05, 0.06), 0.3))
 	cluster.rotation.x = -0.3

@@ -49,7 +49,7 @@ The target is the **level of quality and detail**, not a copy. Never copy anothe
 3. **Labels on consumables.** Cans, jars, bottles and spray cans get a label texture band with our own made-up brands, never real or borrowed ones.
 4. **Real construction.** Crates have slats with gaps, cupboards have hinged doors and shelves, and jars have lids. Things that open open physically, never through a menu.
 5. **Liquids in litres.** Moving toward this: fuel, water, coolant and other fluids live in containers with a capacity and a current amount, shown as "x.xx/y.yy L". Transfers between containers (a can to the van tank, a pump nozzle to the tank, a jug to the radiator) show a two-gauge panel.
-6. **Aim feedback.** Planned: an outline on the aimed object, a small name label at the cursor, and the action list on the right with one key cap per row.
+6. **Aim feedback.** Loose items have an outline and crosshair label. Key-first prompts have right-side action rows with one key cap per row. Extend the outline and label to other interactable props.
 7. **Check in screenshots.** Every visual change gets a devtest screenshot (see `game/scripts/devtest.gd`, for example `--v18`) and is compared against the descriptions above before it ships.
 
 ## Priority list toward the bar

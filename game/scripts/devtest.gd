@@ -1449,6 +1449,23 @@ func _v18() -> void:
 	Game.weather = "clear"
 	Game.notified.connect(func(t: String) -> void: _log("  note: " + t))
 	await _settle(pl.global_position)
+	var item_origin: Vector3 = pl.global_position - Vector3(0, 0, 1.8)
+	item_origin.y = w.gen.height(item_origin.x, item_origin.z) + 0.35
+	var item := Game.place_item("fuel_can", 2, Transform3D(Basis.IDENTITY, item_origin))
+	var item_center := item_origin + Vector3.UP * 0.15
+	var item_prompt: String = await _aim_prompt(item_center)
+	await get_tree().process_frame
+	if pl.look_target != item or not item._hl or w.hud.aim_label.text != item.aim_name():
+		_log("FAIL: aimed item outline or name missing (%s)" % item_prompt)
+	elif w.hud.action_hints.get_child_count() != 1:
+		_log("FAIL: pickup action hint missing (%s)" % item_prompt)
+	else:
+		_log("PASS: aimed stack shows outline, name, quantity and pickup action")
+	await _shot("z00_item_aim")
+	await _aim_prompt(item_origin + Vector3.UP * 4.0)
+	if item._hl:
+		_log("FAIL: item outline did not clear after looking away")
+	item.queue_free()
 	# make the van road-ready the quick way
 	rv.modules = rv._all_modules()
 	rv.missing = {}

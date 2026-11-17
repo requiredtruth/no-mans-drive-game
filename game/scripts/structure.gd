@@ -817,8 +817,6 @@ func assemble() -> void:
 			left -= take
 			if it.amount <= 0:
 				it.queue_free()
-			else:
-				it.refresh_label()
 	var out: String = r["out"]
 	var n := int(r["n"])
 	var bb: AABB = Items.display_bounds(out)

@@ -9,6 +9,11 @@ var bars := {}
 var clock: Label
 var info: Label
 var prompt_label: Label
+var aim_label: Label
+var action_hints: VBoxContainer
+var _action_pattern := RegEx.new()
+var _previous_prompt := ""
+var _previous_touch := false
 var crosshair: Control
 var hotbar_box: HBoxContainer
 var notes: VBoxContainer
@@ -122,6 +127,22 @@ func _build_center() -> void:
 	prompt_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	prompt_label.add_theme_constant_override("outline_size", 6)
 	root.add_child(prompt_label)
+	aim_label = UI.label("", 18, Color.WHITE)
+	aim_label.set_anchors_preset(Control.PRESET_CENTER)
+	aim_label.position = Vector2(-200, 16)
+	aim_label.custom_minimum_size.x = 400
+	aim_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	aim_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	aim_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	aim_label.add_theme_constant_override("outline_size", 5)
+	root.add_child(aim_label)
+	action_hints = VBoxContainer.new()
+	action_hints.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	action_hints.position = Vector2(-330, 88)
+	action_hints.custom_minimum_size.x = 306
+	action_hints.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(action_hints)
+	_action_pattern.compile("^\\[([^\\]]+)\\] +(.+)$")
 	build_info = UI.label("", 17, Color(0.7, 1.0, 0.75))
 	build_info.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	build_info.position = Vector2(-400, -150)
@@ -272,6 +293,64 @@ func _draw_compass() -> void:
 	compass.draw_line(Vector2(w * 0.5, 0), Vector2(w * 0.5, 30), Color(1, 1, 1, 0.5), 1.0)
 
 # ------------------------------------------------------------------ update
+func _update_action_hints(prompt: String, touch: bool) -> void:
+	if prompt == _previous_prompt and touch == _previous_touch:
+		return
+	_previous_prompt = prompt
+	_previous_touch = touch
+	action_hints.offset_left = -510.0 if touch else -330.0
+	action_hints.offset_right = action_hints.offset_left + 306.0
+	for child in action_hints.get_children():
+		action_hints.remove_child(child)
+		child.queue_free()
+	var messages := PackedStringArray()
+	for line in prompt.split("\n", false):
+		if not line.begins_with("["):
+			messages.append(line)
+			continue
+		for part in line.split("   ["):
+			var segment := part if part.begins_with("[") else "[" + part
+			var action := _action_pattern.search(segment)
+			if action == null:
+				messages.append(part)
+				continue
+			var key := action.get_string(1)
+			if touch:
+				key = {"G": "PLACE", "Q": "THROW", "R": "ROT", "E": "E", "Space / JUMP": "JUMP"}.get(key, key)
+				if key == "E" and action.get_string(2) == "Exit vehicle":
+					key = "EXIT"
+			elif key == "Space / JUMP":
+				key = "SPACE"
+			var row := HBoxContainer.new()
+			row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			row.add_theme_constant_override("separation", 10)
+			var verb := UI.label(action.get_string(2), 16, Color.WHITE)
+			verb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			verb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			verb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			verb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			verb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			verb.add_theme_color_override("font_outline_color", Color.BLACK)
+			verb.add_theme_constant_override("outline_size", 5)
+			row.add_child(verb)
+			var cap := PanelContainer.new()
+			cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var style := StyleBoxFlat.new()
+			style.bg_color = Color(0.07, 0.075, 0.08, 0.92)
+			style.border_color = Color(1, 1, 1, 0.45)
+			style.set_border_width_all(1)
+			style.set_corner_radius_all(4)
+			style.set_content_margin_all(4)
+			cap.add_theme_stylebox_override("panel", style)
+			cap.custom_minimum_size.x = 58 if touch else 48
+			var binding := UI.label(key, 14, Color.WHITE)
+			binding.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			binding.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			cap.add_child(binding)
+			row.add_child(cap)
+			action_hints.add_child(row)
+	prompt_label.text = "\n".join(messages)
+
 func _process(delta: float) -> void:
 	var st := Game.stats
 	for k in bars:
@@ -293,7 +372,13 @@ func _process(delta: float) -> void:
 		info.text = "%s · %s · %d°C" % [w.gen.biome_name(p.global_position.x, p.global_position.z), Game.weather.capitalize(), int(round(p.effective_temp()))]
 		if Game.wears_flag("altimeter"):
 			info.text += " · Alt %d m" % int(round(p.global_position.y))
-		prompt_label.text = p.prompt
+		var gameplay_visible: bool = modal == null and not p.dead
+		var target: Object = p.look_target
+		aim_label.text = target.aim_name() if is_instance_valid(target) and target.has_method("aim_name") else ""
+		aim_label.visible = gameplay_visible and not p.driving
+		action_hints.visible = gameplay_visible
+		prompt_label.visible = gameplay_visible
+		_update_action_hints(p.prompt, Game.use_touch())
 		var b = p.builder
 		if b.active and not p.driving:
 			var pc: String = b.piece()

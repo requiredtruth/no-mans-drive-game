@@ -891,7 +891,6 @@ func _cook_here(here: Array) -> void:
 				it.queue_free()
 			else:
 				it.set_meta("cook", 0.0)
-				it.refresh_label()
 			k0 += 1
 		Game.place_item(r["out"], n, xf, host)
 		Audio.play_at("pickup", xf.origin, -6.0, 1.4)

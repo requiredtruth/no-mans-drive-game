@@ -2,6 +2,12 @@
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.
 
+## Version 1.9.0: interaction and cab detail
+
+- [x] Loose items show a white outline and a name with stack count at the crosshair.
+- [x] Key-first interaction prompts appear as individual right-side action rows with touchscreen button names where available.
+- [x] Van dashboard, door cards and console have textured trim, with textured laminate wall panels and fabric headliner.
+
 ## Version 1.8.0: van performance parts and body add-ons
 
 ### Performance parts (fitted at the open hood with a toolkit nearby; [G] with empty hands takes them out again, last one first)

@@ -235,19 +235,16 @@ func display_instance(id: String) -> Node3D:
 	root.add_child(inst)
 	return root
 
-var _glow_mat: StandardMaterial3D
+var _outline_mat: ShaderMaterial
 
-func set_glow(n: Node, on: bool) -> void:
-	if _glow_mat == null:
-		_glow_mat = StandardMaterial3D.new()
-		_glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		_glow_mat.albedo_color = Color(0.35, 0.32, 0.2, 1.0)
-	if n is GeometryInstance3D:
-		(n as GeometryInstance3D).material_overlay = _glow_mat if on else null
-	for ch in n.get_children():
-		set_glow(ch, on)
+func set_outline(n: Node, on: bool) -> void:
+	if _outline_mat == null:
+		_outline_mat = ShaderMaterial.new()
+		_outline_mat.shader = preload("res://shaders/item_outline.gdshader")
+	if n is MeshInstance3D:
+		(n as MeshInstance3D).material_overlay = _outline_mat if on else null
+	for child in n.get_children():
+		set_outline(child, on)
 
 func _strip_fx(n: Node) -> void:
 	for ch in n.get_children():

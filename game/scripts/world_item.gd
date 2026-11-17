@@ -11,7 +11,6 @@ var _check := 0.0
 var _attached := false
 var _model: Node3D
 var _hl := false
-var _label: Label3D
 
 func setup(p_id: String, n: int) -> void:
 	id = p_id
@@ -31,31 +30,18 @@ func setup(p_id: String, n: int) -> void:
 	cs.shape = sh
 	cs.position = bb.get_center()
 	add_child(cs)
-	_label = Label3D.new()
-	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_label.no_depth_test = true
-	_label.font_size = 42
-	_label.outline_size = 10
-	_label.pixel_size = 0.0022
-	_label.position = Vector3(0, bb.end.y + 0.12, 0)
-	_label.visible = false
-	add_child(_label)
-	refresh_label()
-
-func refresh_label() -> void:
-	if _label:
-		_label.text = Game.Data.item_name(id) + ((" ×%d" % amount) if amount > 1 else "")
+func aim_name() -> String:
+	return Game.Data.item_name(id) + ((" ×%d" % amount) if amount > 1 else "")
 
 ## Highlight while the player looks at it, so small things are easy to spot.
 func set_highlight(on: bool) -> void:
 	if on == _hl:
 		return
 	_hl = on
-	_label.visible = on
-	Items.set_glow(_model, on)
+	Items.set_outline(_model, on)
 
 func get_prompt() -> String:
-	var nm := "%s%s" % [Game.Data.item_name(id), (" ×%d" % amount) if amount > 1 else ""]
+	var nm := aim_name()
 	if Game.hands_full_for(id):
 		return "%s — hands full ([G] place / [Q] drop what you hold)" % nm
 	return "[E] Pick up %s" % nm

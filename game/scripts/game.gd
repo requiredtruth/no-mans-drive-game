@@ -358,8 +358,6 @@ func pick_up(it: Node) -> bool:
 	notify("Picked up %s%s" % [Data.item_name(id), (" ×%d" % k) if k > 1 else ""])
 	if it.amount <= 0:
 		it.queue_free()
-	else:
-		it.refresh_label()
 	return true
 
 ## Put on wearables (jacket, backpack, flashlight) so they stop taking up a hand.

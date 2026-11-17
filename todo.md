@@ -6,7 +6,7 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 ## Quality pass (see NOTES.md)
 
-- [ ] Aim outline, floating name label at the cursor, and right-hand action hints with one key cap per row.
+- [ ] Extend aim outlines and crosshair labels from loose items to individual cupboard doors and other interactable props.
 - [ ] Liquids in litres for fuel, water and coolant, with a two-gauge transfer panel and a pump nozzle at fuel stations.
 - [ ] Texture and bevel pass on the van interior (cab, dashboard, seats, cupboards, floor), then houses.
 - [ ] Labelled consumables (cans, jars, bottles, spray paint) and slatted crates.
