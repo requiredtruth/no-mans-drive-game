@@ -7,10 +7,12 @@ const GRID := 3.0
 const FURNITURE := ["chair", "table", "sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit",
 	"mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven",
 	"camp_folding_chair", "camp_canvas_bedroll", "deployable_tarp", "mod_retro_tv", "mod_led_wall_clock",
-	"mod_weather_station", "mod_cassette_travel_case"]
+	"mod_weather_station", "mod_cassette_travel_case", "deployable_camp_cot",
+	"portable_water_purifier", "collapsible_rain_barrel", "portable_cookstove"]
 const EXTRA_FURNITURE := ["mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave", "mod_rug_cowhide", "mod_rug_woven",
 	"camp_folding_chair", "camp_canvas_bedroll", "deployable_tarp", "mod_retro_tv", "mod_led_wall_clock",
-	"mod_weather_station", "mod_cassette_travel_case"]
+	"mod_weather_station", "mod_cassette_travel_case", "deployable_camp_cot",
+	"portable_water_purifier", "collapsible_rain_barrel", "portable_cookstove"]
 var _label3: Label3D
 var _screen: MeshInstance3D
 var _spin: Node3D
@@ -38,7 +40,7 @@ func setup(p_id: String, rec: Dictionary) -> void:
 	rotation.y = float(rec.get("rot", 0.0))
 	collision_layer = 1
 	add_to_group("structure")
-	if type in ["roof", "roof_slope", "floor"]:
+	if type in ["roof", "metal_roof", "roof_slope", "floor", "metal_floor"]:
 		add_to_group("roof")
 	_build()
 
@@ -107,10 +109,18 @@ func _build() -> void:
 			var depth: float = float(data.get("depth", 1.2))
 			_solid(Vector3(0, -depth * 0.5, 0), Vector3(GRID, depth, GRID), stone)
 			Lib.box(self, Vector3(0, 0.01, 0), Vector3(GRID - 0.04, 0.02, GRID - 0.04), planks)
-		"floor":
-			_solid(Vector3(0, 0.1, 0), Vector3(GRID, 0.2, GRID), planks)
-		"roof":
-			_solid(Vector3(0, 0.1, 0), Vector3(GRID + 0.1, 0.2, GRID + 0.1), shingle)
+		"floor", "metal_floor":
+			var floor_mat: Material = Lib.mat("ribbed_metal", Color(0.78, 0.83, 0.86), 1.2, false, 0.45, 0.75) if type == "metal_floor" else planks
+			_solid(Vector3(0, 0.1, 0), Vector3(GRID, 0.2, GRID), floor_mat)
+			if type == "metal_floor":
+				for z in [-1.0, 0.0, 1.0]:
+					Lib.box(self, Vector3(0, 0.206, z), Vector3(2.9, 0.014, 0.018), Lib.mat("metal", Color(0.3, 0.35, 0.38), 2.0, false, 0.4, 0.85))
+		"roof", "metal_roof":
+			var roof_mat: Material = Lib.mat("ribbed_metal", Color(0.6, 0.68, 0.75), 1.0, false, 0.46, 0.65) if type == "metal_roof" else shingle
+			_solid(Vector3(0, 0.1, 0), Vector3(GRID + 0.1, 0.2, GRID + 0.1), roof_mat)
+			if type == "metal_roof":
+				for x in [-1.0, 0.0, 1.0]:
+					Lib.box(self, Vector3(x, 0.215, 0), Vector3(0.035, 0.03, 3.0), trim)
 		"roof_slope":
 			var ang := atan2(1.5, GRID)
 			var length := sqrt(GRID * GRID + 2.25) + 0.1
@@ -120,12 +130,24 @@ func _build() -> void:
 				for k in range(3):
 					var hh := 1.5 * (1.0 - k / 3.0)
 					Lib.box(self, Vector3(s * (GRID * 0.5 - 0.05), hh * 0.5, -GRID * 0.5 + 0.5 + k * 1.0), Vector3(0.1, hh, 1.0), logs)
-		"wall":
-			_solid(Vector3(0, GRID * 0.5, 0), Vector3(GRID, GRID, 0.24), logs)
+		"wall", "metal_wall", "concrete_wall":
+			var wall_mat: Material = logs
+			if type == "metal_wall":
+				wall_mat = Lib.mat("ribbed_metal", Color(0.68, 0.73, 0.75), 1.0, false, 0.45, 0.72)
+			elif type == "concrete_wall":
+				wall_mat = Lib.mat("rock", Color(0.75, 0.77, 0.76), 0.9, false, 0.97)
+			_solid(Vector3(0, GRID * 0.5, 0), Vector3(GRID, GRID, 0.24), wall_mat)
+			if type != "wall":
+				for x in [-1.4, 0.0, 1.4]:
+					Lib.box(self, Vector3(x, 1.5, 0.14), Vector3(0.09, 2.95, 0.08), Lib.mat("metal", Color(0.3, 0.35, 0.37), 2.0, false, 0.5, 0.7))
+				for y in [0.35, 1.5, 2.65]:
+						for x in [-1.38, 1.38]:
+							Lib.sphere(self, Vector3(x, y, 0.19), 0.035, Lib.color_mat(Color("71777c"), 0.45, 0.8))
 			for x in [-GRID * 0.5, GRID * 0.5]:
 				Lib.box(self, Vector3(x, GRID * 0.5, 0), Vector3(0.26, GRID, 0.3), trim)
-		"window":
-			_wall_with_hole(logs, 1.3, 1.1, 1.1)
+		"window", "metal_window":
+			var window_mat: Material = Lib.mat("ribbed_metal", Color(0.75, 0.77, 0.77), 1.3, false, 0.4, 0.7) if type == "metal_window" else logs
+			_wall_with_hole(window_mat, 1.3, 1.1, 1.1)
 			for y in [1.1, 2.2]:
 				Lib.box(self, Vector3(0, y, 0), Vector3(1.45, 0.08, 0.3), trim)
 			for x in [-0.68, 0.68]:
@@ -141,15 +163,19 @@ func _build() -> void:
 			add_child(g)
 			_col(Vector3(0, 1.65, 0), Vector3(1.3, 1.1, 0.06))
 			Lib.box(self, Vector3(0, 1.1, 0.12), Vector3(1.5, 0.08, 0.2), dark)
-		"doorway":
-			_wall_with_hole(logs, 1.2, 2.3, 0.0)
+			if type == "metal_window":
+				for x in [-0.45, 0.0, 0.45]:
+					_solid(Vector3(x, 1.65, 0.16), Vector3(0.055, 1.1, 0.06), Lib.mat("metal", Color(0.25, 0.3, 0.34), 2.0, false, 0.35, 0.8))
+		"doorway", "metal_door":
+			var door_mat: Material = Lib.mat("ribbed_metal", Color(0.62, 0.67, 0.7), 1.2, false, 0.45, 0.75) if type == "metal_door" else logs
+			_wall_with_hole(door_mat, 1.2, 2.3, 0.0)
 			for x in [-0.64, 0.64]:
 				Lib.box(self, Vector3(x, 1.15, 0), Vector3(0.08, 2.3, 0.3), trim)
 			Lib.box(self, Vector3(0, 2.34, 0), Vector3(1.36, 0.1, 0.3), trim)
 			_door_pivot = Node3D.new()
 			_door_pivot.position = Vector3(-0.6, 0, 0)
 			add_child(_door_pivot)
-			var door := Lib.box(_door_pivot, Vector3(0.6, 1.15, 0), Vector3(1.18, 2.28, 0.08), dark)
+			var door := Lib.box(_door_pivot, Vector3(0.6, 1.15, 0), Vector3(1.18, 2.28, 0.08), door_mat if type == "metal_door" else dark)
 			var body := StaticBody3D.new()
 			var cs := CollisionShape3D.new()
 			var sh := BoxShape3D.new()
@@ -412,12 +438,15 @@ func _refresh() -> void:
 				_fire_audio.play()
 			elif not lit:
 				_fire_audio.stop()
-		"doorway":
+		"doorway", "metal_door":
 			var open: bool = data.get("open", false)
 			_door_pivot.rotation.y = -1.6 if open else 0.0
 		"floor_lamp":
 			if _lamp:
 				_lamp.visible = data.get("on", true)
+		"portable_cookstove":
+			if _lamp:
+				_lamp.visible = data.get("on", false) and float(data.get("fuel", 0.0)) > 0.0
 		"mod_retro_tv":
 			if _lamp:
 				_lamp.visible = data.get("on", false)
@@ -465,6 +494,22 @@ func _process(delta: float) -> void:
 		"mod_retro_tv":
 			if _lamp and _lamp.visible:
 				_lamp.light_energy = 0.7 + randf() * 0.35
+		"portable_water_purifier":
+			if int(data.get("dirty", 0)) > 0 and int(data.get("clean", 0)) < 6 and int(data.get("filter", 0)) > 0:
+				data["elapsed"] = float(data.get("elapsed", 0.0)) + delta
+				if float(data["elapsed"]) >= 18.0:
+					data["elapsed"] = 0.0
+					data["dirty"] = int(data.get("dirty", 0)) - 1
+					data["clean"] = int(data.get("clean", 0)) + 1
+					data["filter"] = int(data.get("filter", 0)) - 1
+					_save_data()
+		"portable_cookstove":
+			if data.get("on", false):
+				data["fuel"] = maxf(float(data.get("fuel", 0.0)) - delta, 0.0)
+				if float(data["fuel"]) <= 0.0:
+					data["on"] = false
+					_refresh()
+					_save_data()
 		"mod_led_wall_clock", "mod_weather_station":
 			_tick -= delta
 			if _spin:
@@ -490,9 +535,10 @@ func game_hour() -> void:
 			data["water"] = maxf(water - 1.0 / 20.0, 0.0)
 			_refresh()
 			_save_data()
-		"rain_collector":
-			if Game.weather == "rain":
-				data["water"] = mini(int(data.get("water", 0)) + 1, 6)
+		"rain_collector", "collapsible_rain_barrel":
+			if Game.weather == "rain" and not is_sheltered():
+				var cap := 20 if type == "collapsible_rain_barrel" else 6
+				data["water"] = mini(int(data.get("water", 0)) + (2 if type == "collapsible_rain_barrel" else 1), cap)
 				_save_data()
 
 func is_sheltered() -> bool:
@@ -521,7 +567,7 @@ func _prompt() -> String:
 					return "[E] Set the %s on the grill" % Data.item_name(held)
 				return "Campfire (%d min of fuel) — hold food or dirty water and [E] to set it on the grill" % int(fuel / 60.0 + 1)
 			return "[E] Light campfire (1 Wood)"
-		"doorway":
+		"doorway", "metal_door":
 			return "[E] %s door" % ("Close" if data.get("open", false) else "Open")
 		"tent", "bed":
 			return "[E] Sleep"
@@ -560,6 +606,30 @@ func _prompt() -> String:
 			return "[E] Sit (recover energy)   [G] Pick up"
 		"camp_canvas_bedroll":
 			return "[E] Sleep on the bedroll   [G] Roll it up"
+		"deployable_camp_cot":
+			return "[E] Sleep in the folding cot   [G] Fold up"
+		"portable_water_purifier":
+			var dirty := int(data.get("dirty", 0))
+			var clean := int(data.get("clean", 0))
+			var filter_left := int(data.get("filter", 0))
+			match Game.equipped():
+				"water_dirty": return "[E] Pour dirty water into purifier (%d/6 L)" % dirty
+				"charcoal": return "[E] Refill carbon filter (%d cycles)" % filter_left
+				"bottle_empty": return "[E] Fill bottle with filtered water (%d L ready)" % clean
+			return "Water filter: %d L dirty, %d L clean, %d cycles remaining" % [dirty, clean, filter_left]
+		"collapsible_rain_barrel":
+			if Game.equipped() == "bottle_empty":
+				return "[E] Fill bottle (barrel %d/20 L)" % int(data.get("water", 0))
+			return "Rain barrel: %d/20 L — hold empty bottle" % int(data.get("water", 0))
+		"portable_cookstove":
+			var stove_fuel := float(data.get("fuel", 0.0))
+			if Game.equipped() == "fuel_can":
+				return "[E] Add stove fuel (%d seconds left)" % int(stove_fuel)
+			if stove_fuel <= 0.0:
+				return "Cookstove empty — hold a full fuel can"
+			if data.get("on", false) and _cookable(Game.equipped()):
+				return "[E] Set %s on cookstove" % Data.item_name(Game.equipped())
+			return "[E] Turn cookstove %s (%d seconds fuel)" % ["on" if not data.get("on", false) else "off", int(stove_fuel)]
 		"deployable_tarp":
 			return "Shade tarp: keeps the rain off   [G] Pack it up"
 		"mod_retro_tv":
@@ -591,7 +661,7 @@ func interact(player: Node) -> void:
 				_set_on_grill()
 			else:
 				Game.notify("Hold food (raw meat, fish, potatoes, mushrooms) or dirty water and press [E] to set it on the grill. It cooks by itself.")
-		"doorway":
+		"doorway", "metal_door":
 			data["open"] = not data.get("open", false)
 			Audio.play_at("door", global_position)
 			_refresh()
@@ -608,6 +678,23 @@ func interact(player: Node) -> void:
 			player.sit_in(self)
 		"camp_canvas_bedroll":
 			Game.world.sleep(global_position + Vector3(0, 0.4, 0))
+		"deployable_camp_cot":
+			Game.world.sleep(global_position + Vector3(0, 0.55, 0))
+		"portable_water_purifier":
+			_purifier_interact()
+		"collapsible_rain_barrel":
+			var amount := int(data.get("water", 0))
+			if Game.equipped() != "bottle_empty":
+				Game.notify("Hold an Empty Bottle to draw collected rainwater")
+			elif amount <= 0:
+				Game.notify("The rain barrel is empty")
+			elif Game.remove_item("bottle_empty", 1):
+				Game.add_item("water_clean", 1, true)
+				data["water"] = amount - 1
+				_save_data()
+				Audio.play_at("splash", global_position, -10.0)
+		"portable_cookstove":
+			_stove_interact()
 		"mod_retro_tv":
 			data["on"] = not data.get("on", false)
 			Audio.play_at("click", global_position, -6.0)
@@ -669,6 +756,55 @@ func add_fuel(fuel_id := "wood") -> bool:
 	_save_data()
 	return true
 
+## A physical treatment station: no crafting menu and no free water generation.
+func _purifier_interact() -> void:
+	var held := Game.equipped()
+	if held == "water_dirty":
+		if int(data.get("dirty", 0)) >= 6:
+			Game.notify("The purifier's dirty-water tank is full (6 L)")
+		elif Game.remove_item("water_dirty", 1):
+			Game.add_item("bottle_empty", 1, true)
+			data["dirty"] = int(data.get("dirty", 0)) + 1
+			_save_data()
+			Audio.play_at("splash", global_position, -8.0)
+	elif held == "charcoal":
+		if int(data.get("filter", 0)) >= 12:
+			Game.notify("The carbon filter is already full")
+		elif Game.remove_item("charcoal", 1):
+			data["filter"] = mini(int(data.get("filter", 0)) + 4, 12)
+			_save_data()
+			Audio.play_at("click", global_position, -8.0)
+	elif held == "bottle_empty":
+		if int(data.get("clean", 0)) <= 0:
+			Game.notify("No filtered water yet — load dirty water and charcoal")
+		elif Game.remove_item("bottle_empty", 1):
+			Game.add_item("water_clean", 1, true)
+			data["clean"] = int(data.get("clean", 0)) - 1
+			_save_data()
+			Audio.play_at("splash", global_position, -8.0)
+	else:
+		Game.notify("Hold Dirty Water to pour, Charcoal to refill, or an Empty Bottle to fill")
+
+func _stove_interact() -> void:
+	var fuel := float(data.get("fuel", 0.0))
+	if Game.equipped() == "fuel_can":
+		if fuel >= 360.0:
+			Game.notify("Cookstove fuel tank is full")
+		elif Game.remove_item("fuel_can", 1):
+			Game.add_item("fuel_can_empty", 1, true)
+			data["fuel"] = minf(fuel + 180.0, 360.0)
+			_save_data()
+			Game.notify("Cookstove refuelled")
+	elif fuel <= 0.0:
+		Game.notify("Hold a full fuel can to refuel the stove")
+	elif data.get("on", false) and _cookable(Game.equipped()):
+		_set_on_grill()
+	else:
+		data["on"] = not data.get("on", false)
+		_refresh()
+		_save_data()
+		Audio.play_at("click", global_position, -6.0)
+
 func _planter_interact() -> void:
 	var crop: String = data.get("crop", "")
 	if crop == "":
@@ -729,7 +865,8 @@ func _cookable(id: String) -> bool:
 const GRILL := [Vector3(-0.2, 0.42, -0.2), Vector3(0.2, 0.42, -0.2), Vector3(-0.2, 0.42, 0.2), Vector3(0.2, 0.42, 0.2), Vector3(0.0, 0.42, 0.0)]
 
 func _set_on_grill() -> void:
-	for lp in GRILL:
+	var cooking_spots: Array = [Vector3(0, 0.55, 0)] if type == "portable_cookstove" else GRILL
+	for lp in cooking_spots:
 		var gp: Vector3 = to_global(lp)
 		var busy := false
 		for it in get_tree().get_nodes_in_group("world_item"):
@@ -747,6 +884,8 @@ func _set_on_grill() -> void:
 
 ## World positions that cook what sits on them while the fire burns.
 func heat_spots() -> Array:
+	if type == "portable_cookstove":
+		return [to_global(Vector3(0, 0.55, 0))] if data.get("on", false) and float(data.get("fuel", 0.0)) > 0.0 else []
 	if type != "campfire" or float(data.get("fuel", 0.0)) <= 0.0:
 		return []
 	return [to_global(Vector3(0, 0.42, 0))]
@@ -931,6 +1070,54 @@ func _flat_rug(w: float, d: float, tex_name: String, round_rug := false) -> void
 func _build_extra() -> void:
 	var alu := Lib.mat("metal", Color(0.78, 0.8, 0.82), 2.0, false, 0.3, 0.85)
 	match type:
+		"deployable_camp_cot":
+			var tubing := Lib.mat("metal", Color(0.55, 0.6, 0.64), 3.0, false, 0.38, 0.8)
+			var canvas := Lib.mat("canvas", Color(0.28, 0.45, 0.37), 1.4, false, 0.95)
+			for x in [-0.39, 0.39]:
+				Lib.cyl(self, Vector3(x, 0.5, 0), 0.022, 0.022, 2.02, tubing, Vector3(PI * 0.5, 0, 0))
+				for z in [-0.85, 0.85]:
+					Lib.cyl(self, Vector3(x, 0.25, z), 0.017, 0.017, 0.5, tubing)
+			for z in [-0.95, 0.95]:
+				Lib.cyl(self, Vector3(0, 0.5, z), 0.021, 0.021, 0.81, tubing, Vector3(0, 0, PI * 0.5))
+			Lib.box(self, Vector3(0, 0.51, 0), Vector3(0.78, 0.035, 1.86), canvas, false, Vector3.ZERO, 0.02)
+			Lib.box(self, Vector3(0, 0.56, -0.7), Vector3(0.63, 0.07, 0.35), Lib.mat("canvas", Color(0.87, 0.85, 0.75), 1.0, false), false, Vector3.ZERO, 0.035)
+			_col(Vector3(0, 0.27, 0), Vector3(0.85, 0.54, 2.05))
+		"portable_water_purifier":
+			var shell := Lib.mat("metal", Color(0.56, 0.65, 0.69), 3.0, false, 0.38, 0.7)
+			var tube := Lib.mat("rubber", Color(0.2, 0.27, 0.29), 3.0, false, 0.85)
+			Lib.box(self, Vector3(0, 0.28, 0), Vector3(0.72, 0.56, 0.44), shell, false, Vector3.ZERO, 0.05)
+			for x in [-0.2, 0.2]:
+				Lib.cyl(self, Vector3(x, 0.58, -0.06), 0.105, 0.105, 0.44, shell)
+				Lib.cyl(self, Vector3(x, 0.81, -0.06), 0.12, 0.12, 0.035, tube)
+			Lib.cyl(self, Vector3(0, 0.63, 0.11), 0.06, 0.06, 0.48, tube, Vector3(0, 0, PI * 0.5))
+			Lib.box(self, Vector3(0, 0.32, -0.229), Vector3(0.43, 0.18, 0.014), Lib.color_mat(Color("263b46"), 0.35))
+			for x in [-0.25, 0.25]:
+				Lib.cyl(self, Vector3(x, 0.09, 0.33), 0.022, 0.022, 0.45, shell, Vector3(PI * 0.5, 0, 0))
+			_col(Vector3(0, 0.42, 0), Vector3(0.76, 0.84, 0.54))
+		"collapsible_rain_barrel":
+			var barrel := Lib.mat("canvas", Color(0.23, 0.4, 0.53), 1.4, false, 0.9)
+			var rim := Lib.mat("metal", Color(0.62, 0.67, 0.68), 2.0, false, 0.35, 0.72)
+			Lib.cyl(self, Vector3(0, 0.52, 0), 0.41, 0.38, 1.04, barrel)
+			for y in [0.08, 0.52, 1.03]:
+				Lib.cyl(self, Vector3(0, y, 0), 0.435, 0.435, 0.025, rim)
+			Lib.cyl(self, Vector3(0, 1.056, 0), 0.38, 0.38, 0.017, Lib.color_mat(Color(0.12, 0.23, 0.31), 0.45))
+			Lib.cyl(self, Vector3(0.35, 0.19, 0.07), 0.045, 0.045, 0.22, rim, Vector3(0, 0, PI * 0.5))
+			for x in [-0.33, 0.33]:
+				Lib.box(self, Vector3(x, 0.52, 0), Vector3(0.026, 0.98, 0.024), rim)
+			_col(Vector3(0, 0.53, 0), Vector3(0.86, 1.07, 0.86))
+		"portable_cookstove":
+			var iron := Lib.mat("metal", Color(0.31, 0.34, 0.35), 2.0, false, 0.5, 0.7)
+			Lib.box(self, Vector3(0, 0.26, 0), Vector3(0.58, 0.38, 0.48), iron, false, Vector3.ZERO, 0.03)
+			Lib.box(self, Vector3(0, 0.47, 0), Vector3(0.62, 0.06, 0.52), Lib.mat("ribbed_metal", Color(0.68, 0.7, 0.72), 2.0, false, 0.45, 0.7))
+			for x in [-0.23, 0.23]:
+				for z in [-0.18, 0.18]:
+					Lib.box(self, Vector3(x, 0.53, z), Vector3(0.08, 0.06, 0.08), iron)
+			Lib.cyl(self, Vector3(0, 0.52, 0), 0.11, 0.11, 0.035, iron)
+			Lib.cyl(self, Vector3(0.26, 0.21, -0.17), 0.035, 0.035, 0.08, Lib.color_mat(Color("c48238"), 0.35), Vector3(0, 0, PI * 0.5))
+			_lamp = Lib.light(self, Vector3(0, 0.62, 0), Color(0.95, 0.51, 0.24), 0.4, 2.0)
+			_lamp.visible = false
+			_col(Vector3(0, 0.28, 0), Vector3(0.64, 0.56, 0.55))
+			_refresh()
 		"mod_rug_persian":
 			_flat_rug(1.9, 1.25, "rug_persian")
 			for x in [-0.98, 0.98]:

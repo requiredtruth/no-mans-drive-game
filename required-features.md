@@ -2,6 +2,15 @@
 
 Every user requirement for this project, kept up to date. Items marked ✅ are in the current build. Items marked 🔄 are in progress for the next version.
 
+### Continuing survival-feature expansion — v1.13.0
+
+- ✅ Expand beyond the reference game's RV survival features with six reinforced metal/concrete house pieces, a working hinged metal door and a barred glazed window.
+- ✅ Add four detailed, physical portable campsite objects: folding cot, charcoal water purifier, large rain barrel, fuelled cookstove; movable and storable in vehicles.
+- ✅ Charcoal-based water filtration, refillable rain barrel, real stove cooking without crafting menus, and night sleep to 05:00.
+- ✅ Preserve fuel/water/plant data when picking up and relocating working camp equipment, including saves.
+- 🔄 Continue completing all missing items in the backlog, visuals and physics across devices.
+
+
 ## User requests (verbatim intent)
 
 - Build the full game in `requiredtruth/no-mans-drive-game`. Posting directly to `main` is approved.

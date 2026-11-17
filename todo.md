@@ -22,9 +22,9 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 ## Remaining gameplay expansion
 
 - [ ] Vehicle performance parts and add-ons for the other cars (they take the turbo and ram plow at the hood today; the rest is van-only).
-- [ ] Base building pieces: metal and concrete walls, metal floor, metal door with code lock, window barricades, weapon rack, mannequin, tanning rack, anvil bench, hydroponic tray, industrial crate.
+- [ ] Base building remaining: combination code lock, window barricades, weapon rack, mannequin, tanning rack, anvil bench, hydroponic tray, industrial crate. (Reinforced metal floor, steel/concrete walls, metal door, roof and barred window completed in 1.13.)
 - [ ] Power: generators, batteries, solar array, wind turbine, power hub, battery monitor, with lights and appliances that need power.
-- [ ] Machines: smelter, crusher, chemistry station, coolant still, water filtration, 3D printer, fabricator.
+- [ ] Machines: smelter, crusher, chemistry station, coolant still, industrial water filtration, 3D printer, fabricator. (Portable charcoal purifier completed in 1.13.)
 - [ ] Remaining weapons: SMG, assault rifles, heavy rifle, bullpup, explosive arrows, flamethrower, and their ammo.
 - [ ] Finish the visuals pass: every vehicle, building and animal to the same high-resolution standard as the nature and the new items.
 
@@ -128,14 +128,14 @@ What is still to be made. Finished work moves to `done.md`. Each item needs a re
 
 ### Mobile Base and Road-Trip Equipment (Packable)
 
-- [ ] packable camp cot (`deployable_camp_cot`)
+- [x] packable camp cot (`deployable_camp_cot`) — completed v1.13.0
 - [ ] compact folding table (`folding_workbench_compact`)
 - [ ] portable field anvil (`portable_anvil`)
 - [ ] portable chemistry mixing station (`portable_chem_lab`)
-- [ ] portable induction cookstove (`portable_cookstove`)
+- [x] portable induction cookstove (`portable_cookstove`) — completed v1.13.0
 - [ ] compact solar roll-out blanket (`rollout_solar_panel`)
-- [ ] collapsible rain catcher barrel (`collapsible_rain_barrel`)
-- [ ] portable water purifier pump (`portable_water_purifier`)
+- [x] collapsible rain catcher barrel (`collapsible_rain_barrel`) — completed v1.13.0
+- [x] portable water purifier pump (`portable_water_purifier`) — completed v1.13.0
 - [ ] heavy towing winch cable (`towing_winch_cable`)
 - [ ] portable wildlife decoy speaker (`wildlife_decoy_speaker`)
 

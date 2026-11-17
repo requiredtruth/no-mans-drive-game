@@ -290,7 +290,7 @@ func _process(delta: float) -> void:
 	_fire_scan -= delta
 	if _fire_scan <= 0.0:
 		_fire_scan = 1.0
-		_fires = get_tree().get_nodes_in_group("structure").filter(func(s): return s.type == "campfire")
+		_fires = get_tree().get_nodes_in_group("structure").filter(func(s): return s.type in ["campfire", "portable_cookstove"])
 		_cook_tick(1.0)
 		Game.journey.prepare(gen, Game.seed_value)
 		if not player.dead:
@@ -838,7 +838,7 @@ func _cook_tick(dt: float) -> void:
 			for hp in f.heat_spots():
 				spots.append([hp, 0.42])
 	for f in get_tree().get_nodes_in_group("placeable"):
-		if is_instance_valid(f) and f.get("type") == "campfire" and f.has_meta("host"):
+		if is_instance_valid(f) and f.get("type") in ["campfire", "portable_cookstove"] and f.has_meta("host"):
 			for hp in f.heat_spots():
 				spots.append([hp, 0.42])
 	if rv:
@@ -1148,7 +1148,7 @@ func alert_animals(at: Vector3, r: float) -> void:
 
 # ------------------------------------------------------------------ structures
 func _occ_key(t: String, pos: Vector3, rot: float) -> String:
-	var cls := "edge" if t in ["wall", "doorway", "window", "fence"] else ("cell" if t in ["foundation", "stairs"] else ("level" if t in ["floor", "roof", "roof_slope"] else "free"))
+	var cls := "edge" if t in ["wall", "metal_wall", "concrete_wall", "doorway", "metal_door", "window", "metal_window", "fence"] else ("cell" if t in ["foundation", "stairs"] else ("level" if t in ["floor", "metal_floor", "roof", "metal_roof", "roof_slope"] else "free"))
 	if cls == "free":
 		return ""
 	var r := int(round(fposmod(rot, PI) / (PI * 0.5))) % 2
@@ -1167,8 +1167,8 @@ func occupied(t: String, pos: Vector3, rot: float) -> bool:
 func _clear_grass_at(p: Vector3, t: String, info: Dictionary) -> void:
 	if not info.has("grass"):
 		return
-	var half := 1.7 if t in ["foundation", "floor", "stairs"] else (1.3 if t in ["tent", "bed", "workbench", "planter"] else 0.0)
-	if half <= 0.0 or t in ["wall", "doorway", "window", "fence", "roof", "roof_slope", "lantern"]:
+	var half := 1.7 if t in ["foundation", "floor", "metal_floor", "stairs"] else (1.3 if t in ["tent", "bed", "workbench", "planter", "deployable_camp_cot", "portable_water_purifier", "collapsible_rain_barrel"] else 0.0)
+	if half <= 0.0 or t in ["wall", "metal_wall", "concrete_wall", "doorway", "metal_door", "window", "metal_window", "fence", "roof", "metal_roof", "roof_slope", "lantern"]:
 		return
 	var gp: PackedVector3Array = info["grass"]
 	var mm: MultiMesh = info["grass_mm"]

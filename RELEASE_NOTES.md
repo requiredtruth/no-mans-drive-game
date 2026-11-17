@@ -1,13 +1,12 @@
-## No Man's Drive 1.12.0 — Everything garage and accessible vehicle cargo
+## No Man's Drive 1.13.0 — Reinforced building and portable camp systems
 
-- The **New Journey** menu now offers **Regular** (original stripped-van survival start) or **Everything** (complete, largest flagship motorhome at the start, with its furniture, systems, fuel and repairs finished).
-- Everything adds a nearby parts-and-items depot, an expanded drivable fleet, and camper, flatbed and tanker trailers. Regular no longer automatically floods the starting clearing with all debug items.
-- Two additional drivable RV sizes: **Compact RV** and **Touring RV**, with walk-in rear cargo access, interior beds and physical cargo. The largest fully featured motorhome retains its detailed walk-in kitchen, bath, storage and sleeping systems.
-- The pickup tailgate, box-truck roll-up cargo shutter, and every other car's rear cargo hatch can actually open and shut. The box truck now has a hollow cargo bay instead of an obstructing solid cube.
-- E at the cargo access stores or retrieves real world items attached to the vehicle. You can also place objects directly on the surfaces. Cargo is preserved in save files, including the contents of portable crates.
-- Every drivable road vehicle continues to support swappable batteries and tires, repairs to its engine and body, and now engine-block removal/installation with a toolkit.
-- Save files preserve the chosen map mode, rear-door state, fitted parts, cargo and installed engines.
+- Six new buildable house parts: reinforced steel floor, corrugated roof, steel wall, concrete wall, metal doorway with working hinged door, and barred glazed window. Pieces support the existing snap-grid construction, textures, collision and saves.
+- Four carryable 3D campsite items: folding cot, six-litre charcoal water purifier, 20-litre collapsible rain barrel, and portable fuelled cookstove.
+- Water purification now physically accepts dirty-water bottles, consumes charcoal for four filtration cycles per piece, purifies one litre every 18 seconds, and refills empty bottles with clean water.
+- The portable cookstove takes full fuel cans, gives back empty cans, cooks food placed on its burner while lit and can be switched off to save fuel.
+- The folding cot sleeps until 05:00 at night. The rain barrel catches rain outdoors and dispenses collected water into bottles.
+- Moving placed equipment now carries along its working state (water, fuel, growing plants, switches) inside the physical carried item, rather than resetting the device when moved.
+- New camp and farm loot locations, with physical workbench recipes for each portable piece of equipment. The Everything map's all-items depot can also expose them.
+- Built using original procedural models and existing licensed textures; no new outside assets.
 
-Automated Godot checks must pass before the Android APK is built and released. Actual Android hardware testing is still pending.
-- The opening interaction is available directly at the rear cargo access even when the separate door hotspot is obscured; the tailgate and camper hatches now rotate around their actual hinges.
-- Individual road-vehicle wheel types are persisted, and Everything trailers no longer occupy the item depot.
+Android: install the signed release APK attached below. Existing world save data remains compatible. On-device verification is still recommended.

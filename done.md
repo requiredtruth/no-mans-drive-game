@@ -1,3 +1,10 @@
+## 1.13.0 — reinforced structures and off-grid camping
+
+- Six new textured snap-built structures: metal floor, metal roof, steel wall, concrete wall, barred glazed window and openable metal door.
+- Four new portable 3D camping items: charcoal water purifier, 20 L rain barrel, fuelled cookstove and folding cot; new workbench recipes and camp/farm loot.
+- Water purifier tracks dirty and clean tanks, charcoal cartridge cycles and processing time; cookstove tracks its fuel and uses a real burner heat spot; rain barrel catches rainfall.
+- Packed camp equipment now keeps its working data when carried, saved, and placed again, including plant growth and container contents.
+
 # Done
 
 Everything finished and in the game, newest first. Work in progress lives in `todo.md`. When something is finished, it moves from `todo.md` to here.

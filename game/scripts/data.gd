@@ -154,6 +154,10 @@ const ITEMS := {
 	"floor_lamp": {"name": "Floor Lamp", "color": Color("e8d8a0"), "kind": "placeable"},
 	"rug": {"name": "Rug", "color": Color("a04a3a"), "kind": "placeable"},
 	"potted_plant": {"name": "Potted Plant", "color": Color("4a8a3a"), "kind": "placeable"},
+	"deployable_camp_cot": {"name": "Folding Camp Cot", "color": Color("52706a"), "kind": "placeable"},
+	"portable_water_purifier": {"name": "Portable Water Purifier", "color": Color("52869b"), "kind": "placeable"},
+	"collapsible_rain_barrel": {"name": "Collapsible Rain Barrel", "color": Color("547d91"), "kind": "placeable"},
+	"portable_cookstove": {"name": "Portable Gas Cookstove", "color": Color("b47e52"), "kind": "placeable"},
 	"shelf_unit": {"name": "Shelf Unit", "color": Color("9a7a50"), "kind": "placeable"},
 	# ---------------- 1.7: item backlog batch ----------------
 	# Raw resources & chemistry
@@ -382,6 +386,10 @@ const RECIPES := [
 	{"out": "knife", "n": 1, "cost": {"stone": 2, "wood": 1, "rope": 1}},
 	{"out": "bow", "n": 1, "cost": {"wood": 4, "rope": 2}},
 	{"out": "fishing_rod", "n": 1, "cost": {"wood": 2, "rope": 2}},
+	{"out": "deployable_camp_cot", "n": 1, "cost": {"pipe": 2, "heavy_canvas": 2, "bolts": 2}},
+	{"out": "portable_water_purifier", "n": 1, "cost": {"pipe": 2, "scrap": 3, "cloth": 1, "charcoal": 2}},
+	{"out": "collapsible_rain_barrel", "n": 1, "cost": {"heavy_canvas": 2, "cured_rubber_sheet": 2, "pipe": 1}},
+	{"out": "portable_cookstove", "n": 1, "cost": {"scrap": 2, "pipe": 1, "bolts": 2}},
 	{"out": "hammer", "n": 1, "cost": {"wood": 2, "stone": 1, "rope": 1}},
 	{"out": "jacket", "n": 1, "cost": {"hide": 4, "rope": 2}},
 	{"out": "backpack", "n": 1, "cost": {"hide": 2, "cloth": 2, "rope": 2}},
@@ -648,6 +656,12 @@ const TIRE_KINDS := {
 const PIECES := {
 	"foundation": {"name": "Foundation", "cost": {"wood": 4, "stone": 2}, "snap": "cell"},
 	"floor": {"name": "Floor / Ceiling", "cost": {"wood": 3}, "snap": "cell_level"},
+	"metal_floor": {"name": "Reinforced Metal Floor", "cost": {"scrap": 5, "bolts": 2}, "snap": "cell_level"},
+	"metal_roof": {"name": "Corrugated Metal Roof", "cost": {"scrap": 4, "bolts": 2}, "snap": "cell_level"},
+	"metal_wall": {"name": "Corrugated Steel Wall", "cost": {"scrap": 6, "bolts": 3}, "snap": "edge"},
+	"concrete_wall": {"name": "Stone and Concrete Wall", "cost": {"stone": 9, "scrap": 2}, "snap": "edge"},
+	"metal_door": {"name": "Reinforced Metal Doorway", "cost": {"scrap": 8, "bolts": 4}, "snap": "edge"},
+	"metal_window": {"name": "Steel-Barred Window", "cost": {"scrap": 6, "glass": 1, "bolts": 3}, "snap": "edge"},
 	"wall": {"name": "Wall", "cost": {"wood": 4}, "snap": "edge"},
 	"doorway": {"name": "Wall with Door", "cost": {"wood": 6}, "snap": "edge"},
 	"window": {"name": "Wall with Window", "cost": {"wood": 4, "cloth": 1}, "snap": "edge"},
@@ -661,6 +675,10 @@ const PIECES := {
 	"bed": {"name": "Bed", "cost": {"wood": 4, "cloth": 3}, "snap": "free"},
 	"workbench": {"name": "Workbench", "cost": {"wood": 6, "scrap": 2}, "snap": "free"},
 	"rain_collector": {"name": "Rain Collector", "cost": {"wood": 3, "cloth": 2}, "snap": "free"},
+	"deployable_camp_cot": {"name": "Folding Camp Cot", "cost": {"pipe": 2, "heavy_canvas": 2}, "snap": "free"},
+	"portable_water_purifier": {"name": "Water Purifier", "cost": {"pipe": 2, "scrap": 3, "cloth": 1}, "snap": "free"},
+	"collapsible_rain_barrel": {"name": "Rain Barrel (20 L)", "cost": {"heavy_canvas": 2, "pipe": 1}, "snap": "free"},
+	"portable_cookstove": {"name": "Portable Cookstove", "cost": {"scrap": 2, "pipe": 1}, "snap": "free"},
 	"lantern": {"name": "Lantern Post", "cost": {"wood": 2, "scrap": 2}, "snap": "free"},
 	"fence": {"name": "Fence", "cost": {"wood": 2}, "snap": "edge"},
 	"chair": {"name": "Camp Chair", "cost": {"wood": 2, "cloth": 1}, "snap": "free"},
@@ -684,8 +702,9 @@ const PIECES := {
 	"mod_cassette_travel_case": {"name": "Cassette Travel Case", "cost": {"cured_leather": 1, "scrap": 1}, "snap": "free"},
 }
 
-const PIECE_ORDER := ["foundation", "floor", "wall", "doorway", "window", "roof", "roof_slope", "stairs",
-	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector", "lantern", "chair", "table",
+const PIECE_ORDER := ["foundation", "floor", "metal_floor", "wall", "metal_wall", "concrete_wall", "doorway", "metal_door", "window", "metal_window", "roof", "metal_roof", "roof_slope", "stairs",
+	"fence", "campfire", "tent", "crate", "planter", "bed", "workbench", "rain_collector",
+	"deployable_camp_cot", "portable_water_purifier", "collapsible_rain_barrel", "portable_cookstove", "lantern", "chair", "table",
 	"sofa", "floor_lamp", "rug", "potted_plant", "shelf_unit", "mod_rug_persian", "mod_rug_braided", "mod_rug_japanese_wave",
 	"mod_rug_cowhide", "mod_rug_woven", "camp_folding_chair", "camp_canvas_bedroll", "deployable_tarp", "mod_retro_tv",
 	"mod_led_wall_clock", "mod_weather_station", "mod_cassette_travel_case"]

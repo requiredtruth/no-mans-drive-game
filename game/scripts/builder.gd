@@ -4,8 +4,8 @@ extends Node3D
 const Data = preload("res://scripts/data.gd")
 const Structure = preload("res://scripts/structure.gd")
 const GRID := 3.0
-const EDGE_TYPES := ["wall", "doorway", "window", "fence"]
-const FLOOR_TYPES := ["foundation", "floor", "roof", "roof_slope", "stairs"]
+const EDGE_TYPES := ["wall", "metal_wall", "concrete_wall", "doorway", "metal_door", "window", "metal_window", "fence"]
+const FLOOR_TYPES := ["foundation", "floor", "metal_floor", "roof", "metal_roof", "roof_slope", "stairs"]
 
 var player: Node
 var active := false
@@ -173,9 +173,9 @@ func _compute() -> void:
 			var cz := floorf(q.z / GRID)
 			var center := Vector3(cx * GRID + GRID * 0.5, 0, cz * GRID + GRID * 0.5)
 			if t == "foundation":
-				if s and s.type in ["foundation", "floor"]:
+				if s and s.type in ["foundation", "floor", "metal_floor"]:
 					center.y = s.position.y
-					if s.type == "floor":
+					if s.type in ["floor", "metal_floor"]:
 						center.y += 0.2
 					placement = {"pos": center, "rot": 0.0, "depth": 1.2 + maxf(center.y - _min_corner(center), 0.0)}
 				else:
@@ -191,10 +191,10 @@ func _compute() -> void:
 						reason = "Ground is too uneven"
 						return
 			else: # stairs
-				if not s or not (s.type in ["foundation", "floor"]):
+				if not s or not (s.type in ["foundation", "floor", "metal_floor"]):
 					reason = "Stairs need a foundation or floor"
 					return
-				center.y = s.position.y + (0.2 if s.type == "floor" else 0.0)
+				center.y = s.position.y + (0.2 if s.type in ["floor", "metal_floor"] else 0.0)
 				placement = {"pos": center, "rot": snappedf(player.rotation.y + PI + user_rot, PI * 0.5)}
 			valid = true
 		"cell_level":
@@ -218,7 +218,7 @@ func _compute() -> void:
 			var y := 0.0
 			if s:
 				y = s.position.y
-				if s.type == "floor":
+				if s.type in ["floor", "metal_floor"]:
 					y += 0.2
 				elif s.type in EDGE_TYPES and p.y > s.position.y + GRID * 0.6 and t != "fence":
 					y += GRID
@@ -291,17 +291,20 @@ func place() -> void:
 		return
 	var t := piece()
 	var contents: Array = []
+	var carried_state: Dictionary = {}
 	if kit != "":
 		if Game.equipped() != kit:
 			stop()
 			return
-		contents = Game.take_held().get("c", [])
+		var carried: Dictionary = Game.take_held()
+		contents = carried.get("c", [])
+		carried_state = carried.get("sd", {}).duplicate(true)
 	elif not Game.pay(Data.PIECES[t]["cost"]):
 		return
-	var rec := {"type": t, "pos": Game.arr(placement["pos"]), "rot": placement["rot"], "data": {}}
+	var rec := {"type": t, "pos": Game.arr(placement["pos"]), "rot": placement["rot"], "data": carried_state}
 	if placement.has("depth"):
 		rec["data"]["depth"] = placement["depth"]
-	if t == "campfire":
+	if t == "campfire" and not rec["data"].has("fuel"):
 		rec["data"]["fuel"] = 240.0
 	if placement.get("rv", false):
 		placement["host"].attach_structure(rec)

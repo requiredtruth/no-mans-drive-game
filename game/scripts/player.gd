@@ -541,6 +541,8 @@ func place_or_grab() -> void:
 			Game.notify("Your hands are full — place [G] or drop [Q] something first")
 			return
 		var type: String = t.type
+		# Carry a portable object's state with it, including liquids and live plants.
+		var carried_state: Dictionary = t.data.duplicate(true)
 		var contents: Array = []
 		if type == "crate":
 			contents = _crate_contents(t)
@@ -551,6 +553,12 @@ func place_or_grab() -> void:
 		else:
 			return
 		Game.add_item(type, 1, true)
+		if not carried_state.is_empty():
+			for sl in Game.slots:
+				if sl["id"] == type and not sl.has("sd") and not sl.has("c"):
+					sl["sd"] = carried_state
+					break
+			Game._changed()
 		if not contents.is_empty():
 			for sl in Game.slots:
 				if sl["id"] == "crate" and not sl.has("c"):
