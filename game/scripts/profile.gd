@@ -116,7 +116,7 @@ func build_editor(parent: Container, done: Callable) -> void:
 	vp.add_child(cam)
 	cam.look_at(Vector3(0, 1.1, 0), Vector3.UP)
 	cam.current = true
-	var avatar := load("res://scripts/avatar.gd").new()
+	var avatar = load("res://scripts/avatar.gd").new()
 	vp.add_child(avatar)
 	avatar.rebuild(draft)
 	var grid := GridContainer.new()
