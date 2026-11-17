@@ -163,11 +163,11 @@ func _female_upper_body(material: Material, shoulder_width: float, body_build: i
 		var depth: float = lerpf(0.197, 0.226, upper)
 		for i in range(sides):
 			var theta: float = TAU * float(i) / float(sides)
-			var x: float = cosf(theta) * width
-			var z: float = sinf(theta) * depth
+			var x: float = cos(theta) * width
+			var z: float = sin(theta) * depth
 			# The avatar faces negative Z. Add a soft symmetrical silhouette
 			# at chest height, fading continuously into waist/shoulders/sides.
-			var front: float = pow(maxf(-sinf(theta), 0.0), 2.0)
+			var front: float = pow(maxf(-sin(theta), 0.0), 2.0)
 			var lateral: float = exp(-pow((absf(x) - 0.112) / 0.137, 2.0))
 			var vertical: float = exp(-pow((y - 1.385) / 0.148, 2.0))
 			z -= fullness * front * lateral * vertical
