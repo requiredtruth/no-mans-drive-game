@@ -11,3 +11,5 @@
 - The GitHub release quality gate now starts a real headless Starter game and checks its one vehicle, four fitted wheels, drivable condition, 3–5 nearby supplies, lack of nearby other vehicles, and snapshot persistence before signing the APK.
 
 - Primary vehicle compatibility: free-furniture placement checks for the original van-only API before using it, so holding modules beside a chosen car/4x4 no longer calls missing methods. Fuel pumps now refer to the actual selected vehicle instead of always saying van.
+
+- Multiplayer joiners use the host's already-generated starter vehicle and loot; clients do not generate their own copies of the starting site or classic assembly-lot parts.

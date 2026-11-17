@@ -167,7 +167,7 @@ func start(loaded: Dictionary) -> void:
 		var st: Dictionary = Game.vehicles[vid]
 		var xf: Array = st.get("xform", [[0, 0, 0], [0, 0, 0]])
 		spawn_vehicle(vid, str(st.get("kind", "pickup")), Game.v3(xf[0]), Game.v3(xf[1]), st)
-	if Game.map_mode != "starter" and not Game.vehicles.has("trl_start"):
+	if Game.map_mode != "starter" and not Net.is_client() and not Game.vehicles.has("trl_start"):
 		# parked just behind the van with its tongue next to the hitch: press E at the tongue
 		var tp: Vector3 = rv.to_global(Vector3(0, 0, RV.REAR_Z - 0.55 - 1.2 - 2.7))
 		tp.y = gen.height(tp.x, tp.z) + 0.6
@@ -190,7 +190,9 @@ func start(loaded: Dictionary) -> void:
 				continue
 			Game.drop_pile(k, int(Game.legacy_inventory[k]), at)
 		Game.legacy_inventory = {}
-	if not loaded.has("player"):
+	# Joining clients already receive the host's physical items and parked
+	# vehicles in the world snapshot. Never regenerate the starting setup.
+	if not loaded.has("player") and not Net.is_client():
 		if Game.map_mode == "starter":
 			_scattered_starter_supplies()
 		else:

@@ -1,3 +1,4 @@
+- ✅ In co-op, only the server/host generates starting supplies and legacy starter vehicles; joining clients use the authoritative snapshot and do not duplicate the starting site.
 - ✅ Guard original van-only furniture placement calls when the Starter primary vehicle is a Car subclass, preventing runtime errors when holding a module near a randomly selected car.
 ### November 17 true sparse Starter map (1.15.5)
 
