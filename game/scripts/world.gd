@@ -89,7 +89,7 @@ func start(loaded: Dictionary) -> void:
 		var dir := gen.road_dir(z)
 		rv.global_position = Vector3(gen.road_x(z) + 1.8, gen.road_h(z) + 0.6, z)
 		rv.rotation.y = atan2(dir.x, dir.z)
-		rv.apply_state({})
+		rv.apply_state(RV.complete_starter_state() if Game.map_mode == "everything" else {})
 	# Player
 	player = CharacterBody3D.new()
 	player.set_script(Player)
@@ -135,7 +135,8 @@ func start(loaded: Dictionary) -> void:
 	if not loaded.has("player"):
 		_starter_lot()
 		_start_vehicles()
-		if TEST_DEPOT:
+		if Game.map_mode == "everything":
+			_everything_trailers()
 			test_depot(rv.global_transform * Transform3D(Basis.IDENTITY, Vector3(-RV.W * 0.5 - 7.5, 0, 2.0)))
 	Game.playing = true
 	apply_settings()
@@ -944,6 +945,10 @@ func _starter_lot() -> void:
 func _start_vehicles() -> void:
 	var good := {"fuel": 40.0, "battery": 90.0, "parts": {"engine": 85.0, "tires": 85.0, "battery": 90.0, "body": 80.0}}
 	var specs := [["start_car", "sedan", 9.5], ["start_truck", "pickup", 16.5], ["start_boxtruck", "box_truck", 25.0]]
+	if Game.map_mode == "everything":
+		specs.append_array([["start_offroad", "offroader", 32.0], ["start_compact_rv", "mini_rv", 39.5],
+			["start_touring_rv", "mid_rv", 48.0]])
+
 	for e in specs:
 		if Game.vehicles.has(e[0]):
 			continue
@@ -951,9 +956,21 @@ func _start_vehicles() -> void:
 		p.y = gen.height(p.x, p.z) + 1.0
 		spawn_vehicle(e[0], e[1], p, Vector3(0, rv.rotation.y, 0), good.duplicate(true))
 
+## Additional openable trailers all within walking distance of the Everything depot.
+func _everything_trailers() -> void:
+	var kinds := ["camper", "tanker", "flatbed"]
+	for i in range(kinds.size()):
+		var id := "everything_trailer_%d" % i
+		if Game.vehicles.has(id):
+			continue
+		var lp := Vector3(-6.0 - i * 3.2, 0.0, -14.0)
+		var p: Vector3 = rv.to_global(lp)
+		p.y = gen.height(p.x, p.z) + 0.8
+		spawn_vehicle(id, kinds[i], p, Vector3(0, rv.rotation.y, 0), {})
+
 ## For testing: while the game is in development a new game starts with a pile of every item in
 ## the game laid out in rows next to the lot (also on the cheats menu).
-const TEST_DEPOT := true
+const TEST_DEPOT := false # the depot is intentionally restricted to the Everything map
 func test_depot(xf: Transform3D) -> void:
 	var groups := {}
 	for id in Data.ITEMS:
@@ -1234,7 +1251,10 @@ func cargo_records(v: Node) -> Array:
 		return out
 	for ch in cargo.get_children():
 		if ch.is_in_group("world_item") and is_instance_valid(ch):
-			out.append({"id": ch.id, "n": ch.amount, "pos": Game.arr(ch.position), "rot": Game.arr(ch.rotation)})
+			var rec := {"id": ch.id, "n": ch.amount, "pos": Game.arr(ch.position), "rot": Game.arr(ch.rotation)}
+			if not ch.contents.is_empty():
+				rec["c"] = ch.contents.duplicate(true)
+			out.append(rec)
 	return out
 
 func restore_cargo(v: Node, list: Array) -> void:
@@ -1245,6 +1265,8 @@ func restore_cargo(v: Node, list: Array) -> void:
 		var it := RigidBody3D.new()
 		it.set_script(load("res://scripts/world_item.gd"))
 		it.setup(str(r["id"]), int(r["n"]))
+		it.contents = r.get("c", []).duplicate(true)
+		it.placed = true
 		it._attached = true
 		it.freeze_mode = RigidBody3D.FREEZE_MODE_STATIC
 		it.freeze = true

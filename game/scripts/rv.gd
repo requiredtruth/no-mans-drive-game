@@ -1600,6 +1600,19 @@ func _starter_state() -> void:
 	battery = 0.0
 	paint = Data.PRIMER
 
+## The fully assembled seven-metre flagship RV used only in the Everything map.
+## Parts remain removable, wearable and repairable during play.
+static func complete_starter_state() -> Dictionary:
+	var fitted := {}
+	for slot in LEGACY_SLOTS:
+		fitted[slot] = true
+	for slot in ADDONS:
+		fitted[slot] = true
+	return {"modules": fitted, "module_xf": {}, "missing": {}, "wheel_kind": {},
+		"parts": {"engine": 100.0, "tires": 100.0, "battery": 100.0, "body": 100.0},
+		"fuel": 100.0, "water": 60.0, "battery": 100.0, "paint": 2,
+		"spare_tire": "tire", "coolant": 100.0, "nitrous": 100.0}
+
 ## Older saves had a fully fitted motorhome: keep it that way.
 func _all_modules() -> Dictionary:
 	var d := {}

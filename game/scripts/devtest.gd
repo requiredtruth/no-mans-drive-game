@@ -1809,6 +1809,7 @@ func _v110() -> void:
 	await _shot("quality_route_notebook")
 	Game.world.hud.close_modal()
 	await _v111()
+	await _v112()
 	_log("Quality checks: %d failure(s)" % quality_failures)
 
 func _v111() -> void:
@@ -2231,3 +2232,39 @@ func _run() -> void:
 	f.store_string("\n".join(log_lines))
 	f.close()
 	get_tree().quit()
+
+
+## 1.12 vehicle doors, cargo, map state and two extra drivable motorhomes.
+func _v112() -> void:
+	var w = Game.world
+	var before := Game.map_mode
+	var pl = Game.player
+	Game.map_mode = "everything"
+	_check_quality(Game.map_mode == "everything", "Everything selection state is available")
+	var types := ["pickup", "sedan", "box_truck", "offroader", "mini_rv", "mid_rv"]
+	for i in range(types.size()):
+		var kind: String = types[i]
+		var z: float = -100.0 - float(i) * 11.0
+		var x: float = w.gen.road_x(z)
+		var v = w.spawn_vehicle("quality_v112_" + kind, kind, Vector3(x, w.gen.height(x, z) + 1.3, z), Vector3.ZERO, {"fuel": 60.0, "battery": 90.0})
+		_check_quality(v != null and v.get_node_or_null("Cargo") != null, "cargo component: " + kind)
+		_check_quality(v._rear_gate != null and v._rear_gate_shape != null, "working rear hatch: " + kind)
+		v.set_rear_open(true, false)
+		_check_quality(v.rear_open and v._rear_gate.visible, "rear access opens: " + kind)
+		Game.slots[0] = {"id": "scrap", "n": 1}
+		Game.selected_slot = 0
+		v.cargo_store()
+		_check_quality(w.cargo_records(v).size() == 1, "real physical item stored: " + kind)
+		var saved: Dictionary = v.save_state()
+		_check_quality(saved["rear_open"] and saved["cargo"].size() == 1, "cargo/door persisted: " + kind)
+		v.set_rear_open(false, false)
+		_check_quality(not v.rear_open, "rear access closes: " + kind)
+	var a = w.vehicle_nodes["quality_v112_box_truck"]
+	_player_at(a.global_position + Vector3(3, 0.2, -5), -0.4)
+	await _settle(a.global_position)
+	_look_at_point(a.global_position + Vector3(0, 1.8, 0))
+	await _wait(0.5)
+	await _shot("quality_everything_garage")
+	var state: Dictionary = load("res://scripts/rv.gd").complete_starter_state()
+	_check_quality(state["modules"].has("bed") and state["modules"].has("engine") and state["missing"].is_empty(), "big RV fully furnished and drivable")
+	Game.map_mode = before

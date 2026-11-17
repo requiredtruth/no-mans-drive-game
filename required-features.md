@@ -145,3 +145,13 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ Added a saved nine-stop roadside journey, door/furniture aim feedback, 16 original printed labels and slatted wooden storage crates.
 - ✅ Save replacement retains a previous valid backup and can recover from a damaged main save.
 - 🔄 Remaining work is still tracked in `todo.md`; this release does not claim the entire item backlog or visual overhaul is finished.
+
+
+### Requests after 1.11.0 (1.12.0)
+- ✅ Offer **Regular** and **Everything** starting-map buttons when beginning a journey, and persist the selected map mode in save files.
+- ✅ The **Everything** map has the largest fully assembled motorhome as the main vehicle, all original installed modules, stocked fuel/water, a large depot of item types, multiple vehicle models and trailers near the start.
+- ✅ Add several RV sizes, including compact and touring models alongside the large flagship. Compact and touring models have physical interiors, bed interaction, cargo spaces and working rear access.
+- ✅ All vehicles support physical item cargo which moves with the vehicle. Provide a rear storage access action, and preserve all cargo (including crate contents) during save/load.
+- ✅ Pickup tailgate and box-truck rear roll-up door actually open; sedan and off-roader have rear hatches.
+- ✅ Enable repair/part interchange for road vehicles (engine swap with a toolkit, tires, batteries, engine/body repair) and store installed engine type.
+- 🔄 Physical-device tests and further high-detail visual/vehicle expansion remain open. Do not mark unfinished artistic or multiplayer testing as complete.

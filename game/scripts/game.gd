@@ -26,6 +26,7 @@ var settings := {
 # --- Runtime/saved state ---
 var seed_value := 1234
 var difficulty := "Normal"
+var map_mode := "regular" # regular journey or Everything demonstration garage
 var time_of_day := 8.0 # hours 0..24
 var day := 1
 var weather := "clear"
@@ -443,6 +444,7 @@ func new_game(seed_in: int, diff_in: String) -> void:
 	journey.reset()
 	seed_value = seed_in
 	difficulty = diff_in
+	map_mode = "regular"
 	time_of_day = 8.0
 	day = 1
 	weather = "clear"
@@ -472,7 +474,7 @@ func arr(v: Vector3) -> Array:
 
 func world_snapshot() -> Dictionary:
 	return {
-		"seed": seed_value, "difficulty": difficulty, "time": time_of_day, "day": day,
+		"seed": seed_value, "difficulty": difficulty, "map_mode": map_mode, "time": time_of_day, "day": day,
 		"weather": weather, "structures": structures, "removed": removed, "next_id": next_struct_id,
 		"rv": rv.save_state() if rv else rv_state,
 		"items": _loose_items(),
@@ -494,6 +496,7 @@ func _loose_items() -> Array:
 func apply_world_snapshot(d: Dictionary) -> void:
 	seed_value = int(d["seed"])
 	difficulty = str(d.get("difficulty", "Normal"))
+	map_mode = str(d.get("map_mode", "regular"))
 	time_of_day = float(d.get("time", 8.0))
 	day = int(d.get("day", 1))
 	weather = str(d.get("weather", "clear"))

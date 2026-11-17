@@ -29,6 +29,7 @@ jobs:
           ! grep -E 'FAIL:|SCRIPT ERROR|Parse Error' quality/runtime.log
           test -s quality/quality_printed_labels.png
           test -s quality/quality_first_person_seated.png
+          test -s quality/quality_everything_garage.png
           "$engine" --headless --path game -- --devtest="$PWD/quality/legacy" --v18 2>&1 | tee quality/legacy.log
           ! grep -E 'FAIL:|SCRIPT ERROR|Parse Error' quality/legacy.log
       - uses: actions/upload-artifact@v4

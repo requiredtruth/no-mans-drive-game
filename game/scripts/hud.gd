@@ -798,6 +798,10 @@ func show_death(cause: String) -> void:
 
 func show_intro() -> void:
 	var body := _open_modal("intro", "The road goes on", null, 900.0)
+	if Game.map_mode == "everything":
+		body.add_child(UI.label("EVERYTHING MAP — The largest motorhome starts fully fitted and fuelled. Compact and touring RVs, trucks, cars, trailers and the complete item depot are nearby. Use E at cargo doors to open them; use E at cargo access to load or unload physical items. Engine, batteries, wheels and body remain repairable and interchangeable. Everything is saved with your world.", 17))
+		body.add_child(UI.button("Explore Everything", close_modal))
+		return
 	body.add_child(UI.label("""The world went quiet. All you have is a stripped, rusty van shell on an empty lot,
 a pocket knife and an endless highway.
 

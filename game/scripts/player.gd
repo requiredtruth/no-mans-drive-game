@@ -524,6 +524,9 @@ func place_or_grab() -> void:
 		t.interact(self)
 		return
 	# pull a fitted battery or tire off a vehicle
+	if t.get_script() == RvPart and t.action == "hood" and t.rv.has_method("remove_engine"):
+		t.rv.remove_engine()
+		return
 	if t.get_script() == RvPart and (t.action == "battery" or t.action.begins_with("wheel")):
 		Mounts.pull(t.rv, t.action)
 		return

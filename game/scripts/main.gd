@@ -140,6 +140,13 @@ func _show_new() -> void:
 	diff.custom_minimum_size = Vector2(0, 44)
 	content.add_child(UI.label("Difficulty", 16))
 	content.add_child(diff)
+	content.add_child(UI.label("Starting map", 16))
+	var map_choice := OptionButton.new()
+	map_choice.add_item("Regular — roadside survival (broken van)")
+	map_choice.add_item("Everything — complete RV, every vehicle and item depot")
+	map_choice.select(0)
+	map_choice.custom_minimum_size = Vector2(0, 44)
+	content.add_child(map_choice)
 	content.add_child(UI.label("World seed", 16))
 	var seed_edit := LineEdit.new()
 	seed_edit.text = str(randi() % 999999)
@@ -147,6 +154,7 @@ func _show_new() -> void:
 	content.add_child(seed_edit)
 	content.add_child(UI.button("Start", func() -> void:
 		Game.new_game(int(seed_edit.text.hash() if not seed_edit.text.is_valid_int() else seed_edit.text.to_int()), diff.get_item_text(diff.selected))
+		Game.map_mode = "everything" if map_choice.selected == 1 else "regular"
 		_start_world({})))
 	content.add_child(UI.button("Back", _show_main))
 
