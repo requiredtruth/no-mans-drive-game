@@ -213,6 +213,7 @@ func _move(delta: float) -> void:
 			crouching = false
 	var was_air := not is_on_floor()
 	var fall_speed := velocity.y
+	_step_up(dir)
 	move_and_slide()
 	if was_air and is_on_floor() and fall_speed < -11.0:
 		hurt((-fall_speed - 11.0) * 6.0, "fall")
@@ -232,6 +233,32 @@ func _move(delta: float) -> void:
 	head.position.x = cos(_bob) * bob_amt * 0.5 * minf(hspeed / WALK, 1.0)
 	if global_position.y < -200.0:
 		teleport(Game.rv.global_position + Vector3(4, 3, 0))
+
+## Walk up steps and kerbs (van and camper steps, door sills, porch edges) without jumping:
+## when something low blocks the way, lift onto it if there is room above and floor on top.
+const STEP_UP := 0.42
+func _step_up(dir: Vector3) -> void:
+	if not is_on_floor() or velocity.y > 0.5 or dir.length() < 0.1:
+		return
+	var probe := Vector3(dir.x, 0, dir.z).normalized() * 0.1
+	var xf := global_transform
+	if not test_move(xf, probe):
+		return
+	var up := Vector3(0, STEP_UP, 0)
+	if test_move(xf, up):
+		return
+	var raised := xf.translated(up)
+	if test_move(raised, probe):
+		return
+	var col := KinematicCollision3D.new()
+	if not test_move(raised.translated(probe), Vector3(0, -STEP_UP - 0.02, 0), col):
+		return
+	if col.get_normal().y < 0.7:
+		return
+	var rise := STEP_UP - col.get_travel().length()
+	if rise < 0.04:
+		return
+	global_position.y += rise + 0.01
 
 func _footstep() -> void:
 	var s := "step_ground"

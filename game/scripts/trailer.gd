@@ -128,6 +128,110 @@ func _part(pos: Vector3, size: Vector3, action: String) -> void:
 	b.position = pos
 	add_child(b)
 
+## The camper's side door and window: real openings. [z0, z1, y0, y1]
+const DOOR := [-1.25, -0.4, 0.68, 2.64]
+const WIN := [0.4, 1.6, 1.65, 2.3]
+const DOOR_Z := -0.825
+var door_open := false
+var _door_pivot: Node3D
+var _door_shape: CollisionShape3D
+var _jack: CollisionShape3D
+
+## Wall board along Z at x with rectangular holes, from z_a to z_b.
+func _wall(x: float, m: Material, holes: Array, z_a: float, z_b: float) -> void:
+	var y0 := 0.7
+	var y1 := 2.85
+	var cuts: Array[float] = [z_a, z_b]
+	for h in holes:
+		cuts.append(clampf(h[0], z_a, z_b))
+		cuts.append(clampf(h[1], z_a, z_b))
+	cuts.sort()
+	for i in range(cuts.size() - 1):
+		var a := cuts[i]
+		var b := cuts[i + 1]
+		if b - a < 0.001:
+			continue
+		var zc := (a + b) * 0.5
+		var spans: Array = [[y0, y1]]
+		for h in holes:
+			if zc > h[0] and zc < h[1]:
+				spans = [[y0, maxf(h[2], y0)], [h[3], y1]]
+		for sp in spans:
+			if sp[1] - sp[0] > 0.01:
+				Lib.box(self, Vector3(x, (sp[0] + sp[1]) * 0.5, zc), Vector3(0.02, sp[1] - sp[0], b - a), m)
+
+## A hinged entry door that swings out, plus a step below it.
+func _build_camper_door(paint_m: Material) -> void:
+	var w: float = spec["w"]
+	var dw: float = DOOR[1] - DOOR[0]
+	var dh: float = DOOR[3] - DOOR[2]
+	_door_pivot = Node3D.new()
+	_door_pivot.name = "DoorPivot"
+	_door_pivot.position = Vector3(w * 0.5, DOOR[2], DOOR[0])
+	add_child(_door_pivot)
+	var st_out := Shapes.st()
+	var st_in := Shapes.st()
+	var st_glass := Shapes.st()
+	var rect := PackedVector2Array([Vector2(0, 0), Vector2(dw, 0), Vector2(dw, dh), Vector2(0, dh)])
+	var win := PackedVector2Array([Vector2(0.15, 1.2), Vector2(dw - 0.15, 1.2), Vector2(dw - 0.15, 1.7), Vector2(0.15, 1.7)])
+	Shapes.side_with_holes(st_out, rect, [win], 0.0, 1.0)
+	Shapes.side_with_holes(st_in, rect, [win], -0.05, -1.0)
+	Shapes.side_panel(st_glass, win, -0.025, 1.0)
+	var mi := MeshInstance3D.new()
+	mi.mesh = Shapes.commit([[st_out, Lib.mat("paint", Color(0.9, 0.88, 0.82), 0.6, false, 0.4, 0.3)], [st_in, Lib.color_mat(Color(0.82, 0.8, 0.76), 0.8)], [st_glass, Lib.glass_mat()]])
+	_door_pivot.add_child(mi)
+	for e in [[Vector2(0, 0), Vector2(dw, 0)], [Vector2(dw, 0), Vector2(dw, dh)], [Vector2(dw, dh), Vector2(0, dh)], [Vector2(0, dh), Vector2(0, 0)]]:
+		var c: Vector2 = (e[0] + e[1]) * 0.5
+		var d: Vector2 = e[1] - e[0]
+		Lib.box(_door_pivot, Vector3(-0.025, c.y, c.x), Vector3(0.05, 0.02, d.length() + 0.02), paint_m, false, Vector3(atan2(-d.y, d.x), 0, 0), 0.006)
+	Lib.box(_door_pivot, Vector3(0.025, 0.95, dw - 0.1), Vector3(0.04, 0.05, 0.12), Items.steel(), false, Vector3.ZERO, 0.015)
+	Lib.box(_door_pivot, Vector3(-0.075, 0.95, dw - 0.1), Vector3(0.04, 0.05, 0.12), Items.steel(), false, Vector3.ZERO, 0.015)
+	var b := StaticBody3D.new()
+	b.set_script(RvPart)
+	b.rv = self
+	b.action = "door"
+	b.collision_layer = 2
+	b.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var sh := BoxShape3D.new()
+	sh.size = Vector3(0.2, dh, dw)
+	cs.shape = sh
+	b.add_child(cs)
+	b.position = Vector3(-0.025, dh * 0.5, dw * 0.5)
+	_door_pivot.add_child(b)
+	_door_shape = CollisionShape3D.new()
+	var dsh := BoxShape3D.new()
+	dsh.size = Vector3(0.08, dh, dw)
+	_door_shape.shape = dsh
+	_door_shape.position = Vector3(w * 0.5, DOOR[2] + dh * 0.5, (DOOR[0] + DOOR[1]) * 0.5)
+	add_child(_door_shape)
+	# entry step: its own body so it never drags on the ground
+	var sb := StaticBody3D.new()
+	sb.collision_layer = 16
+	sb.collision_mask = 0
+	add_child(sb)
+	add_collision_exception_with(sb)
+	var sc := Vector3(w * 0.5 + 0.22, 0.33, DOOR_Z)
+	Lib.box(self, sc, Vector3(0.4, 0.05, dw - 0.06), Lib.mat("metal", Color(0.62, 0.62, 0.64), 4.0, false, 0.45, 0.8), false, Vector3.ZERO, 0.012)
+	for dz in [-dw * 0.5 + 0.08, dw * 0.5 - 0.08]:
+		Lib.box(self, Vector3(w * 0.5 + 0.1, 0.45, DOOR_Z + dz), Vector3(0.3, 0.04, 0.04), Items.dark_steel(), false, Vector3(0, 0, -0.7))
+	var scs := CollisionShape3D.new()
+	var ssh := BoxShape3D.new()
+	ssh.size = Vector3(0.4, 0.05, dw - 0.06)
+	scs.shape = ssh
+	scs.position = sc
+	sb.add_child(scs)
+
+## Swing the camper door open (outwards, towards the back) or shut.
+func set_door(open: bool) -> void:
+	door_open = open
+	if _door_shape:
+		_door_shape.disabled = open
+	if _door_pivot:
+		var tw := create_tween()
+		tw.tween_property(_door_pivot, "rotation:y", 1.75 if open else 0.0, 0.35).set_trans(Tween.TRANS_SINE)
+	Audio.play_at("door", to_global(Vector3(spec["w"] * 0.5, 1.4, DOOR_Z)), -2.0)
+
 func _build() -> void:
 	var L: float = spec["len"]
 	var w: float = spec["w"]
@@ -139,6 +243,14 @@ func _build() -> void:
 		Lib.box(self, Vector3(s * 0.35, 0.5, L * 0.5 + 0.35), Vector3(0.08, 0.08, 1.0), frame, false, Vector3(0, -s * 0.4, 0))
 	Lib.cyl(self, Vector3(0, 0.5, float(spec["tongue"])), 0.06, 0.06, 0.12, Items.steel())
 	Lib.cyl(self, Vector3(0, 0.25, L * 0.5 + 0.5), 0.03, 0.03, 0.5, Items.steel())
+	Lib.box(self, Vector3(0, 0.02, L * 0.5 + 0.5), Vector3(0.16, 0.03, 0.16), Items.dark_steel())
+	# the tongue jack holds the trailer level when it's unhitched, and is wound up for towing
+	_jack = CollisionShape3D.new()
+	var jsh := BoxShape3D.new()
+	jsh.size = Vector3(0.16, 0.5, 0.16)
+	_jack.shape = jsh
+	_jack.position = Vector3(0, 0.26, L * 0.5 + 0.5)
+	add_child(_jack)
 	for s in [-1.0, 1.0]:
 		var vw := VehicleWheel3D.new()
 		vw.position = Vector3(s * (w * 0.5 - 0.15), 0.5, -0.2)
@@ -164,33 +276,53 @@ func _build() -> void:
 			var body := Shapes.st()
 			var glass := Shapes.st()
 			var trim := Shapes.st()
-			var o := PackedVector2Array([Vector2(-L * 0.5, 0.62), Vector2(L * 0.5, 0.62), Vector2(L * 0.5 + 0.1, 1.4), Vector2(L * 0.5 - 0.2, 2.35),
-				Vector2(L * 0.5 - 0.7, 2.6), Vector2(-L * 0.5 + 0.6, 2.62), Vector2(-L * 0.5 + 0.05, 2.3), Vector2(-L * 0.5 - 0.05, 1.3)])
-			Shapes.extrude(body, glass, o, w, 0.18, [])
+			var o := PackedVector2Array([Vector2(-L * 0.5, 0.62), Vector2(L * 0.5, 0.62), Vector2(L * 0.5 + 0.1, 1.4), Vector2(L * 0.5 - 0.2, 2.65),
+				Vector2(L * 0.5 - 0.7, 2.95), Vector2(-L * 0.5 + 0.6, 2.97), Vector2(-L * 0.5 + 0.05, 2.65), Vector2(-L * 0.5 - 0.05, 1.3)])
+			Shapes.extrude(body, glass, o, w, 0.18, [], 0.0, false)
+			var flat := Shapes.inset_outline(o, 0.18)
+			var lining := Shapes.st()
+			var rubber := Lib.color_mat(Color(0.05, 0.05, 0.05), 0.85)
+			var paint_m := Lib.mat("rv_paint", Color(1.0, 0.97, 0.9), 0.4, false, 0.55)
 			for s in [-1.0, 1.0]:
-				var win := PackedVector2Array([Vector2(1.6, 1.55), Vector2(1.6, 2.15), Vector2(0.4, 2.15), Vector2(0.4, 1.55)])
-				Shapes.side_panel(trim, Shapes.shrink(win, -0.04), s * (w * 0.5 + 0.004), s)
-				Shapes.side_panel(glass, win, s * (w * 0.5 + 0.008), s)
+				var holes: Array = [WIN]
+				if s > 0.0:
+					holes.append(DOOR)
+				var hp: Array = []
+				for r in holes:
+					hp.append(PackedVector2Array([Vector2(r[0], r[2]), Vector2(r[1], r[2]), Vector2(r[1], r[3]), Vector2(r[0], r[3])]))
+				Shapes.side_with_holes(body, flat, hp, s * w * 0.5, s)
+				Shapes.side_with_holes(lining, flat, hp, s * (w * 0.5 - 0.02), -s)
 				var stripe := PackedVector2Array([Vector2(L * 0.5, 1.2), Vector2(L * 0.5, 1.35), Vector2(-L * 0.5, 1.35), Vector2(-L * 0.5, 1.2)])
-				Shapes.side_panel(trim, stripe, s * (w * 0.5 + 0.003), s)
-			var door := PackedVector2Array([Vector2(-0.4, 0.8), Vector2(-0.4, 2.3), Vector2(-1.2, 2.3), Vector2(-1.2, 0.8)])
-			Shapes.side_panel(trim, Shapes.shrink(door, -0.03), w * 0.5 + 0.004, 1.0)
-			var door_st := Shapes.st()
-			Shapes.side_panel(door_st, door, w * 0.5 + 0.008, 1.0)
-			var mesh := Shapes.commit([[body, Lib.mat("rv_paint", Color(1.0, 0.97, 0.9), 0.4, false, 0.55)], [glass, Lib.glass_mat()],
-				[trim, Lib.mat("paint", Color(0.55, 0.75, 0.75), 0.6, false, 0.4, 0.3)], [door_st, Lib.mat("paint", Color(0.9, 0.88, 0.82), 0.6, false, 0.4, 0.3)]])
+				for pc in (Geometry2D.clip_polygons(stripe, hp[hp.size() - 1]) if s > 0.0 else [stripe]):
+					Shapes.side_panel(trim, pc, s * (w * 0.5 + 0.003), s)
+				for k in range(hp.size()):
+					var poly: PackedVector2Array = hp[k]
+					var is_door: bool = s > 0.0 and k == 1
+					for i in range(4):
+						var a: Vector2 = poly[i]
+						var b: Vector2 = poly[(i + 1) % 4]
+						var c := (a + b) * 0.5
+						var d := b - a
+						var m: Material = rubber if not is_door else paint_m
+						if is_door and i == 0:
+							m = Items.steel()
+						Lib.box(self, Vector3(s * (w * 0.5 - 0.06), c.y, c.x), Vector3(0.14, 0.03, d.length() + 0.03), m, false, Vector3(atan2(-d.y, d.x), 0, 0), 0.008)
+					if not is_door:
+						Shapes.side_panel(glass, poly, s * (w * 0.5 - 0.01), s)
+			var mesh := Shapes.commit([[body, paint_m], [glass, Lib.glass_mat()],
+				[trim, Lib.mat("paint", Color(0.55, 0.75, 0.75), 0.6, false, 0.4, 0.3)], [lining, Lib.color_mat(Color(0.85, 0.83, 0.79), 0.8)]])
 			var mi := MeshInstance3D.new()
 			mi.mesh = mesh
 			add_child(mi)
-			Lib.box(self, Vector3(w * 0.5 + 0.02, 1.5, -0.6), Vector3(0.04, 0.04, 0.14), Items.steel())
+			_build_camper_door(paint_m)
 			# interior: vinyl floor, wall board, laminate bed base and an open shelf unit
 			var wall := Lib.color_mat(Color(0.88, 0.86, 0.82), 0.8)
 			var lam := Lib.color_mat(Color(0.8, 0.78, 0.74), 0.4)
 			var trim_m := Lib.color_mat(Color(0.36, 0.35, 0.34), 0.5)
 			Lib.box(self, Vector3(0, 0.68, 0), Vector3(w - 0.3, 0.04, L - 0.4), Lib.mat("tiles", Color(0.62, 0.58, 0.52), 1.1, false, 0.55))
 			for sx in [-1.0, 1.0]:
-				Lib.box(self, Vector3(sx * (w * 0.5 - 0.09), 1.6, 0), Vector3(0.02, 1.8, L - 0.3), wall)
-			Lib.box(self, Vector3(0, 2.47, 0), Vector3(w - 0.2, 0.02, L - 0.3), Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9))
+				_wall(sx * (w * 0.5 - 0.09), wall, [WIN, DOOR] if sx > 0.0 else [WIN], -L * 0.5 + 0.15, L * 0.5 - 0.15)
+			Lib.box(self, Vector3(0, 2.82, 0), Vector3(w - 0.2, 0.02, L - 0.3), Lib.color_mat(Color(0.93, 0.92, 0.9), 0.9))
 			Lib.box(self, Vector3(0, 0.95, L * 0.5 - 0.75), Vector3(w - 0.35, 0.5, 1.2), lam)
 			Lib.box(self, Vector3(0, 1.25, L * 0.5 - 0.75), Vector3(w - 0.4, 0.15, 1.15), Lib.color_mat(Color(0.92, 0.92, 0.9), 0.95), false, Vector3.ZERO, 0.05)
 			Lib.box(self, Vector3(0.1, 1.34, L * 0.5 - 0.75), Vector3(w - 0.6, 0.05, 1.17), Lib.mat("plaid", Color(0.75, 0.75, 0.78), 2.0, false, 0.95))
@@ -203,19 +335,18 @@ func _build() -> void:
 				Lib.box(self, pc[0], pc[1], lam)
 				_shape(pc[0], pc[1])
 			Lib.box(self, sc + Vector3(ss.x * 0.5, 0.0, 0), Vector3(0.02, 0.04, ss.z), trim_m)
-			Lib.light(self, Vector3(0, 2.3, 0), Color(1.0, 0.86, 0.66), 0.8, 5.0)
+			Lib.light(self, Vector3(0, 2.65, 0), Color(1.0, 0.86, 0.66), 0.8, 5.0)
 			_part(Vector3(0, 1.38, L * 0.5 - 0.35), Vector3(w - 0.6, 0.12, 0.35), "bed")
-			_part(Vector3(w * 0.5 + 0.1, 1.5, -0.8), Vector3(0.15, 1.5, 0.8), "door")
-			_part(Vector3(w * 0.5 - 0.3, 1.5, -0.8), Vector3(0.15, 1.5, 0.8), "door")
 			_floor_y = 0.7
 			# hollow collision: floor, walls, roof (door gap on the right)
 			_shape(Vector3(0, 0.6, 0), Vector3(w, 0.15, L))
-			_shape(Vector3(0, 2.55, 0), Vector3(w, 0.15, L))
-			_shape(Vector3(-w * 0.5, 1.6, 0), Vector3(0.1, 2.0, L))
-			_shape(Vector3(w * 0.5, 1.6, (L * 0.5 - 0.4) * 0.5 + 0.2), Vector3(0.1, 2.0, L * 0.5 + 0.4))
-			_shape(Vector3(w * 0.5, 1.6, -L * 0.5 + 0.4), Vector3(0.1, 2.0, 0.8))
-			_shape(Vector3(0, 1.6, L * 0.5), Vector3(w, 2.0, 0.1))
-			_shape(Vector3(0, 1.6, -L * 0.5), Vector3(w, 2.0, 0.1))
+			_shape(Vector3(0, 2.9, 0), Vector3(w, 0.15, L))
+			_shape(Vector3(-w * 0.5, 1.75, 0), Vector3(0.1, 2.3, L))
+			_shape(Vector3(w * 0.5, 1.75, (DOOR[1] + L * 0.5) * 0.5), Vector3(0.1, 2.3, L * 0.5 - DOOR[1]))
+			_shape(Vector3(w * 0.5, 1.75, (DOOR[0] - L * 0.5) * 0.5), Vector3(0.1, 2.3, DOOR[0] + L * 0.5))
+			_shape(Vector3(w * 0.5, (DOOR[3] + 2.9) * 0.5, (DOOR[0] + DOOR[1]) * 0.5), Vector3(0.1, 2.9 - DOOR[3], DOOR[1] - DOOR[0]))
+			_shape(Vector3(0, 1.75, L * 0.5), Vector3(w, 2.3, 0.1))
+			_shape(Vector3(0, 1.75, -L * 0.5), Vector3(w, 2.3, 0.1))
 		"flatbed":
 			Lib.box(self, Vector3(0, 0.68, 0), Vector3(w, 0.08, L), Lib.mat("planks", Color(0.75, 0.65, 0.55), 1.0, false))
 			for s in [-1.0, 1.0]:
@@ -266,6 +397,8 @@ func hitch_to(v: Node) -> void:
 		return
 	tow = v
 	v.trailer = self
+	if _jack:
+		_jack.disabled = true
 	# snap the tongue to the hitch before joining
 	var offset: Vector3 = v.hitch_global() - tongue_global()
 	global_position += offset
@@ -284,6 +417,8 @@ func unhitch() -> void:
 	if tow and is_instance_valid(tow):
 		tow.trailer = null
 	tow = null
+	if _jack:
+		_jack.disabled = false
 	brake = 30.0
 	Audio.play_at("hammer", global_position, -2.0, 0.7)
 
@@ -301,7 +436,7 @@ func contains_point(p: Vector3) -> bool:
 	var l := to_local(p)
 	var L: float = spec["len"]
 	var w: float = spec["w"]
-	return absf(l.x) < w * 0.5 and absf(l.z) < L * 0.5 and l.y > _floor_y - 0.2 and l.y < 2.7
+	return absf(l.x) < w * 0.5 and absf(l.z) < L * 0.5 and l.y > _floor_y - 0.2 and l.y < 3.0
 
 func is_inside(p: Vector3) -> bool:
 	return kind == "camper" and contains_point(p)
@@ -314,7 +449,7 @@ func prompt_for(action: String) -> String:
 			var v := _nearest_tow()
 			return ("[E] Hitch to %s" % v.display_name()) if v else "%s — back a vehicle's hitch up to the tongue" % spec["name"]
 		"bed": return "[E] Sleep"
-		"door": return "[E] Exit camper" if is_inside(Game.player.global_position) else "[E] Enter camper"
+		"door": return "[E] %s the door" % ("Close" if door_open else "Open")
 		"tank_valve":
 			return "[E] Fuel tank %d L — transfer 20 L to the towing vehicle / fill cans" % int(fuel_store)
 	return ""
@@ -333,11 +468,7 @@ func do_action(action: String, player: Node) -> void:
 		"bed":
 			Game.world.sleep(player.global_position)
 		"door":
-			if is_inside(player.global_position):
-				player.teleport(to_global(Vector3(spec["w"] * 0.5 + 0.9, 0.2, -0.8)))
-			else:
-				player.teleport(to_global(Vector3(spec["w"] * 0.5 - 0.6, _floor_y + 0.05, -0.8)))
-			Audio.play_at("door", global_position)
+			set_door(not door_open)
 		"tank_valve":
 			if fuel_store < 1.0:
 				Game.notify("The tank is empty")

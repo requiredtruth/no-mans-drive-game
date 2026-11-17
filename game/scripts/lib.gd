@@ -53,10 +53,11 @@ func color_mat(c: Color, rough := 0.7, metal := 0.0, emission := Color.BLACK, em
 func glass_mat() -> StandardMaterial3D:
 	if not _mats.has("glass"):
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.12, 0.16, 0.18, 0.55)
+		m.albedo_color = Color(0.32, 0.38, 0.4, 0.22)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.roughness = 0.05
-		m.metallic = 0.6
+		m.roughness = 0.04
+		m.metallic = 0.25
+		m.metallic_specular = 0.8
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED
 		_mats["glass"] = m
 	return _mats["glass"]

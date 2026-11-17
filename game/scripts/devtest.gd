@@ -159,7 +159,7 @@ func _find_loot(mode: String) -> Node:
 
 func _look_at_point(p: Vector3) -> void:
 	var pl = Game.player
-	var eye: Vector3 = pl.camera.global_position
+	var eye: Vector3 = pl.global_position + Vector3(0, pl.head.position.y, 0)
 	var d := p - eye
 	pl.rotation.y = atan2(-d.x, -d.z)
 	pl.pitch = atan2(d.y, Vector2(d.x, d.z).length())
@@ -177,7 +177,7 @@ func _hands() -> void:
 	_log("start slots %s worn %s" % [str(Game.slots), str(Game.worn)])
 	var cargo: Node = rv.get_node("Cargo")
 	_log("starter items glued in RV: %d" % cargo.get_child_count())
-	rv.do_action("door", pl)
+	_van_door(pl)
 	rv.interior_lights = true
 	rv._update_lights()
 	await _wait(0.4)
@@ -227,7 +227,7 @@ func _hands() -> void:
 	var lp0: Vector3 = placed.position if placed else Vector3.ZERO
 	_log("placed on counter: %s local %s" % [placed != null, str(lp0)])
 	# drive and check that items stay glued exactly
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.2)
 	for k in rv.parts:
 		rv.parts[k] = 100.0
@@ -430,6 +430,149 @@ func _aim_prompt(target: Vector3) -> String:
 		_log("  (aim hit: %s)" % str(Game.player.ray.get_collider()))
 	return Game.player.prompt
 
+## Test shortcut for the older tours: hop in or out of the van through the doorway.
+func _van_door(pl: Node) -> void:
+	var rv = Game.rv
+	var zc: float = (rv.DOOR_Z0 + rv.DOOR_Z1) * 0.5
+	if rv.is_inside(pl.global_position):
+		pl.teleport(rv.to_global(Vector3(rv.W * 0.5 + 1.4, 0.2, zc)))
+	else:
+		pl.teleport(rv.to_global(Vector3(0.05, rv.FLOOR_Y + 0.1, zc - 0.1)))
+
+## Hold a movement key for a while, like a player would.
+func _walk(action: String, sec: float) -> void:
+	Input.action_press(action)
+	await _wait(sec)
+	Input.action_release(action)
+	await _wait(0.2)
+
+## 1.5: the van is a real vehicle you walk into, and the camper too.
+func _walkin() -> void:
+	var w = Game.world
+	var rv = Game.rv
+	var pl = Game.player
+	var gen = w.gen
+	w.hud.close_modal()
+	Game.time_of_day = 10.0
+	Game.god_mode = true
+	await _settle(pl.global_position)
+	await _wait(2.0)
+	var zc: float = (rv.DOOR_Z0 + rv.DOOR_Z1) * 0.5
+	var below: Vector3 = rv.to_global(Vector3(rv.W * 0.5 + 1.0, 0, zc))
+	var gl: Vector3 = rv.to_local(Vector3(below.x, gen.height(below.x, below.z), below.z))
+	_log("ground under the doorway in van space: y=%.2f (floor %.2f)" % [gl.y, rv.FLOOR_Y])
+	for v in [["w01_van_side_door", Vector3(7.0, 0, 3.5), Vector3(0, 1.6, 0.5)], ["w02_van_front34", Vector3(5.5, 0, 9.5), Vector3(0, 1.4, 2.0)],
+			["w03_van_rear34", Vector3(-5.0, 0, -8.5), Vector3(0, 1.6, -2.0)], ["w04_van_driver_side", Vector3(-7.5, 0, 1.0), Vector3(0, 1.6, 0.0)],
+			["w05_doorway_close", Vector3(3.2, 0, 1.0), Vector3(0, 1.7, 0.6)]]:
+		var c: Vector3 = rv.to_global(v[1])
+		_player_at(_ground(c.x, c.z), 0.0)
+		_look_at_point(rv.to_global(v[2]))
+		await _wait(0.5)
+		await _shot(v[0])
+	# walk in through the open doorway: no prompts, no teleport
+	var start: Vector3 = rv.to_global(Vector3(rv.W * 0.5 + 2.6, 0, zc))
+	_player_at(_ground(start.x, start.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.6, zc)))
+	pl.pitch = -0.1
+	pl.head.rotation.x = -0.1
+	await _wait(0.3)
+	Game.player._update_prompt()
+	_log("prompt facing the empty doorway: '%s'" % Game.player.prompt)
+	Input.action_press("move_forward")
+	for k in range(11):
+		await _wait(0.2)
+		var lp: Vector3 = rv.to_local(pl.global_position)
+		_log("  walk t=%.1f van-space %.2f %.2f %.2f floor=%s vel=%s" % [k * 0.2, lp.x, lp.y, lp.z, pl.is_on_floor(), str(pl.velocity)])
+	Input.action_release("move_forward")
+	await _wait(0.2)
+	_log("walked in through the doorway: inside=%s y=%.2f" % [rv.is_inside(pl.global_position), rv.to_local(pl.global_position).y])
+	await _shot("w06_walked_in")
+	pl.rotation.y = rv.rotation.y
+	await _wait(0.3)
+	await _shot("w07_inside_rear")
+	pl.rotation.y = rv.rotation.y + PI
+	await _wait(0.3)
+	await _shot("w08_inside_cab")
+	_look_at_point(rv.to_global(Vector3(rv.W * 0.5 + 3.0, 1.2, zc)))
+	await _wait(0.3)
+	await _shot("w09_looking_out_doorway")
+	await _walk("move_forward", 2.2)
+	_log("walked out again: inside=%s" % rv.is_inside(pl.global_position))
+	# fully fitted out, with the sliding door
+	rv.modules = rv._all_modules()
+	rv.missing = {}
+	rv.paint = 3
+	rv._apply_visuals()
+	await _wait(0.5)
+	var c2: Vector3 = rv.to_global(Vector3(7.0, 0, 3.5))
+	_player_at(_ground(c2.x, c2.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.6, 0.5)))
+	await _wait(0.5)
+	await _shot("w10_fitted_door_closed")
+	var c3: Vector3 = rv.to_global(Vector3(5.5, 0, 9.5))
+	_player_at(_ground(c3.x, c3.z), 0.0)
+	_look_at_point(rv.to_global(Vector3(0, 1.4, 2.0)))
+	await _wait(0.4)
+	await _shot("w11_fitted_front34")
+	_player_at(_ground(start.x, start.z), 0.0)
+	var pr: String = await _aim_prompt(rv.to_global(Vector3(rv.W * 0.5, 1.9, zc)))
+	_log("prompt at the closed door: '%s'" % pr)
+	await _walk("move_forward", 1.2)
+	_log("walking into the closed door: inside=%s" % rv.is_inside(pl.global_position))
+	_player_at(_ground(start.x, start.z), 0.0)
+	pr = await _aim_prompt(rv.to_global(Vector3(rv.W * 0.5, 1.9, zc)))
+	var dp = pl.look_target
+	if dp:
+		dp.interact(pl)
+	await _wait(1.0)
+	_log("door open: %s, shape disabled: %s" % [rv.door_open, rv._door_shape.disabled])
+	await _shot("w12_door_slid_open")
+	_look_at_point(rv.to_global(Vector3(0, 1.6, zc)))
+	pl.pitch = -0.1
+	await _walk("move_forward", 2.2)
+	_log("walked in through the open door: inside=%s" % rv.is_inside(pl.global_position))
+	pl.rotation.y = rv.rotation.y
+	rv.interior_lights = true
+	rv._update_lights()
+	await _wait(0.3)
+	await _shot("w13_fitted_inside_rear")
+	pl.rotation.y = rv.rotation.y + PI
+	await _wait(0.3)
+	await _shot("w14_fitted_inside_cab")
+	pr = await _aim_prompt(rv.to_global(Vector3(rv.W * 0.5 - 0.12, rv.FLOOR_Y + 1.25, rv.DOOR_Z1 + 0.07)))
+	_log("prompt at the inside grab handle: '%s'" % pr)
+	# the camper trailer: walk in through its door too
+	var tz: float = rv.global_position.z - 25.0
+	var tx: float = gen.road_x(tz) + 2.0
+	var cam = w.spawn_vehicle("walk_camper", "camper", Vector3(tx, gen.height(tx, tz) + 1.0, tz), Vector3(0, PI * 0.5, 0), {})
+	await _wait(2.5)
+	var cz: float = cam.DOOR_Z
+	var cs: Vector3 = cam.to_global(Vector3(cam.spec["w"] * 0.5 + 4.0, 0, cz))
+	_player_at(_ground(cs.x, cs.z), 0.0)
+	_look_at_point(cam.to_global(Vector3(0, 1.4, cz)))
+	await _wait(0.4)
+	await _shot("w15_camper_outside")
+	var cs2: Vector3 = cam.to_global(Vector3(cam.spec["w"] * 0.5 + 1.6, 0, cz))
+	_player_at(_ground(cs2.x, cs2.z), 0.0)
+	pr = await _aim_prompt(cam.to_global(Vector3(cam.spec["w"] * 0.5, 1.5, cz)))
+	_log("camper door prompt: '%s'" % pr)
+	if pl.look_target:
+		pl.look_target.interact(pl)
+	await _wait(0.8)
+	_look_at_point(cam.to_global(Vector3(0, 1.3, cz)))
+	pl.pitch = -0.1
+	Input.action_press("move_forward")
+	for k in range(10):
+		await _wait(0.2)
+		var cp: Vector3 = cam.to_local(pl.global_position)
+		_log("  camper walk %.2f %.2f %.2f floor=%s" % [cp.x, cp.y, cp.z, pl.is_on_floor()])
+	Input.action_release("move_forward")
+	await _wait(0.2)
+	_log("walked into the camper: inside=%s, trailer tilt %.1f deg" % [cam.is_inside(pl.global_position), rad_to_deg(cam.global_transform.basis.y.angle_to(Vector3.UP))])
+	pl.rotation.y = cam.global_rotation.y
+	await _wait(0.3)
+	await _shot("w16_camper_inside")
+
 ## 1.4: start with a stripped van and put it together by hand.
 func _assembly() -> void:
 	var w = Game.world
@@ -458,7 +601,7 @@ func _assembly() -> void:
 	_look_at_point(rv.to_global(Vector3(0, 1.4, 3.0)))
 	await _wait(0.4)
 	await _shot("a02_stripped_van_front")
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.3)
 	pl.rotation.y = rv.rotation.y + PI
 	pl.pitch = -0.15
@@ -468,7 +611,7 @@ func _assembly() -> void:
 	pl.rotation.y = rv.rotation.y
 	await _wait(0.3)
 	await _shot("a04_bare_interior_rear")
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.2)
 	# put the knife down so both hands are free, carry the toolkit to the van
 	pl._place_valid = true
@@ -527,12 +670,12 @@ func _assembly() -> void:
 	_player_at(_ground(dpos.x, dpos.z), 0.0)
 	pr = await _aim_prompt(rv.to_global(Vector3(rv.W * 0.5 + 0.12, rv.FLOOR_Y + 1.0, 1.0)))
 	_log("door prompt holding door: '%s'" % pr)
-	rv.do_action("door", pl)
+	rv.install_module("door")
 	_log("door hung: %s" % rv.modules.has("door"))
 	# seat: inside, ghost outline shows where it goes
 	await _fetch("car_seat")
 	_player_at(_ground(dpos.x, dpos.z), 0.0)
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.3)
 	pl.rotation.y = rv.rotation.y + PI
 	pl.pitch = -0.3
@@ -546,11 +689,11 @@ func _assembly() -> void:
 		pl._interact()
 	_log("driver seat fitted: %s" % rv.modules.has("seat_driver"))
 	# steering wheel needs a toolkit within reach: bring it in
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.2)
 	await _fetch("steering_wheel")
 	await _fetch("toolkit")
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.2)
 	for k in range(Game.slots.size()):
 		if Game.slots[k]["id"] == "steering_wheel":
@@ -633,7 +776,7 @@ func _assembly() -> void:
 	Game.slots = [{"id": "", "n": 0}, {"id": "", "n": 0}]
 	Game._changed()
 	await _fetch("kitchen_unit")
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.2)
 	for k in range(Game.slots.size()):
 		if Game.slots[k]["id"] == "kitchen_unit":
@@ -675,7 +818,7 @@ func _assembly() -> void:
 	Game.consume(Game.equipped())
 	_log("after drinking: held %s" % Game.equipped())
 	# take the stove back out with G (empty hand)
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.2)
 	# campfire: boil dirty water on the grill
 	var cf: Vector3 = rv.to_global(Vector3(7.0, 0, -6.0))
@@ -713,7 +856,7 @@ func _assembly() -> void:
 	_look_at_point(rv.to_global(Vector3(0, 1.4, 0.5)))
 	await _wait(0.6)
 	await _shot("a10_fitted_van_exterior")
-	rv.do_action("door", pl)
+	_van_door(pl)
 	await _wait(0.3)
 	pl.rotation.y = rv.rotation.y + PI * 0.75
 	pl.pitch = -0.3
@@ -754,6 +897,17 @@ func _assembly() -> void:
 	_log("old save without modules -> %d modules, can drive: %s" % [rv.modules.size(), str(rv.missing_for_drive())])
 
 func _run() -> void:
+	if "--walkin" in OS.get_cmdline_user_args():
+		var mw := get_tree().root.get_node("Main")
+		Game.new_game(4242, "Normal")
+		mw._start_world({})
+		await _wait(1.5)
+		await _walkin()
+		var fw := FileAccess.open("%s/devtest.log" % out, FileAccess.WRITE)
+		fw.store_string("\n".join(log_lines))
+		fw.close()
+		get_tree().quit()
+		return
 	if "--assembly" in OS.get_cmdline_user_args():
 		var ma := get_tree().root.get_node("Main")
 		Game.new_game(4242, "Normal")
@@ -821,7 +975,7 @@ func _run() -> void:
 	await _wait(0.5)
 	await _shot("02_rv_exterior")
 	# RV interior
-	rv.do_action("door", Game.player)
+	_van_door(Game.player)
 	await _wait(0.3)
 	Game.player.rotation.y = rv.rotation.y + PI
 	Game.player.pitch = -0.2
@@ -833,7 +987,7 @@ func _run() -> void:
 	Game.player.rotation.y = rv.rotation.y
 	await _wait(0.3)
 	await _shot("04_rv_interior_rear")
-	rv.do_action("door", Game.player)
+	_van_door(Game.player)
 	await _wait(0.3)
 	# Furniture on the RV + loose cargo
 	rv.attach_structure({"type": "crate", "pos": Game.arr(rv.to_global(Vector3(0.3, rv.FLOOR_Y, -1.0))), "rot": rv.global_rotation.y, "data": {}})

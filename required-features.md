@@ -52,6 +52,13 @@ Every user requirement for this project, kept up to date. Items marked ✅ are i
 - ✅ **Avoid little crafting menus.** Crafting happens on a workbench: lay the items on it and put them together. Cooking happens on a campfire grill or the van stove. Drinking, refilling, refuelling and fitting parts are all done with items in your hands. The old crafting, cooking, sink and RV workshop menus are gone. Tab is now a read-only notebook.
 - Posting directly to `main` and publishing a new APK release are approved.
 
+### Requests after 1.4 (addressed in 1.5)
+
+- ✅ **No "walk into a room with E".** Get into the van by walking in through the doorway, as in Nomad Drive. With no door fitted the doorway is open; a fitted sliding door opens and closes with E. The camper trailer works the same way. No teleporting in or out.
+- ✅ **You can see into and out of the vehicle**: every window and the doorway are real openings with see-through glass.
+- ✅ **The van must look as real as possible**, with the same feel as Nomad Drive: real body details, lights, bumpers, trim, chassis and underside.
+- Posting directly to `main` and publishing a new APK release are approved.
+
 ## Core RV road-trip features
 
 - ✅ Drivable motorhome with physics (throttle, brake/reverse, steering, handbrake), first- and third-person cameras, headlights, engine sound.
